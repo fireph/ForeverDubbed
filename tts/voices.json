@@ -1,0 +1,148 @@
+{
+  "endpoint": "http://127.0.0.1:8765",
+  "default": {
+    "male": "narrator_male",
+    "female": "human_female",
+    "unknown": "narrator_male"
+  },
+  "races": {
+    "human": {
+      "male": "human_male",
+      "female": "human_female",
+      "unknown": "human_male"
+    },
+    "orc": {
+      "male": "orc_male",
+      "female": "orc_female",
+      "unknown": "orc_male"
+    },
+    "dwarf": {
+      "male": "dwarf_male",
+      "female": "dwarf_female",
+      "unknown": "dwarf_male"
+    },
+    "nightelf": {
+      "male": "nightelf_male",
+      "female": "nightelf_female",
+      "unknown": "nightelf_male"
+    },
+    "undead": {
+      "male": "undead_male",
+      "female": "undead_female",
+      "unknown": "undead_male"
+    },
+    "tauren": {
+      "male": "tauren_male",
+      "female": "tauren_female",
+      "unknown": "tauren_male"
+    },
+    "gnome": {
+      "male": "gnome_male",
+      "female": "gnome_female",
+      "unknown": "gnome_male"
+    },
+    "troll": {
+      "male": "troll_male",
+      "female": "troll_female",
+      "unknown": "troll_male"
+    },
+    "skyborne": {
+      "male": "skyborne_male",
+      "female": "skyborne_female",
+      "unknown": "skyborne_male"
+    },
+    "goblin": {
+      "male": "goblin_male",
+      "female": "goblin_female",
+      "unknown": "goblin_male"
+    },
+    "bloodelf": {
+      "male": "bloodelf_male",
+      "female": "bloodelf_female",
+      "unknown": "bloodelf_male"
+    },
+    "draenei": {
+      "male": "draenei_male",
+      "female": "draenei_female",
+      "unknown": "draenei_male"
+    }
+  },
+  "npc_overrides": {},
+  "profiles": {
+    "human_male": {
+      "voice": "marius"
+    },
+    "human_female": {
+      "voice": "alba"
+    },
+    "orc_male": {
+      "voice": "javert"
+    },
+    "orc_female": {
+      "voice": "cosette"
+    },
+    "dwarf_male": {
+      "voice": "george"
+    },
+    "dwarf_female": {
+      "voice": "anna"
+    },
+    "nightelf_male": {
+      "voice": "charles"
+    },
+    "nightelf_female": {
+      "voice": "fantine"
+    },
+    "undead_male": {
+      "voice": "paul"
+    },
+    "undead_female": {
+      "voice": "eponine"
+    },
+    "tauren_male": {
+      "voice": "jean"
+    },
+    "tauren_female": {
+      "voice": "mary"
+    },
+    "gnome_male": {
+      "voice": "michael"
+    },
+    "gnome_female": {
+      "voice": "azelma"
+    },
+    "troll_male": {
+      "voice": "peter_yearsley"
+    },
+    "troll_female": {
+      "voice": "eve"
+    },
+    "skyborne_male": {
+      "voice": "charles"
+    },
+    "skyborne_female": {
+      "voice": "fantine"
+    },
+    "goblin_male": {
+      "voice": "stuart_bell"
+    },
+    "goblin_female": {
+      "voice": "jane"
+    },
+    "bloodelf_male": {
+      "voice": "charles"
+    },
+    "bloodelf_female": {
+      "voice": "fantine"
+    },
+    "draenei_male": {
+      "voice": "jean"
+    },
+    "draenei_female": {
+      "voice": "mary"
+    },
+    "narrator_male": {
+      "voice": "jean"
+    }
+  }
+}

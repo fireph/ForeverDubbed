@@ -1,0 +1,12 @@
+## Interface: 16001
+## Title: ForeverDubbed
+## Notes: Sends NPC and quest text to a screen-reading TTS companion.
+## Author: ForeverDubbed contributors
+## Version: 0.3.1
+## SavedVariables: ForeverDubbedDB
+## AllowLoadGameType: standard, camelot
+
+Codec.lua
+Races.lua
+Speakers.lua
+ForeverDubbed.lua

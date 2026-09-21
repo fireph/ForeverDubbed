@@ -1,0 +1,31 @@
+/dist/
+*.exe
+*.test
+*.zip
+*.dll
+*.pdb
+/.runtime/
+__pycache__/
+*.pyc
+
+# Local recordings, cloned voices, and model weights.
+/tts/custom/
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.safetensors
+*.onnx
+*.pt
+*.pth
+
+# Local diagnostics, dialogue logs, and credentials.
+/screenshots/
+/capture*.png
+/snapshot*.png
+*.jsonl
+*.log
+.env
+.env.*
+!.env.example
