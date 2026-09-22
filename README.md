@@ -1,6 +1,6 @@
 # ForeverDubbed
 
-A WoW Forever addon and Go companion that read NPC and quest dialogue aloud. The addon draws a small RGB data square; the Windows app finds it anywhere on the desktop, decodes the text, and speaks using **Pocket TTS on your CPU**. The Go companion captures, decodes, selects voices, and plays audio; a small local Python helper runs the official Pocket TTS model. Speech stays on your computer. No OCR or game-memory access is used. Windows SAPI remains available as a fallback.
+A WoW Forever addon and Go companion that read NPC and quest dialogue aloud. The addon draws a small RGB data square; the Windows app finds it anywhere on the desktop, decodes the text, and speaks using **Pocket TTS on your CPU**. The Go companion captures, decodes, selects voices, and streams audio to the Windows sound device; a small local Python helper runs the official Pocket TTS model. Playback begins with the first decoded audio instead of waiting for a complete text chunk. Speech stays on your computer. No OCR or game-memory access is used. Windows SAPI remains available as a fallback.
 
 The square uses **16 calibrated colors** and a **48 × 48 data grid**, with a one-cell border. At the default **2 × 2 pixel cell size**, it occupies **100 × 100 physical pixels** and carries **1,124 bytes per page**. This is the only encoding format. You can enlarge cells with `/fdb cell 3` (150 × 150 pixels) if your display needs more sampling margin; the capacity stays the same. This is a custom optical format, not a standard QR code.
 
@@ -28,6 +28,14 @@ This creates `dist/foreverdubbed.exe` and the addon/Windows ZIP packages. Genera
 The build produces `dist/ForeverDubbed-windows-amd64.zip`, which bundles the executable, addon, Pocket TTS scripts/config, launchers, and these instructions. Models and Python are downloaded by setup instead of being included in the ZIP. This is a console application; close it or press Ctrl+C to stop.
 
 **Compatibility status:** the manifest targets Forever interface **16001**. The 16-color, 2-pixel transport has been confirmed working in-game. The Pocket TTS integration has been tested on Windows with real CPU synthesis and Go audio playback. Race extraction, including asynchronous display/model lookup, is covered by Lua API doubles; display/model identification should still be checked in-game with `/fdb npc`; NPCs whose race is unavailable use the configured fallback. If a later beta marks the addon out of date, inspect `/fdb status` before updating the TOC.
+
+### Streaming speech
+
+Rebuild the Go companion and restart `Start-ForeverDubbed.cmd` after updating both the companion and `tts/server.py`. No new models or Python dependencies are required. An older running helper must be stopped before restarting.
+
+The helper sends mono 16-bit PCM as Pocket TTS decodes it. The companion queues a bounded number of audio buffers on one Windows playback device, including across text chunks. Changing dialogue stops and clears queued playback immediately. Pocket TTS 3.1.0 still finishes the active short generation before starting another request, discarding cancelled audio to keep model state safe.
+
+The TTS log records `first audio in ...s` for each text chunk. This measures the helper's time to its first emitted audio, not capture/transport delay or speaker output latency.
 
 ## What it reads
 
