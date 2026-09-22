@@ -51,6 +51,7 @@ SlashCmdList = {}
 local ns = {}
 assert(loadfile("addon/ForeverDubbed/Codec.lua"))("ForeverDubbed", ns)
 assert(loadfile("addon/ForeverDubbed/Races.lua"))("ForeverDubbed", ns)
+assert(loadfile("addon/ForeverDubbed/DisplayRaces.lua"))("ForeverDubbed", ns)
 assert(loadfile("addon/ForeverDubbed/Speakers.lua"))("ForeverDubbed", ns)
 local actual, calls = ns.Codec.Encode, {}
 ns.Codec.Encode = function(...)

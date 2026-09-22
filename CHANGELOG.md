@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2
+
+- Bundle 15,444 display-ID race/gender mappings from VoiceOver across 21 legacy races, with a pinned source, verified importer, and license.
+- Resolve NPC display IDs before shared model appearances; preserve API identity, confirmed Skyborne mappings, and saved NPC overrides.
+- Show display IDs in `/fdb npc`; add regression coverage for delayed display loads, cached model upgrades, and fallback behavior.
+- Keep the optical protocol and existing Pocket TTS voice configuration compatible with 0.3.1.
+
 ## 0.3.1
 
 - Resolve missing NPC races using confirmed NPC IDs, cached identities, and known character model file IDs. Wait up to 600 ms for model loading without publishing superseded dialogue.

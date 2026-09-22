@@ -13,7 +13,7 @@ local textures, pages, page, elapsed, expires = {}, nil, 1, 0, 0
 local session = (time() * 1000 + math.floor(GetTime() * 1000) % 1000) % 4294967296
 local sequence, lastBody, lastAt, ready = 0, nil, -1, false
 local PAGE_SECONDS = 0.25
-local VERSION = "0.3.1"
+local VERSION = "0.3.2"
 local requestID, lastSpeaker = 0, nil
 
 local function pixelFactor()
@@ -238,6 +238,7 @@ SlashCmdList.FOREVERDUBBED = function(input)
             NS.Speakers.Resolve(info, function(resolved)
                 printStatus("NPC: " .. resolved.name .. "; ID: " .. resolved.npcID .. "; race: " .. resolved.race
                     .. "; source: " .. (resolved.raceSource or "unavailable") .. "; gender: " .. resolved.gender
+                    .. "; display ID: " .. tostring(resolved.displayID or "unavailable")
                     .. "; model file: " .. tostring(resolved.modelID or "unavailable"))
             end, true)
         end

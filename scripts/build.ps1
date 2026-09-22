@@ -20,6 +20,7 @@ try {
     try {
         Copy-Item dist/foreverdubbed.exe, README.md, PROTOCOL.md, CHANGELOG.md $stage
         Copy-Item docs (Join-Path $stage 'docs') -Recurse
+        Copy-Item data (Join-Path $stage 'data') -Recurse
         Copy-Item Start-ForeverDubbed.cmd, Setup-PocketTTS.cmd $stage
         New-Item -ItemType Directory (Join-Path $stage 'tts'), (Join-Path $stage 'scripts') | Out-Null
         Copy-Item tts/server.py, tts/runtime.py, tts/prepare.py, tts/check_runtime.py, tts/requirements.txt, tts/voices.json (Join-Path $stage 'tts')

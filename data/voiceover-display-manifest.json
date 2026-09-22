@@ -1,0 +1,48 @@
+{
+  "repository": "https://github.com/mrthinger/wow-voiceover",
+  "revision": "5cf7627fc5ba99d7c2545cf0c9f323eaef31ef09",
+  "sources": {
+    "CreatureDisplayInfo.sql": {
+      "path": "assets/sql/exported/CreatureDisplayInfo.sql",
+      "sha256": "c9d368cbfbf6b4231c055ee5bb2e6eb46057e27aa5f376e3c64d10d8ae879142"
+    },
+    "CreatureDisplayInfoExtra.sql": {
+      "path": "assets/sql/exported/CreatureDisplayInfoExtra.sql",
+      "sha256": "3ea2dd1d7006100fd375888a1bca497042aa23ec536e63255344b177b91912b5"
+    },
+    "LICENSE": {
+      "path": "LICENSE",
+      "sha256": "6b0382b16279f26ff69014300541967a356a666eb0b91b422f6862f6b7dad17e"
+    }
+  },
+  "display_rows": 24262,
+  "extra_rows": 15475,
+  "mapped_displays": 15444,
+  "mapped_races": [
+    "BloodElf",
+    "Broken",
+    "Draenei",
+    "Dwarf",
+    "FelOrc",
+    "ForestTroll",
+    "Gnome",
+    "Goblin",
+    "Human",
+    "IceTroll",
+    "Naga",
+    "NightElf",
+    "NorthrendSkeleton",
+    "Orc",
+    "Scourge",
+    "Skeleton",
+    "Taunka",
+    "Tauren",
+    "Troll",
+    "Tuskarr",
+    "Vrykul"
+  ],
+  "skipped": {
+    "missing_extra_record": 7,
+    "no_extra_record": 8811
+  }
+}

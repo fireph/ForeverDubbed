@@ -68,7 +68,7 @@ class Engine:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ForeverDubbedTTS/0.3.1"
+    server_version = "ForeverDubbedTTS/0.3.2"
 
     def send(self, status, body, content_type="application/json"):
         if not isinstance(body, bytes):
@@ -86,7 +86,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
             self.send(200, {"ready": True, "device": self.server.engine.device,
-                            "model": MODEL, "version": "0.3.1", "engine": "pocket-tts",
+                            "model": MODEL, "version": "0.3.2", "engine": "pocket-tts",
                             "config_digest": self.server.engine.digest})
         else:
             self.send(404, {"error": "not found"})

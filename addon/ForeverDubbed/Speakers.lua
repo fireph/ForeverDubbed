@@ -48,7 +48,8 @@ local function enrich(info)
         elseif old then
             info.race, info.raceSource = old.race, old.raceSource
             info.modelID = old.modelID
-            if info.gender == "" then info.gender = old.gender end
+            info.displayID = old.displayID
+            if info.gender == "" then info.gender, info.genderSource = old.gender, old.genderSource end
         end
     end
     return info
@@ -69,6 +70,7 @@ function Speakers.ForUnit(unit)
         local ok, sex = pcall(UnitSex, unit)
         if ok and public(sex) then
             if sex == 2 then info.gender = "male" elseif sex == 3 then info.gender = "female" end
+            if info.gender ~= "" then info.genderSource = "UnitSex" end
         end
     end
     enrich(info)
@@ -103,7 +105,7 @@ end
 function Speakers.Resolve(info, callback, inspect)
     if activeStop then activeStop() end
     if info.restricted or info.guid == "" or not info.unit or
-        (info.race ~= "" and not inspect) then callback(info); return end
+        (info.race ~= "" and info.raceSource ~= "model appearance" and not inspect) then callback(info); return end
     if not probe then
         local ok, frame = pcall(CreateFrame, "PlayerModel", nil, UIParent)
         if not ok then callback(info); return end
@@ -114,7 +116,9 @@ function Speakers.Resolve(info, callback, inspect)
         probe:EnableMouse(false)
         probe:Hide()
     end
-    if type(probe.SetUnit) ~= "function" or type(probe.GetModelFileID) ~= "function" then callback(info); return end
+    local hasDisplay = type(probe.GetDisplayInfo) == "function"
+    if type(probe.SetUnit) ~= "function" or
+        (not hasDisplay and type(probe.GetModelFileID) ~= "function") then callback(info); return end
     local done, attempts = false, 0
     local function finish()
         if done then return end
@@ -134,16 +138,28 @@ function Speakers.Resolve(info, callback, inspect)
         if done then return end
         -- Never attribute a model to a new occupant of target/npc/nameplate tokens.
         if read(UnitGUID, info.unit) ~= info.guid then finish(); return end
-        local id = number(probe.GetModelFileID, probe)
-        if id then
-            info.modelID = id
-            local identity = NS.ModelRaces and NS.ModelRaces[id]
-            if identity then
-                if info.race == "" then info.race, info.raceSource = identity.race, "model appearance" end
-                if info.gender == "" then info.gender = identity.gender end
+        local displayID = number(probe.GetDisplayInfo, probe)
+        local modelID = number(probe.GetModelFileID, probe)
+        info.displayID, info.modelID = displayID, modelID
+        local identity = displayID and NS.DisplayIdentity and NS.DisplayIdentity(displayID)
+        local source = "display lookup (VoiceOver)"
+        -- Give the display time to load before settling for a shared model.
+        local canWait = attempts < 12 and C_Timer and type(C_Timer.After) == "function"
+        if not identity and (displayID or not hasDisplay or not canWait) then
+            identity = modelID and NS.ModelRaces and NS.ModelRaces[modelID]
+            source = "model appearance"
+        end
+        if identity then
+            if info.race == "" or info.raceSource == "model appearance" then
+                info.race, info.raceSource = identity.race, source
+            end
+            if info.gender == "" or info.genderSource == "model appearance" then
+                info.gender, info.genderSource = identity.gender, source
             end
             finish()
-        elseif attempts < 12 and C_Timer and type(C_Timer.After) == "function" then
+        elseif modelID and (displayID or not hasDisplay) then
+            finish()
+        elseif canWait then
             attempts = attempts + 1
             C_Timer.After(0.05, poll)
         else
