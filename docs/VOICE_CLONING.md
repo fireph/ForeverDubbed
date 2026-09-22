@@ -23,7 +23,19 @@ The tool selects roughly 20 seconds with active audio, converts it to mono 24 kH
 
 Automatic selection uses audio energy; it cannot distinguish good acting from music, combat sounds, or another speaker. Listen to the reference and preview. To select your own excerpt, run one `--voice` with `--start 5 --seconds 15`. Add `--force` to replace an existing exported voice. `--prepare-only` prepares references without model access; omit `--activate` to export and audition without assigning profiles. Omit `--online` once the cloning weights are cached.
 
-Activation backs up the configuration under `tts/custom/` and changes only the requested profiles after all exports and previews succeed. It fails if the configuration changed during generation. Close the existing ForeverDubbed launcher and restart it after activation; the helper checks the configuration digest. The existing female fallback also uses `human_female`, so assigning it changes that fallback voice too. Finished `.safetensors` files directly under `tts/custom/` can be committed with `tts/voices.json`; release builds include the local voice files referenced by that configuration. Recordings, previews, metadata, experiments, backups, and unfinished exports remain ignored.
+Activation backs up the configuration under `tts/custom/` and changes only the requested profiles after all exports and previews succeed. It fails if the configuration changed during generation. Close the existing ForeverDubbed launcher and restart it after activation; the helper checks the configuration digest. Missing or unmapped races use the separate narrator profile for every gender; changing Human profiles does not change that fallback. Finished `.safetensors` files directly under `tts/custom/` can be committed with `tts/voices.json`; release builds include the local voice files referenced by that configuration. Recordings, previews, metadata, experiments, backups, and unfinished exports remain ignored.
+
+## Narrator fallback
+
+The `narrator_male` profile ID is retained for compatibility, but it is used for
+all genders when race is empty, unavailable, or unmapped. Its voice is exported
+from `audio_clips/narrator.wav` and uses two decoding steps. The three `default`
+entries in `tts/voices.json` point to this profile. Explicit `-voice` and NPC
+assignments still take precedence, and recognized races retain their own voices.
+
+```powershell
+.\.runtime\pocket-env\Scripts\python.exe tts/clone_voice.py --voice narrator_male=audio_clips/narrator.wav --start 0 --seconds 30 --decode-steps 2 --force --activate
+```
 
 ## WAV and MP3 inputs
 

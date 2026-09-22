@@ -2,7 +2,7 @@
   "endpoint": "http://127.0.0.1:8765",
   "default": {
     "male": "narrator_male",
-    "female": "human_female",
+    "female": "narrator_male",
     "unknown": "narrator_male"
   },
   "races": {
@@ -148,7 +148,8 @@
       "voice": "mary"
     },
     "narrator_male": {
-      "voice": "jean"
+      "voice": "custom/narrator_male.safetensors",
+      "decode_steps": 2
     }
   }
 }
