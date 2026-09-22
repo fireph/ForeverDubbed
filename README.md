@@ -13,7 +13,7 @@ See [CHANGELOG.md](CHANGELOG.md) for earlier releases and [PROTOCOL.md](PROTOCOL
 **From a Git clone:** install Go 1.22 or newer, then build from the repository root before following the steps below:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1
+go run ./tools/build
 ```
 
 This creates `dist/foreverdubbed.exe` and the addon/Windows ZIP packages. Generated files and downloaded runtimes are not committed to Git. If you already have an extracted Windows bundle with `foreverdubbed.exe`, skip the build step.
@@ -169,12 +169,21 @@ After installing Pocket TTS, run the helper tests separately. They use a mocked 
 .\.runtime\pocket-env\Scripts\python.exe -m unittest discover -s tts -p "test_*.py"
 ```
 
-On Windows, `powershell -NoProfile -File scripts/build.ps1` builds the executable and both ZIP packages. From Linux, cross-compile with:
+Build and package from **Windows, macOS, or Linux**, using only Go (no PowerShell or Python required for the build):
 
 ```sh
-GOOS=windows GOARCH=amd64 go build -buildvcs=false -trimpath -o dist/foreverdubbed.exe ./cmd/foreverdubbed
+go run ./tools/build
+```
+
+Run from the repository root with Go configured for the host OS; do not set `GOOS=windows` on this command when building from macOS/Linux. The tool runs tests and vet on the host, then cross-compiles the Windows/amd64 companion and creates `dist/foreverdubbed.exe`, `dist/ForeverDubbed-addon.zip`, and `dist/ForeverDubbed-windows-amd64.zip`. The existing `scripts/build.ps1` delegates to the same tool.
+
+Packaging includes only the local voice files referenced by `tts/voices.json`; missing, unfinished, or out-of-directory voice files fail the build. ZIP paths and contents use the same layout on every host. The app's live capture, playback, setup, and launcher remain Windows-only; this change makes the **build host** portable. Python and Pocket TTS are still installed separately by the Windows setup launcher.
+
+Optional checks on a Unix build host:
+
+```sh
 LUA=/path/to/lua go test -race ./...
-python -m unittest discover -s tests -p 'test_*.py'
+python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
 The portable decoder can read PNGs on any OS. For a paged message, supply one unmodified screenshot of each distinct page, in any order:
