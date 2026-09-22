@@ -70,16 +70,18 @@
   "npc_overrides": {},
   "profiles": {
     "human_male": {
-      "voice": "marius"
+      "voice": "custom/human_male.safetensors"
     },
     "human_female": {
-      "voice": "alba"
+      "voice": "custom/human_female.safetensors"
     },
     "orc_male": {
-      "voice": "javert"
+      "voice": "custom/orc_male.safetensors",
+      "decode_steps": 4,
+      "cpu_threads": 1
     },
     "orc_female": {
-      "voice": "cosette"
+      "voice": "custom/orc_female.safetensors"
     },
     "dwarf_male": {
       "voice": "george"
@@ -88,16 +90,18 @@
       "voice": "anna"
     },
     "nightelf_male": {
-      "voice": "charles"
+      "voice": "custom/nightelf_male.safetensors"
     },
     "nightelf_female": {
-      "voice": "fantine"
+      "voice": "custom/nightelf_female.safetensors"
     },
     "undead_male": {
-      "voice": "paul"
+      "voice": "custom/undead_male.safetensors",
+      "decode_steps": 4
     },
     "undead_female": {
-      "voice": "eponine"
+      "voice": "custom/undead_female.safetensors",
+      "decode_steps": 4
     },
     "tauren_male": {
       "voice": "jean"
@@ -112,10 +116,10 @@
       "voice": "azelma"
     },
     "troll_male": {
-      "voice": "peter_yearsley"
+      "voice": "custom/troll_male.safetensors"
     },
     "troll_female": {
-      "voice": "eve"
+      "voice": "custom/troll_female.safetensors"
     },
     "skyborne_male": {
       "voice": "charles"
@@ -124,10 +128,12 @@
       "voice": "fantine"
     },
     "goblin_male": {
-      "voice": "stuart_bell"
+      "voice": "custom/goblin_male.safetensors",
+      "decode_steps": 4
     },
     "goblin_female": {
-      "voice": "jane"
+      "voice": "custom/goblin_female.safetensors",
+      "decode_steps": 4
     },
     "bloodelf_male": {
       "voice": "charles"

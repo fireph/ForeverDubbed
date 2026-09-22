@@ -8,11 +8,53 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from runtime import load_profiles, voice_source
+from runtime import load_profiles, voice_source, synthesis_options
 from server import Engine, Handler, ThreadingHTTPServer
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_synthesis_options_validation(self):
+        self.assertEqual(synthesis_options({'decode_steps':32, 'cpu_threads':1}),
+                         {'decode_steps':32, 'cpu_threads':1})
+        for key, values in (('decode_steps', (0, 65, True, 2.5)),
+                            ('cpu_threads', (0, -1, True, '4'))):
+            for value in values:
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    synthesis_options({key:value})
+
+    def test_per_voice_settings_restore_after_success_and_failure(self):
+        import torch
+        original_threads = torch.get_num_threads()
+        class Model:
+            sampler_decode_steps = 1
+            sample_rate = 24000
+            calls = []
+            def get_state_for_audio_prompt(self, source):
+                return source
+            def generate_audio(self, state, text, **kwargs):
+                self.calls.append((self.sampler_decode_steps, torch.get_num_threads()))
+                if text == 'fail':
+                    raise RuntimeError('synthesis error')
+                return torch.ones(240) * 0.1
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / 'voices.json'
+            p.write_text(json.dumps({'profiles':{
+                'orc':{'voice':'javert','decode_steps':32,'cpu_threads':1},
+                'human':{'voice':'alba'}}}))
+            model = Model()
+            with patch('server.load_model', return_value=model):
+                engine = Engine(p)
+            engine.synthesize('one', 'orc', 'Hello')
+            self.assertEqual(model.calls[-1], (32, 1))
+            engine.synthesize('two', 'human', 'Hello')
+            self.assertEqual(model.calls[-1], (1, original_threads))
+            with self.assertRaisesRegex(RuntimeError, 'synthesis error'):
+                engine.synthesize('three', 'orc', 'fail')
+            self.assertEqual(model.sampler_decode_steps, 1)
+            self.assertEqual(torch.get_num_threads(), original_threads)
+            self.assertTrue(engine.lock.acquire(blocking=False))
+            engine.lock.release()
+
     def test_presets_and_relative_custom_voice(self):
         self.assertEqual(voice_source('tts/voices.json', {'voice': 'alba'}), 'alba')
         self.assertEqual(voice_source('tts/voices.json', {'voice': 'custom/orc.wav'}),

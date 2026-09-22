@@ -8,8 +8,8 @@
 __pycache__/
 *.pyc
 
-# Local recordings, cloned voices, and model weights.
-/tts/custom/
+# Local recordings and model weights.
+/audio_clips/
 *.wav
 *.mp3
 *.flac
@@ -19,6 +19,12 @@ __pycache__/
 *.onnx
 *.pt
 *.pth
+
+# Keep playable voice states; omit previews, references, metadata, experiments,
+# backups, and incomplete exports. These exceptions must follow *.safetensors.
+/tts/custom/*
+!/tts/custom/*.safetensors
+/tts/custom/*.pending.safetensors
 
 # Local diagnostics, dialogue logs, and credentials.
 /screenshots/

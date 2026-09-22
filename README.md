@@ -81,7 +81,7 @@ To hear a voice without opening WoW, run from the project/bundle root:
 
 ### Race and gender voices
 
-Edit `tts/voices.json` and restart the launcher. These are ordinary speech presets assigned to races, not custom fantasy performances. Skyborne and Blood Elves currently share the Night Elf presets; Draenei share the Tauren presets. There are 24 race/gender profiles plus a narrator fallback using 18 distinct voices:
+Edit `tts/voices.json` and restart the launcher. The table below lists the built-in preset assignments; locally cloned voices can replace individual profiles. These presets are ordinary speech voices, not custom fantasy performances. Skyborne and Blood Elves share the Night Elf presets; Draenei share the Tauren presets. There are 24 race/gender profiles plus a narrator fallback, originally using 18 distinct presets:
 
 | Race | Male preset | Female preset |
 | --- | --- | --- |
@@ -108,13 +108,15 @@ Ambient chat uses public sender GUIDs and confirmed NPC-ID mappings, exact match
 
 Pocket speech reads the quest title and text without announcing the speaker's name. Long passages are split into short chunks, with synthesis ahead of playback. New dialogue immediately cancels playback and discards stale audio. Pocket TTS 3.1.0 has no supported generation cancellation API, so its current short chunk finishes before the next synthesis can run.
 
-### Local runtime and future custom voices
+### Local runtime and custom voices
 
 The service binds only to `127.0.0.1:8765`; game text is never sent to an online TTS service. Startup and synthesis run with Hugging Face offline mode. Logs and the setup sample WAV are in `.runtime/pocket/`. The launcher owns and stops the helper process tree it creates; it leaves an already-running compatible helper alone. If you change the voice config, close the existing launcher and its helper before starting a new instance. The configuration is loaded at startup; opening a second launcher does not refresh the first helper.
 
-This setup uses the public preset model, so no Hugging Face login is required. Pocket TTS also supports voice cloning. Profiles already accept local `.wav` or `.safetensors` paths relative to `voices.json`, but cloning a new WAV later requires the cloning-enabled model and any access steps specified by Kyutai. Custom voice creation is not part of the default setup; see [the voice cloning guide](docs/VOICE_CLONING.md) for preparing a reference, enabling the model, exporting a reusable voice, and assigning it to a race. Voice states must match the selected model (`english_2026-04`). After adding a preset, rerun setup to cache it before offline use.
+The default setup uses the public preset model, so no Hugging Face login is required. For custom voices, `tts/clone_voice.py` accepts WAV or MP3 recordings from `audio_clips/`, prepares reference excerpts, exports reusable `.safetensors` voice states, and generates preview dialogue before optionally assigning profiles. Export requires access to Kyutai's cloning-enabled model; audio processing and synthesis remain local. See [the voice cloning guide](docs/VOICE_CLONING.md) for the Human and Night Elf commands, mixed audio formats, and manual excerpt selection. Profiles also accept local `.wav` or `.safetensors` paths relative to `voices.json`. Voice states must match the selected model (`english_2026-04`). After adding a preset, rerun setup to cache it before offline use.
 
 Upstream documentation: [Pocket TTS](https://github.com/kyutai-labs/pocket-tts), [Python API](https://github.com/kyutai-labs/pocket-tts/blob/main/docs/API%20Reference/python-api.md), and [preset voice sources/licenses](https://huggingface.co/kyutai/tts-voices).
+
+Finished `tts/custom/*.safetensors` voice states can be committed alongside `tts/voices.json` and are included in Windows bundles when referenced by that configuration. Source recordings, previews, local backups, credentials, and base-model downloads remain Git-ignored. A fresh checkout still needs the normal Pocket TTS setup; reference recordings and export metadata are not required to play the saved voices.
 
 Decoded messages are printed as one JSON object per line on stdout. Discovery and speech diagnostics go to stderr. To save text without speech:
 

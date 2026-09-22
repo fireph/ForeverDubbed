@@ -11,7 +11,7 @@ import threading
 import time
 import traceback
 
-from runtime import MODEL, ROOT, load_model, load_profiles, voice_source
+from runtime import MODEL, ROOT, load_model, load_profiles, voice_source, synthesis_settings
 
 
 class Engine:
@@ -54,7 +54,8 @@ class Engine:
             # Pocket 3.1.0 has no supported generation stop parameter. Drain the
             # current short chunk before releasing the lock, so its internal
             # threads cannot race the next request. Cancelled audio is discarded.
-            audio = self.model.generate_audio(self.prompts[voice], text, copy_state=True)
+            with synthesis_settings(self.model, self.profiles[voice]):
+                audio = self.model.generate_audio(self.prompts[voice], text, copy_state=True)
             if event.is_set():
                 raise InterruptedError("cancelled")
             stream = io.BytesIO()
