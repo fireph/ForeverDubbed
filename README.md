@@ -4,7 +4,7 @@ A WoW Forever addon and Go companion that read NPC and quest dialogue aloud. The
 
 The square uses **16 calibrated colors** and a **48 × 48 data grid**, with a one-cell border. At the default **2 × 2 pixel cell size**, it occupies **100 × 100 physical pixels** and carries **1,124 bytes per page**. This is the only encoding format. You can enlarge cells with `/fdb cell 3` (150 × 150 pixels) if your display needs more sampling margin; the capacity stays the same. This is a custom optical format, not a standard QR code.
 
-**Upgrading to 0.3.2:** replace the addon and `/reload`. This release adds 15,444 display-ID race/gender mappings from VoiceOver, improving detection when NPC `UnitRace` is unavailable. The 0.3.1 companion and existing Pocket TTS setup remain compatible; no model downloads or voice configuration changes are needed. If upgrading from 0.2.1, replace both addon and companion, run Pocket TTS setup once, and use `Start-ForeverDubbed.cmd` for race-based voices.
+**Upgrading to 0.3.2:** replace the addon and `/reload`. This release adds 15,444 display-ID race/gender mappings from VoiceOver, improving detection when NPC `UnitRace` is unavailable. Use the companion and Python helper from the same checkout: the helper now requires a streaming-capable companion. Existing model downloads and voice configuration remain usable. If upgrading from 0.2.1, replace both addon and companion, run Pocket TTS setup once, and use `Start-ForeverDubbed.cmd` for race-based voices.
 
 See [CHANGELOG.md](CHANGELOG.md) for earlier releases and [PROTOCOL.md](PROTOCOL.md) for the optical format.
 
@@ -31,9 +31,9 @@ The build produces `dist/ForeverDubbed-windows-amd64.zip`, which bundles the exe
 
 ### Streaming speech
 
-Rebuild the Go companion and restart `Start-ForeverDubbed.cmd` after updating both the companion and `tts/server.py`. No new models or Python dependencies are required. An older running helper must be stopped before restarting.
+Rebuild the Go companion and restart `Start-ForeverDubbed.cmd` after updating both the companion and the `tts/` helper files. No new models or Python dependencies are required. An older running helper must be stopped before restarting.
 
-The helper sends mono 16-bit PCM as Pocket TTS decodes it. The companion queues a bounded number of audio buffers on one Windows playback device, including across text chunks. Changing dialogue stops and clears queued playback immediately. Pocket TTS 3.1.0 still finishes the active short generation before starting another request, discarding cancelled audio to keep model state safe.
+The speech helper exposes `/stream`, `/health`, and `/cancel`; the former full-WAV `/synthesize` endpoint has been removed. The helper sends mono 16-bit PCM as Pocket TTS decodes it. The companion queues a bounded number of audio buffers on one Windows playback device, including across text chunks. Changing dialogue stops and clears queued playback immediately. Pocket TTS 3.1.0 still finishes the active short generation before starting another request, discarding cancelled audio to keep model state safe.
 
 The TTS log records `first audio in ...s` for each text chunk. This measures the helper's time to its first emitted audio, not capture/transport delay or speaker output latency.
 
@@ -183,6 +183,6 @@ The portable decoder can read PNGs on any OS. For a paged message, supply one un
 go run ./cmd/foreverdubbed -image page1.png,page2.png,page3.png
 ```
 
-Tests cover voice routing and overrides, cancellation, HTTP service identity/config checks, PCM WAV validation, speaker metadata, the Lua/Go byte and palette contract, Unicode spanning pages, out-of-order/duplicate pages, session changes, sequence wraparound, invalid dimensions, corruption, gamma/tint/noise transforms, damaged reference swatches, moved tiles, negative monitor coordinates, missing NPC races, display lookup precedence, model-load timing and stale identities, saved race assignments, settings migration, physical pixel sizing at multiple resolutions/UI scales, and all supported cell sizes. Lua tests use mocked game APIs; they do not substitute for testing the real client. Tests explicitly skip the Lua checks if an interpreter is unavailable.
+Tests cover voice routing and overrides, cancellation, HTTP service identity/config checks, streamed PCM validation and bounded playback, speaker metadata, the Lua/Go byte and palette contract, Unicode spanning pages, out-of-order/duplicate pages, session changes, sequence wraparound, invalid dimensions, corruption, gamma/tint/noise transforms, damaged reference swatches, moved tiles, negative monitor coordinates, missing NPC races, display lookup precedence, model-load timing and stale identities, saved race assignments, settings migration, physical pixel sizing at multiple resolutions/UI scales, and all supported cell sizes. Lua tests use mocked game APIs; they do not substitute for testing the real client. Tests explicitly skip the Lua checks if an interpreter is unavailable.
 
 See [PROTOCOL.md](PROTOCOL.md) for the wire format. API references used: [Forever gossip API source](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipInfoDocumentation.lua), [Forever quest UI source](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua), [Windows BitBlt](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-bitblt), and [SpeechSynthesizer.Speak](https://learn.microsoft.com/en-us/dotnet/api/system.speech.synthesis.speechsynthesizer.speak?view=netframework-4.8.1).

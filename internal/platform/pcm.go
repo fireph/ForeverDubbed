@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+const (
+	// MaxPCMBufferBytes caps each buffer at 100 ms of 24 kHz mono 16-bit audio.
+	MaxPCMBufferBytes = 4800
+	// PCMQueueDepth bounds each of the receiving and device queues.
+	PCMQueueDepth = 4
+)
+
 // pcmDevice owns buffers until Pending reports they have finished playing.
 type pcmDevice interface {
 	Queue([]byte) error
@@ -33,7 +40,7 @@ func playPCM(ctx context.Context, chunks <-chan []byte, device pcmDevice) (err e
 			return nil
 		}
 		input := chunks
-		if pending >= 4 {
+		if pending >= PCMQueueDepth {
 			input = nil
 		}
 		select {
@@ -45,7 +52,7 @@ func playPCM(ctx context.Context, chunks <-chan []byte, device pcmDevice) (err e
 				chunks = nil
 				continue
 			}
-			if len(pcm) == 0 || len(pcm)%2 != 0 || len(pcm) > 4800 {
+			if len(pcm) == 0 || len(pcm)%2 != 0 || len(pcm) > MaxPCMBufferBytes {
 				return fmt.Errorf("invalid PCM playback buffer")
 			}
 			if err := ctx.Err(); err != nil {

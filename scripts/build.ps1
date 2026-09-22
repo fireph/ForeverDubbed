@@ -23,7 +23,7 @@ try {
         Copy-Item data (Join-Path $stage 'data') -Recurse
         Copy-Item Start-ForeverDubbed.cmd, Setup-PocketTTS.cmd $stage
         New-Item -ItemType Directory (Join-Path $stage 'tts'), (Join-Path $stage 'scripts') | Out-Null
-        Copy-Item tts/server.py, tts/runtime.py, tts/prepare.py, tts/check_runtime.py, tts/clone_voice.py, tts/requirements.txt, tts/voices.json (Join-Path $stage 'tts')
+        Copy-Item tts/server.py, tts/engine.py, tts/runtime.py, tts/prepare.py, tts/check_runtime.py, tts/clone_voice.py, tts/requirements.txt, tts/voices.json (Join-Path $stage 'tts')
         # Include only local voice files used by this configuration, never the
         # whole custom directory (which contains recordings and local backups).
         $ttsRoot = (Resolve-Path tts).Path
