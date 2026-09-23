@@ -2,13 +2,27 @@ local _, NS = ...
 local Codec = {}
 NS.Codec = Codec
 Codec.GRID, Codec.PAYLOAD = 50, 1124
--- Eight cube corners and eight spaced edge midpoints. These indices are also
--- transmitted as sixteen calibration swatches in the bottom border.
+-- Chromaglyph OKLab pack: h 264, L 0.22, C 0.045; minimum RGB distance sqrt(37).
+-- Palette order is part of the wire format; all sixteen references are sent.
+Codec.OUTLINE = 2 -- physical pixels, independent of cell size
+Codec.FINDER = {128, 192, 240} -- light blue #80c0f0
 Codec.PALETTE = {
-    {0,0,0}, {0,0,255}, {0,255,0}, {0,255,255},
-    {255,0,0}, {255,0,255}, {255,255,0}, {255,255,255},
-    {128,0,0}, {0,128,255}, {128,255,0}, {128,0,255},
-    {255,128,0}, {255,0,128}, {0,255,128}, {128,255,255},
+    {16,26,47},
+    {0,28,49},
+    {30,25,46},
+    {14,27,59},
+    {18,24,35},
+    {5,26,38},
+    {24,27,57},
+    {5,28,58},
+    {8,27,48},
+    {26,24,38},
+    {23,26,47},
+    {19,19,45},
+    {15,33,50},
+    {9,20,46},
+    {15,27,53},
+    {17,25,41},
 }
 
 local function uint(n, width)
@@ -52,7 +66,7 @@ function Codec.Encode(session, sequence, kind, speaker, title, text, race, gende
     local frames, checksum = {}, Codec.Adler(body)
     for i = 0, count - 1 do
         local payload = body:sub(i * Codec.PAYLOAD + 1, (i + 1) * Codec.PAYLOAD)
-        local frame = "FDB3" .. uint(session, 4) .. uint(sequence, 4) .. uint(checksum, 4)
+        local frame = "FDB4" .. uint(session, 4) .. uint(sequence, 4) .. uint(checksum, 4)
             .. uint(i, 2) .. uint(count, 2) .. uint(#payload, 2) .. string.char(kind, flags)
             .. payload .. string.rep("\0", Codec.PAYLOAD - #payload)
         frames[#frames + 1] = frame .. uint(Codec.Adler(frame), 4)

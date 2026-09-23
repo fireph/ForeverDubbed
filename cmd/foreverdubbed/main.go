@@ -20,7 +20,7 @@ import (
 	"foreverdubbed/internal/speech"
 )
 
-const version = "0.3.2"
+const version = "0.4.0"
 
 func main() {
 	log.SetFlags(log.Ltime)
@@ -56,7 +56,7 @@ func run() error {
 	flag.DurationVar(&scan, "scan", time.Second, "full desktop search interval when tile is missing")
 	flag.Parse()
 	if showVersion {
-		fmt.Printf("ForeverDubbed %s, FDB3, 16 colors, %d bytes/page\n", version, protocol.PayloadBytes)
+		fmt.Printf("ForeverDubbed %s, FDB4, 16 colors, %d bytes/page\n", version, protocol.PayloadBytes)
 		return nil
 	}
 	if flag.NArg() != 0 {
@@ -164,7 +164,7 @@ func run() error {
 	done := make(chan struct{})
 	go func() { defer close(done); speakLoop(ctx, speech, speak) }()
 	defer func() { stop(); <-done }()
-	log.Printf("ForeverDubbed %s (FDB3, 16 colors). Searching; in WoW: /fdb unlock. Ctrl+C to quit.", version)
+	log.Printf("ForeverDubbed %s (FDB4, 16 colors). Searching; in WoW: /fdb unlock. Ctrl+C to quit.", version)
 	var location *protocol.Location
 	failures := 0
 	var lastError time.Time

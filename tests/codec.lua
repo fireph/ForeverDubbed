@@ -7,6 +7,7 @@ for _, rgb in ipairs(ns.Codec.PALETTE) do
     palette[#palette+1] = string.format("%02x%02x%02x", rgb[1], rgb[2], rgb[3])
 end
 print(table.concat(palette))
+print(string.format("%d:%02x%02x%02x", ns.Codec.OUTLINE, unpack(ns.Codec.FINDER)))
 for _, frame in ipairs(frames) do
     print((frame:gsub(".", function(c) return string.format("%02x", c:byte()) end)))
     local cells = ns.Codec.Cells(frame)

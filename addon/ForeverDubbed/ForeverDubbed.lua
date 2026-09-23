@@ -9,11 +9,12 @@ frame:SetMovable(true)
 frame:RegisterForDrag("LeftButton")
 frame:Hide()
 
+local outline = {}
 local textures, pages, page, elapsed, expires = {}, nil, 1, 0, 0
 local session = (time() * 1000 + math.floor(GetTime() * 1000) % 1000) % 4294967296
 local sequence, lastBody, lastAt, ready = 0, nil, -1, false
 local PAGE_SECONDS = 0.25
-local VERSION = "0.3.2"
+local VERSION = "0.4.0"
 local requestID, lastSpeaker = 0, nil
 
 local function pixelFactor()
@@ -55,7 +56,25 @@ local function place()
     local grid = Codec.GRID
     -- One local unit becomes one physical pixel, independent of UI scale.
     frame:SetScale(pixelFactor() / UIParent:GetEffectiveScale())
-    frame:SetSize(grid * db.cell, grid * db.cell)
+    local inset, size = Codec.OUTLINE, grid * db.cell + 2 * Codec.OUTLINE
+    frame:SetSize(size, size)
+    -- Four strips keep the light-blue finder outside the dark calibration ring.
+    local strips = {{0,0,size,inset}, {0,-size+inset,size,inset},
+        {0,-inset,inset,size-2*inset}, {size-inset,-inset,inset,size-2*inset}}
+    for i, rect in ipairs(strips) do
+        local t = outline[i]
+        if not t then
+            t = frame:CreateTexture(nil, "ARTWORK")
+            if t.SetSnapToPixelGrid then t:SetSnapToPixelGrid(false) end
+            if t.SetTexelSnappingBias then t:SetTexelSnappingBias(0) end
+            outline[i] = t
+        end
+        t:ClearAllPoints()
+        t:SetPoint("TOPLEFT", frame, "TOPLEFT", rect[1], rect[2])
+        t:SetSize(rect[3], rect[4])
+        t:SetColorTexture(Codec.FINDER[1]/255, Codec.FINDER[2]/255, Codec.FINDER[3]/255, 1)
+        t:Show()
+    end
     frame:ClearAllPoints()
     frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", db.x, db.y)
     frame:EnableMouse(not db.locked)
@@ -68,7 +87,7 @@ local function place()
             textures[i] = t
         end
         t:ClearAllPoints()
-        t:SetPoint("TOPLEFT", frame, "TOPLEFT", ((i - 1) % grid) * db.cell, -math.floor((i - 1) / grid) * db.cell)
+        t:SetPoint("TOPLEFT", frame, "TOPLEFT", inset + ((i - 1) % grid) * db.cell, -inset - math.floor((i - 1) / grid) * db.cell)
         t:SetSize(db.cell, db.cell)
         t:Show()
     end
@@ -163,8 +182,8 @@ events:SetScript("OnEvent", function(_, event, ...)
             db.positionVersion = 2
         end
         -- Upgrade the encoding once while preserving position and other settings.
-        if db.encodingVersion ~= 3 then db.cell = 2 end
-        db.encodingVersion, db.mode = 3, nil
+        if db.encodingVersion ~= 3 and db.encodingVersion ~= 4 then db.cell = 2 end
+        db.encodingVersion, db.mode = 4, nil
         db.cell = math.max(2, math.min(8, math.floor(tonumber(db.cell) or 2)))
         db.x = tonumber(db.x) or 16
         db.y = tonumber(db.y) or (screenHeight() - 16)
@@ -216,7 +235,7 @@ SlashCmdList.FOREVERDUBBED = function(input)
         local size = tonumber(arg)
         if not size or size < 2 or size > 8 or size ~= math.floor(size) then printStatus("Use /fdb cell 2 through 8."); return end
         db.cell = size; place()
-        printStatus("Square is " .. size * Codec.GRID .. " × " .. size * Codec.GRID .. " physical pixels, " .. Codec.PAYLOAD .. " bytes per page.")
+        printStatus("Square is " .. (size * Codec.GRID + 2 * Codec.OUTLINE) .. " × " .. (size * Codec.GRID + 2 * Codec.OUTLINE) .. " physical pixels, " .. Codec.PAYLOAD .. " bytes per page.")
     elseif cmd == "on" or cmd == "off" then
         db.enabled = cmd == "on"
         if not db.enabled then requestID = requestID + 1; pages = nil; frame:Hide() end
@@ -251,7 +270,7 @@ SlashCmdList.FOREVERDUBBED = function(input)
             .. "; locked: " .. tostring(db.locked))
         printStatus(string.format("Pixel factor: %.5f; effective scale: %.5f; physical cell: %.3f px; square: %.1f px",
             pixelFactor(), frame:GetEffectiveScale(), db.cell * frame:GetEffectiveScale() / pixelFactor(),
-            Codec.GRID * db.cell * frame:GetEffectiveScale() / pixelFactor()))
+            (Codec.GRID * db.cell + 2 * Codec.OUTLINE) * frame:GetEffectiveScale() / pixelFactor()))
         local info = lastSpeaker or NS.Speakers.Dialog()
         printStatus("Last NPC: " .. (info.name or "") .. "; race: " .. (info.race or "") .. "; gender: " .. (info.gender or "") .. "; NPC ID: " .. (info.npcID or "")
             .. "; race source: " .. (info.raceSource or "unavailable"))

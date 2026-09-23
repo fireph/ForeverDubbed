@@ -10,9 +10,14 @@ function methods:CreateTexture()
     self.textures[#self.textures+1] = t
     return t
 end
+function methods:SetPoint(...) self.point={...} end
+function methods:ClearAllPoints() self.point=nil end
 function methods:SetSize(w,h) self.width, self.height = w,h end
 function methods:SetScale(scale) self.scale=scale end
-function methods:SetColorTexture(r,g,b,a) assert(r==0 or r==128/255 or r==1); assert(g==0 or g==128/255 or g==1); assert(b==0 or b==128/255 or b==1); assert(a==1) end
+function methods:SetColorTexture(r,g,b,a)
+    assert(r>=0 and r<=1 and g>=0 and g<=1 and b>=0 and b<=1 and a==1)
+    self.color={r,g,b,a}
+end
 function methods:Show() self.visible = true end
 function methods:Hide() self.visible = false end
 function methods:GetEffectiveScale()
@@ -65,13 +70,20 @@ events.scripts.OnEvent(events, "ADDON_LOADED", "ForeverDubbed")
 assert(ForeverDubbedDB.cell==2 and ForeverDubbedDB.locked)
 assert(ForeverDubbedDB.x==38 and ForeverDubbedDB.y==1688 and not ForeverDubbedDB.chat)
 assert(ForeverDubbedDB.positionVersion==2)
-assert(ForeverDubbedDB.encodingVersion==3 and ForeverDubbedDB.mode==nil)
-assert(tile.width==100 and tile.height==100 and #tile.textures==2500)
+assert(ForeverDubbedDB.encodingVersion==4 and ForeverDubbedDB.mode==nil)
+assert(tile.width==104 and tile.height==104 and #tile.textures==2504)
 ForeverDubbedDB.chat=true
 for _, event in ipairs({"GOSSIP_SHOW","QUEST_GREETING","QUEST_DETAIL","QUEST_PROGRESS","QUEST_COMPLETE"}) do
     now = now + 1
     events.scripts.OnEvent(events,event)
     assert(tile.visible)
+end
+-- The rendered cells use the exact ordered palette, after the four outline strips.
+local expected = ns.Codec.Cells(actual(unpack(calls[#calls]))[1])
+for i, value in ipairs(expected) do
+    local rgb, t = ns.Codec.PALETTE[value+1], tile.textures[i+4]
+    assert(t.color[1]==rgb[1]/255 and t.color[2]==rgb[2]/255 and t.color[3]==rgb[3]/255)
+    assert(t.point[4]==2+((i-1)%50)*2 and t.point[5]==-2-math.floor((i-1)/50)*2)
 end
 assert(calls[3][7]=="Orc" and calls[3][8]=="male" and calls[3][9]=="4949")
 assert(calls[3][6] == "Quest body\n\nQuest objectives")
@@ -100,13 +112,14 @@ SlashCmdList.FOREVERDUBBED("test")
 assert(tile.visible)
 SlashCmdList.FOREVERDUBBED("status")
 -- A custom cell size survives reload after the one-time encoding upgrade.
+ForeverDubbedDB.encodingVersion=3 -- upgrade preserves a valid custom cell size
 SlashCmdList.FOREVERDUBBED("cell 3")
-assert(tile.width==150 and tile.height==150)
+assert(tile.width==154 and tile.height==154)
 assert(loadfile("addon/ForeverDubbed/ForeverDubbed.lua"))("ForeverDubbed", ns)
 events, tile = objects[#objects], ForeverDubbedTile
 events.scripts.OnEvent(events, "ADDON_LOADED", "ForeverDubbed")
-assert(ForeverDubbedDB.cell==3 and ForeverDubbedDB.encodingVersion==3)
-assert(tile.width==150 and tile.height==150)
+assert(ForeverDubbedDB.cell==3 and ForeverDubbedDB.encodingVersion==4)
+assert(tile.width==154 and tile.height==154)
 now = now + 1
 GetQuestText = function() return string.rep("A long quest. ", 200) end
 events.scripts.OnEvent(events, "QUEST_DETAIL")
@@ -122,7 +135,14 @@ for _, config in ipairs({{768,0.75},{1080,0.8},{1440,0.64},{2160,0.9}}) do
         events.scripts.OnEvent(events,"UI_SCALE_CHANGED")
         local pixelsPerUnit=tile:GetEffectiveScale()/(768/physicalHeight)
         assert(math.abs(pixelsPerUnit-1)<0.000001)
-        assert(math.abs(tile.width*pixelsPerUnit-150)<0.000001)
+        assert(math.abs(tile.width*pixelsPerUnit-154)<0.000001)
+        for i=1,4 do
+            local t=tile.textures[i]
+            assert(math.abs(math.min(t.width,t.height)*pixelsPerUnit-2)<0.000001)
+            assert(t.color[1]==128/255 and t.color[2]==192/255 and t.color[3]==240/255)
+        end
+        assert(tile.textures[5].point[4]==2 and tile.textures[5].point[5]==-2)
+        assert(tile.textures[5].width==3 and tile.textures[5].height==3)
         tile.scripts.OnDragStop(tile)
         assert(ForeverDubbedDB.x==20 and ForeverDubbedDB.y==900)
         SlashCmdList.FOREVERDUBBED("reset")

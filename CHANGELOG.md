@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- Use the dark Chromaglyph palette with a fixed 2px light-blue outline outside the calibration ring. Default tile size is now 104 × 104 physical pixels.
+- Locate the outline and decode both ring and data using captured palette references. Reject clipped outlines, collapsed colors, ambiguous samples, and invalid checksums.
+- Introduce FDB4; update the addon and companion together. Preserve existing position and valid FDB3 cell-size settings.
+
 ## 0.3.2
 
 - Bundle 15,444 display-ID race/gender mappings from VoiceOver across 21 legacy races, with a pinned source, verified importer, and license.

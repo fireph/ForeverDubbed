@@ -73,7 +73,7 @@ func Encode(m Message) ([][]byte, error) {
 		end := min((i+1)*capacity, len(body))
 		p := body[i*capacity : end]
 		b := make([]byte, FrameBytes)
-		copy(b, "FDB3")
+		copy(b, "FDB4")
 		binary.BigEndian.PutUint32(b[4:], m.Session)
 		binary.BigEndian.PutUint32(b[8:], m.Sequence)
 		binary.BigEndian.PutUint32(b[12:], adler32.Checksum(body))
@@ -92,7 +92,7 @@ func Encode(m Message) ([][]byte, error) {
 
 func Parse(b []byte) (Packet, error) {
 	p := Packet{}
-	if len(b) != FrameBytes || string(b[:4]) != "FDB3" || b[23] > 1 {
+	if len(b) != FrameBytes || string(b[:4]) != "FDB4" || b[23] > 1 {
 		return p, errors.New("invalid frame header")
 	}
 	checksumAt := len(b) - 4

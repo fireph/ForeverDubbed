@@ -1,33 +1,33 @@
-# ForeverDubbed optical protocol FDB3
+# ForeverDubbed optical protocol FDB4
 
-The sole supported format uses 16 colors and four bits per cell. A tile is 50 × 50 cells including a one-cell border; its inner 48 × 48 cells carry 9,216 bits (1,152 bytes). Cells are integer 2–8 physical desktop pixels wide, default 2, making the default square 100 × 100 pixels. Coordinates start at the top-left; x increases rightward and y downward.
+The sole supported format uses 16 dark navy colors and four bits per cell. A tile has a 50 × 50 cell grid including a one-cell calibration ring; its inner 48 × 48 cells carry 9,216 bits (1,152 bytes). A separate light-blue outline surrounds the calibration ring, exactly **2 physical pixels** thick on every side. Cells are integer 2–8 physical pixels wide, default 2. The total square is `50 × cell size + 4` pixels wide: **104 × 104** by default, or **154 × 154** with 3px cells. Coordinates start at the outer outline's top-left; x increases rightward and y downward.
 
-FDB3 requires companion/addon version 0.2.0 or newer. Previous 8-color formats are not accepted. Both components must be updated together.
+FDB4 requires companion and addon version 0.4.0 or newer. Update both together: the bright FDB3 palette and previous optical formats are not accepted. The byte layout and payload capacity are unchanged except for the format magic. Existing tile position, lock state, and FDB3 cell-size settings are preserved.
 
-Use addon 0.2.1 or newer for correct physical pixel sizing. Its local scale is `(768 / physical screen height) / UIParent:GetEffectiveScale()`, following Blizzard's [PixelUtil conversion](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_SharedXML/PixelUtil.lua). Version 0.2.1 retains the 0.2.0 wire format; 0.3.0 adds the optional metadata layout described below without changing the tile dimensions or palette.
+The addon uses `(768 / physical screen height) / UIParent:GetEffectiveScale()` for its local scale, so cell sizes and outline thickness remain physical pixels regardless of UI scale. Grid origin is two pixels right and down from the outer tile origin.
 
 ## Palette
 
-Eight RGB cube corners plus eight edge midpoints provide 16 distinct symbols. The closest pair is 127 RGB units apart in the source palette. Indices 0–7 retain binary RGB ordering for discovery.
+Chromaglyph OKLab pack: center hue 264, lightness 0.22, chroma 0.045. The closest source colors are approximately 6.08 RGB units apart (squared distance 37). Palette order is part of the protocol.
 
 | Index (hex) | R | G | B |
 | --- | --- | --- | --- |
-| 0 | 0 | 0 | 0 |
-| 1 | 0 | 0 | 255 |
-| 2 | 0 | 255 | 0 |
-| 3 | 0 | 255 | 255 |
-| 4 | 255 | 0 | 0 |
-| 5 | 255 | 0 | 255 |
-| 6 | 255 | 255 | 0 |
-| 7 | 255 | 255 | 255 |
-| 8 | 128 | 0 | 0 |
-| 9 | 0 | 128 | 255 |
-| A | 128 | 255 | 0 |
-| B | 128 | 0 | 255 |
-| C | 255 | 128 | 0 |
-| D | 255 | 0 | 128 |
-| E | 0 | 255 | 128 |
-| F | 128 | 255 | 255 |
+| 0 | 16 | 26 | 47 |
+| 1 | 0 | 28 | 49 |
+| 2 | 30 | 25 | 46 |
+| 3 | 14 | 27 | 59 |
+| 4 | 18 | 24 | 35 |
+| 5 | 5 | 26 | 38 |
+| 6 | 24 | 27 | 57 |
+| 7 | 5 | 28 | 58 |
+| 8 | 8 | 27 | 48 |
+| 9 | 26 | 24 | 38 |
+| A | 23 | 26 | 47 |
+| B | 19 | 19 | 45 |
+| C | 15 | 33 | 50 |
+| D | 9 | 20 | 46 |
+| E | 15 | 27 | 53 |
+| F | 17 | 25 | 41 |
 
 All cells are opaque. Lua supplies channels divided by 255 to `SetColorTexture`.
 
@@ -43,11 +43,13 @@ Evaluate these rules in order, for coordinates 0..49:
 | x = 0 | (3y + 2) mod 8 |
 | x = 49 | (5y + 4) mod 8 |
 
-The reader samples cell center pixels. It searches for the top-row pattern at every supported cell size, then checks the remaining border, palette, frame magic, dimensions, and checksum. All non-calibration border colors use binary thresholds: channel <=72 means 0, >=183 means 1; intermediate values invalidate the candidate. The first eight calibration swatches must also match their binary corner indices.
+The outer outline is RGB **(128, 192, 240)** (`#80c0f0`), rendered opaque. Discovery scans for a light-blue top-left inner corner, then checks both pixels of all four outline sides at each supported cell size. The broad discovery gate requires R >=25, G >=70, B >=100, G−R >=8 and B−G >=8. Outline pixels must lie within 12 RGB units of the captured top-left color. A blue box alone is never sufficient: calibration, ring pattern, magic, dimensions, and frame checksum must also pass.
 
-The sixteen bottom-row reference swatches define the palette **as captured**, on every page. Each pair must be at least 32 units apart in Euclidean RGB distance. Data cells are classified by nearest observed reference; the distance to that reference must be at most 40% of its distance to its nearest competing reference. Cells outside that radius invalidate the page. This follows consistent gamma/tint changes, while rejecting ambiguous values rather than guessing bits. It does not correct spatially varying filters, blur, or transforms that collapse colors together.
+The reader samples cell center pixels. Sixteen bottom-row reference swatches define the palette **as captured**, on every page. Each pair must be at least 3 units apart in Euclidean RGB distance; transforms that merge colors are rejected. Both ring and data cells use the nearest observed reference, within 40% of that reference's distance to its nearest competing reference. No binary RGB thresholds are used for the dark cells.
 
-Subsequent reads capture only the discovered rectangle. Candidate origins can differ from the exact visual edge by a pixel while still sampling cell interiors correctly. Rotation, fractional rescaling, perspective, and arbitrary external image resizing are unsupported.
+This deliberately subtle palette trades noise tolerance for appearance. Mild consistent gamma/tint changes can be calibrated, but strong dark-level compression, spatially varying filters, blur, lossy screenshots, or HDR transforms can make it unreadable. Ambiguous samples are rejected; checksums catch corrupted packets rather than attempting error correction. Use original, lossless captures at native resolution.
+
+Subsequent reads capture the complete discovered rectangle including the blue outline. Rotation, fractional rescaling, perspective, and arbitrary external image resizing are unsupported.
 
 ## Frame bytes
 
@@ -55,7 +57,7 @@ Interior cells are read row by row. Each palette index encodes a four-bit nibble
 
 | Byte offset | Size | Field |
 | --- | --- | --- |
-| 0 | 4 | ASCII `FDB3` |
+| 0 | 4 | ASCII `FDB4` |
 | 4 | 4 | Session ID, changes when addon reloads |
 | 8 | 4 | Sequence number, increments for each new message |
 | 12 | 4 | Adler-32 of the complete unpadded message |

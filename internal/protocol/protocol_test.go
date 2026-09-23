@@ -176,7 +176,7 @@ func TestImageNoiseAndOcclusion(t *testing.T) {
 	if _, e := Decode(im, Location{Cell: 3}); e != nil {
 		t.Fatal(e)
 	}
-	im.SetRGBA(4, 4, color.RGBA{128, 128, 128, 255})
+	im.SetRGBA(Outline+4, Outline+4, color.RGBA{128, 128, 128, 255})
 	if _, e := Decode(im, Location{Cell: 3}); e == nil {
 		t.Fatal("ambiguous cell accepted")
 	}
@@ -209,7 +209,7 @@ func TestLuaCompatibility(t *testing.T) {
 	m := fixture()
 	m.Race, m.Gender, m.NPCID = "Orc", "male", "4949"
 	want := framesFor(t, m)
-	if len(lines) != len(want)*2+1 {
+	if len(lines) != len(want)*2+2 {
 		t.Fatalf("unexpected Lua output: %s", out)
 	}
 	rgb, err := hex.DecodeString(lines[0])
@@ -221,7 +221,10 @@ func TestLuaCompatibility(t *testing.T) {
 			t.Fatal("Lua/Go palette mismatch", i)
 		}
 	}
-	lines = lines[1:]
+	if lines[1] != "2:80c0f0" {
+		t.Fatal("Lua/Go outline mismatch", lines[1])
+	}
+	lines = lines[2:]
 	for i, b := range want {
 		got, e := hex.DecodeString(lines[i*2])
 		if e != nil || !bytes.Equal(got, b) {
@@ -231,9 +234,10 @@ func TestLuaCompatibility(t *testing.T) {
 		if e != nil || len(cells) != Grid*Grid {
 			t.Fatal("invalid cells")
 		}
-		im := image.NewRGBA(image.Rect(0, 0, Grid*2, Grid*2))
+		im := image.NewRGBA((Location{Cell: 2}).Rect())
+		draw.Draw(im, im.Bounds(), &image.Uniform{finderColor}, image.Point{}, draw.Src)
 		for j, v := range cells {
-			draw.Draw(im, image.Rect(j%Grid*2, j/Grid*2, j%Grid*2+2, j/Grid*2+2), &image.Uniform{palette(v)}, image.Point{}, draw.Src)
+			draw.Draw(im, image.Rect(Outline+j%Grid*2, Outline+j/Grid*2, Outline+j%Grid*2+2, Outline+j/Grid*2+2), &image.Uniform{palette(v)}, image.Point{}, draw.Src)
 		}
 		l, p, e := Find(im)
 		if e != nil || l.Cell != 2 || !reflect.DeepEqual(p, packetFor(t, b)) {
