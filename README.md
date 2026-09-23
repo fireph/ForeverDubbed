@@ -43,7 +43,7 @@ The release contains one application executable plus ONNX Runtime libraries, ONN
 
 ### Streaming speech
 
-Streaming is always enabled. The first decoded PCM is queued immediately; generation and playback use bounded buffers. New dialogue stops playback and cancels native generation. The model is reused after its workers finish, preserving safe voice changes.
+Streaming is always enabled. The decoder generates audio in batches of up to 1.2 seconds, including the first batch; shorter sentence endings are flushed immediately. Playback starts when the first batch is ready, so startup delay depends on generation speed. Audio is queued in at most 100 ms buffers for responsive cancellation. New dialogue stops playback and cancels native generation. The model is reused after its workers finish, preserving safe voice changes.
 
 Generate clips and measure first-audio latency with `go run -tags pocket_native ./tools/voicecheck`. Samples and the timing report go to `.runtime/voice-samples/`. These times measure PCM availability after model loading, not screen capture or speaker latency.
 

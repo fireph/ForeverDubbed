@@ -2053,7 +2053,9 @@ void PocketTTS::stream(const std::string& text, const Tensor& voice, StreamCallb
                 cv.wait(lock, [&]{ return (int)queue.size() >= want || gen_done || aborted; });
                 if (aborted) break;
                 
-                int take = gen_done ? (int)queue.size() : std::min((int)queue.size(), want);
+                // Flush a short final batch, but never exceed the configured
+                // chunk size when the generator finishes ahead of decoding.
+                int take = std::min((int)queue.size(), want);
                 for (int i = 0; i < take; ++i) {
                     batch.push_back(std::move(queue.front()));
                     queue.pop_front();

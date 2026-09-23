@@ -7,9 +7,10 @@ PocketTTS.cpp and our C wrapper are compiled by `go build` through cgo and linke
 - A friend adapter imports the existing April-model `.safetensors` voice states. No re-cloning or lossy conversion is performed.
 - Correct restoration of dynamic snapshot shapes and initialization of decoder `first` flags for the pinned April export.
 - Exceptions from generation/decoding join the worker before propagating to Go.
+- Decoder batch limits also apply after generation finishes, so playback backpressure cannot turn the remaining audio into one oversized decode batch.
 - Windows UTF-8 path conversion allocates space for its terminator.
 
-`bridge.cpp` owns the model and a bounded four-buffer PCM queue. Go polls without blocking on model computation, and cancellation aborts generation and joins both native workers before reuse. Per-profile decode steps are retained. The application's `-cpu-threads` flag configures the native sessions once (default 1); old Python per-profile thread overrides are no longer used.
+`bridge.cpp` owns the model and a bounded four-buffer PCM queue. The native decoder processes 15 latent frames (1.2 seconds of audio) per batch, including the first batch, and flushes shorter batches at the end of a sentence. First playback waits for that batch to be generated; the wall-clock delay depends on inference speed. The callback splits decoded audio into at most 100 ms PCM buffers so playback queues remain bounded. Go polls without blocking on model computation, and cancellation aborts generation and joins both native workers before reuse. Per-profile decode steps are retained. The application's `-cpu-threads` flag configures the native sessions once (default 1); old Python per-profile thread overrides are no longer used.
 
 ## Build
 

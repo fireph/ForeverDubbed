@@ -98,8 +98,11 @@ FDB_EXPORT void* fdb_create(const char* models, int threads, char* error, int ca
         config.num_threads=threads;
         config.temperature=0.3f;
         config.voice_cache=false;
-        config.first_chunk_frames=1;
-        config.max_chunk_frames=1;
+        // Decode 15 latent frames (1.2 seconds of audio) together, including
+        // the first batch. The callback below still splits PCM into <=100 ms
+        // buffers for bounded playback queues and responsive cancellation.
+        config.first_chunk_frames=15;
+        config.max_chunk_frames=15;
         auto engine=std::make_unique<Engine>();
         engine->tts=std::make_unique<pocket_tts::PocketTTS>(config);
         return engine.release();
