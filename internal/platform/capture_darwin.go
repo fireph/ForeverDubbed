@@ -72,3 +72,6 @@ func (macWindowDriver) Capture(rect image.Rectangle) (*image.RGBA, error) {
 	}
 	return pixels, nil
 }
+
+// CloseCapture releases platform capture resources at shutdown.
+func CloseCapture() {}

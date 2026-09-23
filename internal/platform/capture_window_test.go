@@ -8,7 +8,7 @@ import (
 )
 
 func gameWindow(id uint32, pid int32) captureWindow {
-	return captureWindow{ID: id, PID: pid, App: "World of Warcraft", Bundle: "com.blizzard.worldofwarcraft", Executable: "/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app/Contents/MacOS/World of Warcraft", Width: 1280, Height: 720, OnScreen: true}
+	return captureWindow{ID: uint64(id), PID: pid, App: "World of Warcraft", Bundle: "com.blizzard.worldofwarcraft", Executable: "/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app/Contents/MacOS/World of Warcraft", Width: 1280, Height: 720, OnScreen: true}
 }
 
 func TestChooseCaptureWindow(t *testing.T) {
@@ -24,7 +24,7 @@ func TestChooseCaptureWindow(t *testing.T) {
 	for _, tc := range []struct {
 		name, app string
 		windows   []captureWindow
-		want      uint32
+		want      uint64
 	}{
 		{"only game owner", "World of Warcraft", []captureWindow{browser, game}, 1},
 		{"exact bundle", "com.blizzard.worldofwarcraft", []captureWindow{game}, 1},
@@ -62,12 +62,15 @@ func TestChooseWindowKeepsCurrentWithinProcess(t *testing.T) {
 }
 
 type fakeWindowDriver struct {
+	resets                   int
 	windows                  []captureWindow
 	bounds                   image.Rectangle
 	discoveryErr, captureErr error
 	selected                 captureWindow
 	captures                 []image.Rectangle
 }
+
+func (d *fakeWindowDriver) Reset() { d.resets++ }
 
 func (d *fakeWindowDriver) Windows() ([]captureWindow, error) { return d.windows, d.discoveryErr }
 func (d *fakeWindowDriver) Select(w captureWindow) (image.Rectangle, error) {
@@ -112,6 +115,9 @@ func TestWindowCaptureWaitsForGameAndReopens(t *testing.T) {
 	}
 	if len(d.captures) != 2 {
 		t.Fatal("captured after game closed")
+	}
+	if d.resets < 2 {
+		t.Fatal("did not release the native session when the game disappeared")
 	}
 	d.windows = []captureWindow{gameWindow(3, 55)}
 	bounds = c.Bounds()
@@ -190,5 +196,31 @@ func TestCaptureAppUsesRealBetaBundle(t *testing.T) {
 	}
 	if _, err := chooseCaptureWindow([]captureWindow{beta}, "", captureWindow{}); err == nil {
 		t.Fatal("accepted empty selector")
+	}
+}
+
+func TestWindowsExecutableSelection(t *testing.T) {
+	game := captureWindow{ID: 0x123456789, PID: 100, Executable: `C:\Games\World of Warcraft\_classic_beta_\WoWB.exe`, Width: 1920, Height: 1080, OnScreen: true}
+	retail := game
+	retail.ID, retail.PID, retail.Executable = 2, 200, `C:\Games\World of Warcraft\_retail_\WoW.exe`
+	browser := game
+	browser.ID, browser.PID, browser.App, browser.Executable = 3, 300, "WoWB.exe", `C:\Browser\browser.exe`
+	for _, selector := range []string{"WoWB.exe", "wowb.EXE", game.Executable, "c:/games/World of Warcraft/_classic_beta_/wowb.exe"} {
+		got, err := chooseCaptureWindow([]captureWindow{retail, browser, game}, selector, captureWindow{})
+		if err != nil || got.ID != game.ID {
+			t.Fatalf("%s: %+v, %v", selector, got, err)
+		}
+		if _, err := chooseCaptureWindow([]captureWindow{retail, browser}, selector, captureWindow{}); err == nil {
+			t.Fatalf("%s: matched another executable", selector)
+		}
+	}
+	second := game
+	second.ID, second.PID, second.Executable = 4, 400, `D:\Other WoW\WoWB.exe`
+	if _, err := chooseCaptureWindow([]captureWindow{game, second}, "WoWB.exe", captureWindow{}); err == nil {
+		t.Fatal("accepted ambiguous executable instances")
+	}
+	got, err := chooseCaptureWindow([]captureWindow{second, game}, game.Executable, captureWindow{})
+	if err != nil || got.ID != game.ID {
+		t.Fatalf("full executable path did not disambiguate: %+v, %v", got, err)
 	}
 }

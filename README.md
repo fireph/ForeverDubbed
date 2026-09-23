@@ -1,6 +1,6 @@
 # ForeverDubbed
 
-A WoW Forever addon and Go companion that read NPC and quest dialogue aloud. The addon draws a small RGB data square; the Go app finds it on the Windows desktop or inside the WoW window on macOS, decodes the text, and speaks using **Pocket TTS on your CPU**. The Go companion captures, decodes, selects voices, and streams audio through an in-process PocketTTS.cpp engine. No Python interpreter or local HTTP service is used at runtime. Speech stays on your computer. No OCR or game-memory access is used. Windows SAPI and macOS system voices remain available as fallbacks.
+A WoW Forever addon and Go companion that read NPC and quest dialogue aloud. The addon draws a small RGB data square; the Go app finds it inside the WoW game window on Windows and macOS, decodes the text, and speaks using **Pocket TTS on your CPU**. The Go companion captures, decodes, selects voices, and streams audio through an in-process PocketTTS.cpp engine. No Python interpreter or local HTTP service is used at runtime. Speech stays on your computer. No OCR or game-memory access is used. Windows SAPI and macOS system voices remain available as fallbacks.
 
 The square uses **16 subtle dark-navy calibrated colors** and a **48 × 48 data grid**, with a one-cell calibration ring and a **light-blue 2px outer outline**. At the default **2 × 2 pixel cell size**, it occupies **104 × 104 physical pixels** and carries **1,056 bytes per page**. The outline stays 2 physical pixels thick at every cell size. A crisp light-blue sine wave with a 2-cell stroke measured perpendicular to the curve drifts left through the middle half of the data area, animating at 15 fps and completing a loop every 3.2 seconds. Its hard-coded shape moves one whole cell per frame with edge wrapping, so the stroke never changes shape during motion. Both encoder and decoder skip its cells. This FDB5 format requires updating both the addon and companion to 0.5.0. You can enlarge cells with `/fdb cell 3` (154 × 154 pixels) if your display needs more sampling margin; the capacity stays the same. This is a custom optical format, not a standard QR code.
 
@@ -13,6 +13,8 @@ See [CHANGELOG.md](CHANGELOG.md) for earlier releases and [PROTOCOL.md](PROTOCOL
 The companion supports macOS 14+ on Apple Silicon and Intel. macOS captures only the World of Warcraft Beta.app game window, including for `-snapshot`; it waits when the game is unavailable and never falls back to the desktop. You can build the full macOS release **on Linux**, including in GitHub Actions, using the pinned OSXCross setup. See [macOS builds and setup](docs/macos.md) for commands, Screen Recording permission, and validation steps. Linux cross-compilation checks the native code; live capture/audio still need testing on a Mac.
 
 ## Quick start on Windows
+
+Windows capture targets **WoWB.exe** only, using Windows Graphics Capture (Windows 10 version 1903+ or Windows 11). It never falls back to desktop capture. See [Windows window-capture details](docs/windows.md) for executable selection, troubleshooting, and live checks.
 
 From a release ZIP, extract the entire folder and run `foreverdubbed.exe` (or the optional `Start-ForeverDubbed.cmd`). Keep the ONNX Runtime DLLs, `native/`, and `tts/` beside the executable. Python, uv, and Go are not needed to run a prepared release.
 
@@ -43,7 +45,7 @@ The tools automatically select MinGW-w64 and download Windows DLLs even when run
 3. Enter `/fdb test`. You should see the tile detected and hear the connection test.
 4. Use `/fdb unlock`, move the tile, then `/fdb lock`. Prefer windowed or borderless game mode.
 
-The release contains one application executable plus ONNX Runtime libraries, ONNX models, and `.safetensors` voices. It is not a single statically linked binary. Desktop capture/playback support Windows and macOS 14+; the native voice-test tool also runs on Linux.
+The release contains one application executable plus ONNX Runtime libraries, ONNX models, and `.safetensors` voices. It is not a single statically linked binary. Game-window capture/playback support Windows 10 version 1903+ and macOS 14+; the native voice-test tool also runs on Linux.
 
 ### Streaming speech
 
@@ -129,9 +131,9 @@ Decoded messages are printed as one JSON object per line on stdout. Discovery an
 .\foreverdubbed.exe -mute > dialogue.jsonl
 ```
 
-The reader scans all monitors about once per second until it finds the square. It then samples only that region every 75 ms. Four failed reads trigger rediscovery, including after dragging, resizing, or moving the game window. Only one visible addon instance is supported at a time. Full desktop scans stay in memory; screenshots are neither saved nor uploaded.
+The reader searches only the selected game window about once per second until it finds the square. It then decodes the tile region every 75 ms from game-window frames. Four failed reads trigger rediscovery, including after resizing or reopening the game. Windows selects `WoWB.exe`; macOS selects `World of Warcraft Beta.app`. If the game is unavailable, the reader waits; it never captures the desktop instead. Captures stay in memory; normal reading neither saves nor uploads screenshots.
 
-For a diagnostic screenshot, explicitly run `.\foreverdubbed.exe -snapshot capture.png`. It waits three seconds, saves one PNG of the capture surface (the WoW window on macOS, the entire desktop on Windows), reports whether it found a valid tile, and exits. Keep WoW visible, use `/fdb unlock` so the square stays displayed, and move the pointer and other windows away from it. The PNG can be inspected locally or passed to `-image capture.png`. Windows desktop snapshots include other visible windows; macOS snapshots contain only the selected game window. The normal reader never saves images.
+For a diagnostic screenshot, explicitly run `.\foreverdubbed.exe -snapshot capture.png`. It waits three seconds, saves one PNG of the selected game window, reports whether it found a valid tile, and exits. Keep WoW visible, use `/fdb unlock` so the square stays displayed, and move the pointer and other windows away from it. The PNG can be inspected locally or passed to `-image capture.png`. On both platforms, snapshots contain only the selected game window. The normal reader never saves images.
 
 ## Troubleshooting
 
@@ -146,7 +148,7 @@ For a diagnostic screenshot, explicitly run `.\foreverdubbed.exe -snapshot captu
 
 The border includes a reference swatch for every palette color. The decoder measures these on every captured page and compares data cells to the observed colors, adapting to uniform gamma and color changes without assuming exact screen RGB values. Ambiguous or insufficiently separated colors are rejected. This improves tolerance; it does not make the transport immune to all display processing.
 
-There is no forward error correction. Per-page and whole-message Adler-32 checksums reject most accidental damage, and repeated pages provide retries. Checksums are for accidental corruption, not authentication. The companion accepts a valid tile anywhere visible on the desktop.
+There is no forward error correction. Per-page and whole-message Adler-32 checksums reject most accidental damage, and repeated pages provide retries. Checksums are for accidental corruption, not authentication. The companion accepts a valid tile anywhere within the selected game window.
 
 ## Build and test
 
@@ -170,7 +172,7 @@ go run -tags pocket_native ./tools/voicecheck
 go run -tags pocket_native ./tools/voicecheck -voice undead_male
 ```
 
-Speech commands require `CGO_ENABLED=1`, C/C++ compilers, and ONNX Runtime on the OS library search path (see [native instructions](native/README.md)); live desktop capture/playback are not implemented there. The model-free Go tests run without native libraries. Python export-tool tests are optional: `python -m unittest discover -s tools/voices -p 'test_*.py'`. Lua 5.1+ enables additional addon compatibility tests through `LUA=/path/to/lua`.
+Speech commands require `CGO_ENABLED=1`, C/C++ compilers, and ONNX Runtime on the OS library search path (see [native instructions](native/README.md)); live capture/playback are not implemented on Linux. The model-free Go tests run without native libraries. Python export-tool tests are optional: `python -m unittest discover -s tools/voices -p 'test_*.py'`. Lua 5.1+ enables additional addon compatibility tests through `LUA=/path/to/lua`.
 
 The portable decoder can read PNGs on any OS. For a paged message, supply one unmodified screenshot of each distinct page, in any order:
 
@@ -180,4 +182,4 @@ go run ./cmd/foreverdubbed -image page1.png,page2.png,page3.png
 
 Tests cover voice routing and overrides, cancellation, native voice selection and errors, streamed PCM validation and bounded playback, speaker metadata, the Lua/Go byte and palette contract, Unicode spanning pages, out-of-order/duplicate pages, session changes, sequence wraparound, invalid dimensions, corruption, gamma/tint/noise transforms, damaged reference swatches, moved tiles, negative monitor coordinates, missing NPC races, display lookup precedence, model-load timing and stale identities, saved race assignments, settings migration, physical pixel sizing at multiple resolutions/UI scales, and all supported cell sizes. Lua tests use mocked game APIs; they do not substitute for testing the real client. Tests explicitly skip the Lua checks if an interpreter is unavailable.
 
-See [PROTOCOL.md](PROTOCOL.md) for the wire format. API references used: [Forever gossip API source](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipInfoDocumentation.lua), [Forever quest UI source](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua), [Windows BitBlt](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-bitblt), and [SpeechSynthesizer.Speak](https://learn.microsoft.com/en-us/dotnet/api/system.speech.synthesis.speechsynthesizer.speak?view=netframework-4.8.1).
+See [PROTOCOL.md](PROTOCOL.md) for the wire format. API references used: [Forever gossip API source](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipInfoDocumentation.lua), [Forever quest UI source](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua), [Windows Graphics Capture](https://learn.microsoft.com/en-us/windows/win32/api/windows.graphics.capture.interop/nf-windows-graphics-capture-interop-igraphicscaptureiteminterop-createforwindow), and [SpeechSynthesizer.Speak](https://learn.microsoft.com/en-us/dotnet/api/system.speech.synthesis.speechsynthesizer.speak?view=netframework-4.8.1).

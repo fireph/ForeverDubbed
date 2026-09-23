@@ -37,7 +37,7 @@ CMake caches are separated by host and target under `.runtime/native/build-<host
 
 The dependencies are ONNX Runtime 1.23.2, SentencePiece 0.2.1, nlohmann/json 3.12.0, and dr_libs revision `dfe8377631000664666519fdb83da193fd8037f4`. Windows may need Microsoft's Visual C++ x64 redistributable for ONNX Runtime. The Windows link uses static C++/GCC and thread runtimes, including with Ubuntu's POSIX MinGW-w64 toolchain. ONNX Runtime still uses its DLL through an import library. If a custom toolchain requires additional runtime DLLs, place them in the native runtime directory; the packager copies them beside the executable.
 
-The packager defaults to Windows x64; `-target darwin -arch arm64|amd64` selects macOS. See [Linux cross-build and macOS setup](../docs/macos.md). The default setup prepares `.runtime/sdk/windows_amd64` and Windows DLLs in `.runtime/native`, including when run from Ubuntu/WSL. To use another runtime directory, pass `-out` to both `tools/native` and `tools/models`, then use the same path as `tools/build -native-dir`. Desktop capture/playback also support macOS 14+.
+The packager defaults to Windows x64; `-target darwin -arch arm64|amd64` selects macOS. See [Linux cross-build and macOS setup](../docs/macos.md). The default setup prepares `.runtime/sdk/windows_amd64` and Windows DLLs in `.runtime/native`, including when run from Ubuntu/WSL. To use another runtime directory, pass `-out` to both `tools/native` and `tools/models`, then use the same path as `tools/build -native-dir`. Game-window capture/playback support Windows 10 version 1903+ and macOS 14+. Windows capture uses cgo with Windows Graphics Capture and D3D11; no extra capture libraries need to be downloaded.
 
 Windows release layout:
 

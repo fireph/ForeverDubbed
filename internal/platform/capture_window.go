@@ -12,7 +12,7 @@ import (
 // Window titles are intentionally not used for identity: unrelated apps can
 // show a page or document named "World of Warcraft".
 type captureWindow struct {
-	ID                      uint32
+	ID                      uint64
 	PID                     int32
 	App, Bundle, Executable string
 	Width, Height           float64
@@ -37,6 +37,18 @@ func executableBundle(executable string) string {
 }
 
 func matchesCaptureApp(w captureWindow, app string) bool {
+	if strings.HasSuffix(strings.ToLower(app), ".exe") {
+		// Windows paths must compare identically in Linux-hosted tests too.
+		executable := strings.ReplaceAll(w.Executable, "\\", "/")
+		selector := strings.ReplaceAll(app, "\\", "/")
+		if executable == "" {
+			return false
+		}
+		if strings.Contains(selector, "/") {
+			return strings.EqualFold(path.Clean(executable), path.Clean(selector))
+		}
+		return strings.EqualFold(path.Base(executable), selector)
+	}
 	bundle := executableBundle(w.Executable)
 	if path.IsAbs(app) {
 		return path.Clean(app) == w.Executable || (bundle != "" && path.Clean(app) == bundle)
@@ -61,7 +73,7 @@ func chooseCaptureWindow(windows []captureWindow, app string, previous captureWi
 			continue
 		}
 		if best.ID != 0 && best.PID != w.PID {
-			return captureWindow{}, fmt.Errorf("multiple processes match %q; close the other game instance or use -capture-app with the game's exact app path or bundle identifier", app)
+			return captureWindow{}, fmt.Errorf("multiple processes match %q; close the other game instance or use -capture-app with the game's exact executable/app path or bundle identifier", app)
 		}
 		// Keep the current window if it is still available, so opening another game
 		// window doesn't silently switch the capture target.
@@ -73,7 +85,7 @@ func chooseCaptureWindow(windows []captureWindow, app string, previous captureWi
 		}
 	}
 	if best.ID == 0 {
-		return captureWindow{}, fmt.Errorf("waiting for a visible game window owned by %q (use -capture-app for a different app bundle name, path, or identifier)", app)
+		return captureWindow{}, fmt.Errorf("waiting for a visible game window owned by %q (use -capture-app for a different executable, app bundle name, path, or identifier)", app)
 	}
 	return best, nil
 }
@@ -112,6 +124,9 @@ func (c *windowCapture) refresh() {
 	}
 	c.err = err
 	if err != nil {
+		if driver, ok := c.driver.(interface{ Reset() }); ok {
+			driver.Reset()
+		}
 		c.selected = captureWindow{}
 		c.bounds = image.Rectangle{}
 		return

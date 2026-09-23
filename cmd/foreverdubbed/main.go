@@ -43,8 +43,10 @@ func run() error {
 	flag.IntVar(&threads, "cpu-threads", 1, "native inference CPU thread budget")
 	flag.StringVar(&files, "image", "", "decode PNG file(s), comma-separated, without screen capture or TTS")
 	flag.StringVar(&voice, "voice", "", "Pocket TTS profile override, or system voice name with -tts system")
-	flag.StringVar(&snapshot, "snapshot", "", "save one capture PNG after 3 seconds (game window on macOS, desktop on Windows), then exit")
-	if runtime.GOOS == "darwin" {
+	flag.StringVar(&snapshot, "snapshot", "", "save one game-window PNG after 3 seconds, then exit")
+	if runtime.GOOS == "windows" {
+		flag.StringVar(&captureApp, "capture-app", "WoWB.exe", "capture only this Windows executable (exact filename or full path)")
+	} else if runtime.GOOS == "darwin" {
 		flag.StringVar(&captureApp, "capture-app", "World of Warcraft Beta.app", "capture only this macOS app (bundle name, absolute path, application name, or bundle identifier)")
 	}
 	flag.StringVar(&backend, "tts", "pocket", "speech backend: pocket (local CPU) or system (OS voices; sapi is a Windows alias)")
@@ -166,7 +168,8 @@ func run() error {
 	if err := platform.Init(captureApp); err != nil {
 		return err
 	}
-	if runtime.GOOS == "darwin" {
+	defer platform.CloseCapture()
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		log.Printf("Capture is limited to windows owned by %q; waiting if the game is unavailable.", captureApp)
 	}
 	if snapshot != "" {
@@ -251,7 +254,7 @@ func run() error {
 }
 
 func saveSnapshot(ctx context.Context, path string) error {
-	log.Print("Taking a snapshot in 3 seconds (game window on macOS, desktop on Windows). Keep the game and square visible.")
+	log.Print("Taking a game-window snapshot in 3 seconds. Keep the game and square visible.")
 	timer := time.NewTimer(3 * time.Second)
 	defer timer.Stop()
 	select {

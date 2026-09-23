@@ -17,3 +17,6 @@ func Speak(context.Context, string, string, int) error { return errWindows }
 func Voices(context.Context) (string, error)           { return "", errWindows }
 
 func PlayPCM(context.Context, int, <-chan []byte) error { return errWindows }
+
+// CloseCapture releases platform capture resources at shutdown.
+func CloseCapture() {}
