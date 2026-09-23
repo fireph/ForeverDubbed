@@ -6,7 +6,7 @@ The macOS companion targets macOS 14 Sonoma or newer, on Apple Silicon (`arm64`)
 
 The Go build tools run on Linux. OSXCross supplies the macOS C/C++/Objective-C compiler, linker, and Apple SDK for the cgo parts. Setting only `GOOS=darwin` is insufficient because both screen capture and PocketTTS use native libraries.
 
-On Ubuntu 24.04, install Go 1.22+ and these prerequisites. Run these commands from the repository root in Bash:
+On Ubuntu 24.04, install Go 1.27.1+ and these prerequisites. Run these commands from the repository root in Bash:
 
 ```sh
 sudo apt-get update
@@ -28,28 +28,30 @@ go run ./tools/models -out .runtime/native-darwin-arm64
 go run ./tools/build -target darwin -arch arm64 -native-dir .runtime/native-darwin-arm64
 ```
 
-The result is `dist/ForeverDubbed-darwin-arm64.zip`, including the executable, ONNX Runtime dylibs, models, voice presets, and addon. Use `amd64` in all four commands for Intel. Each build also writes `dist/foreverdubbed`; copy or extract the ZIP to keep separate architecture builds. Keep target dependency directories separate from the Windows runtime.
+The release builder enables both the `gui` (Fyne 2.8.1) and `pocket_native` build tags. Fyne uses the macOS frameworks from the existing SDK; the Linux cross-build does not require Linux X11/OpenGL development packages.
+
+The result is `dist/ForeverDubbed-darwin-arm64.zip`, containing `ForeverDubbed.app`, documentation, and the addon. The app contains its executable, ONNX Runtime dylibs, models, and voice presets. Use `amd64` in all four commands for Intel. Each build also writes `dist/ForeverDubbed.app` and `dist/foreverdubbed` for the selected architecture; copy or extract the ZIP to keep separate architecture builds. Keep target dependency directories separate from the Windows runtime.
 
 Do **not** export `GOOS` or `GOARCH` for these `go run` commands: they execute the setup/packaging tools on Linux, and the tools select the child build target. `CC` and `CXX` from the environment script select the same compiler for CMake and Go. `MACOS_SDK` selects CMake's SDK; the deployment target is macOS 14.0. The environment script disables cgo for the Linux helper programs, and the packager enables it for the macOS child build.
 
-For a smaller capture/system-voice build without PocketTTS models:
+For a smaller GUI capture/system-voice build without PocketTTS models:
 
 ```sh
 source scripts/macos-cross-env.sh arm64
-GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -o dist/foreverdubbed ./cmd/foreverdubbed
+GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -tags gui -o dist/foreverdubbed ./cmd/foreverdubbed
 ```
 
-Run that binary with `-tts system` or `-mute`. The default PocketTTS backend requires the full native build above.
+Run that binary with `-tts system` or `-mute`. Omit `-tags gui` for a terminal-only build. The default PocketTTS backend requires the full native build above.
 
 ## GitHub Actions
 
 [The macOS workflow](../.github/workflows/macos.yml) builds both architectures on `ubuntu-24.04`, runs the portable Go tests/vet, caches the pinned OSXCross toolchain, and uploads the two release ZIPs. It runs for pull requests, pushes to `main`, and manual dispatch. It does not publish releases or run macOS executables on Linux. Native screen/audio behavior must be checked on a Mac.
 
-The workflow uses Go 1.25.x and matching LLVM 18 packages. It adds LLVM's `bin` directory to `GITHUB_PATH` before toolchain setup or cache restore, so subsequent steps can find `ld64.lld` and the other LLVM tools. Download the `ForeverDubbed-darwin-arm64` (Apple Silicon) or `ForeverDubbed-darwin-amd64` (Intel) artifact from the workflow run for its release ZIP.
+The workflow uses Go 1.27.1 and matching LLVM 18 packages. It adds LLVM's `bin` directory to `GITHUB_PATH` before toolchain setup or cache restore, so subsequent steps can find `ld64.lld` and the other LLVM tools. Download the `ForeverDubbed-darwin-arm64` (Apple Silicon) or `ForeverDubbed-darwin-amd64` (Intel) artifact from the workflow run for its release ZIP.
 
 ## Build directly on a Mac
 
-Install Go 1.22+, CMake 3.28+, Git, and Xcode command-line tools with a macOS 14+ SDK. From the repository root:
+Install Go 1.27.1+, CMake 3.28+, Git, and Xcode command-line tools with a macOS 14+ SDK. From the repository root:
 
 ```sh
 xcode-select --install
@@ -62,23 +64,29 @@ The default architecture matches the Mac. The resulting release ZIP has the same
 
 ## Run and grant capture permission
 
-Extract the whole ZIP, then open Terminal in the extracted directory:
+Extract the ZIP, move **ForeverDubbed.app** to Applications if desired, and double-click it. No terminal or external runtime folder is required. The addon remains beside the app in the ZIP; install it into the game separately.
+
+On the first capture attempt, allow **Screen Recording** (called **Screen & System Audio Recording** on some versions) for **ForeverDubbed** under **System Settings → Privacy & Security**. Quit using the tray menu and reopen the app after granting access. Keep WoW visible and use `/fdb unlock` to display the tile.
+
+The GUI displays capture, tile, and audio status alongside the latest dialogue. Closing or minimizing it keeps it running in the menu bar; use **Show ForeverDubbed** to restore it or **Quit** to exit.
+
+The Linux-built app is not Developer ID signed or notarized. If macOS blocks a downloaded build, review its source and use [**System Settings → Privacy & Security → Open Anyway**](https://support.apple.com/en-gb/102445) for that app. Public notarized distribution requires a separate signing/notarization step.
+
+For optional terminal diagnostics, open Terminal and select the embedded executable (adjust the path if the app is elsewhere):
 
 ```sh
-./foreverdubbed -tts system -speak-test 'ForeverDubbed is ready.'
-./foreverdubbed -mute
+fdb="/Applications/ForeverDubbed.app/Contents/MacOS/foreverdubbed"
+"$fdb" -headless -mute
 ```
-
-On the first capture attempt, allow **Screen Recording** (called **Screen & System Audio Recording** on some versions) for your terminal or ForeverDubbed under **System Settings → Privacy & Security**. Quit and reopen the terminal/application after granting access, then run the command again. Keep WoW visible and use `/fdb unlock` to display the tile. The app reports decoded dialogue as JSON. To enable PocketTTS, run `./foreverdubbed` without `-mute`.
 
 Useful checks:
 
 ```sh
-./foreverdubbed -tts system -voices
-./foreverdubbed -tts system
-./foreverdubbed -speak-test 'Testing PocketTTS playback.'
-./foreverdubbed -snapshot capture.png
-./foreverdubbed -image capture.png
+"$fdb" -tts system -voices
+"$fdb" -headless -tts system
+"$fdb" -speak-test 'Testing PocketTTS playback.'
+"$fdb" -snapshot capture.png
+"$fdb" -image capture.png
 ```
 
 Capture is restricted to a window owned by the **World of Warcraft Beta.app** bundle. The default matches the `.app` bundle containing the owning process's executable, so the retail client or a browser window titled World of Warcraft cannot be selected. The expected game executable is `/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app/Contents/MacOS/World of Warcraft`. It waits if the game is closed, minimized, or unavailable, and automatically rediscovers the window after it reopens or changes size. It never falls back to desktop capture. If more than one matching game process is open, close the other instance.
@@ -86,9 +94,9 @@ Capture is restricted to a window owned by the **World of Warcraft Beta.app** bu
 If your game's app bundle differs, specify its exact bundle name, absolute app/executable path, application name, or bundle identifier:
 
 ```sh
-./foreverdubbed -capture-app "World of Warcraft Beta.app"
+"$fdb" -capture-app "World of Warcraft Beta.app"
 # To target this particular installation:
-./foreverdubbed -capture-app "/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app"
+"$fdb" -capture-app "/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app"
 ```
 
 ScreenCaptureKit captures the selected game window at native pixel scale. The reader crops the detected tile from that image in memory; neither the desktop nor other applications' windows are included. Coordinates are relative to the game window. `-snapshot` also saves only the selected game window. No images are saved unless you explicitly request a snapshot.
@@ -102,3 +110,26 @@ FDB_TEST_CAPTURE_APP="World of Warcraft Beta.app" CGO_ENABLED=1 go test ./intern
 ```
 
 This exercises the real command-line CoreGraphics initialization and single-window capture path. The captured game image stays in memory.
+
+## GUI validation
+
+The release uses Go 1.27.1 and Fyne 2.8.1. On Linux, `go test -tags "gui ci" ./internal/desktop ./cmd/foreverdubbed` tests the dashboard using Fyne's software driver without an X server. The regular `go test ./...` suite remains independent of GUI development libraries.
+
+On each Mac architecture, check opening the GUI, closing it to the menu bar, the native minimize button, Show ForeverDubbed, and Quit while speech is playing. Also check startup with missing models or denied capture permission: errors should appear in the dashboard. These native window/tray behaviors require live Mac testing.
+
+## App bundle layout
+
+The release builder creates the `.app` on Linux as well as macOS:
+
+```text
+ForeverDubbed.app/
+  Contents/
+    Info.plist
+    MacOS/foreverdubbed
+    Resources/
+      app.icns
+      native/              # ONNX dylibs, models, presets, licenses
+      tts/                 # voices.json and configured custom voices
+```
+
+The executable finds models and voice configuration relative to its own location, so Finder launches and moving the app do not depend on the working directory. Its loader paths include `Contents/Resources/native`. To customize voices, use Finder's **Show Package Contents** and edit `Contents/Resources/tts/voices.json`, or supply an external configuration with `-voice-config` when launching from Terminal. Replacing the app during an upgrade also replaces any customizations inside it.

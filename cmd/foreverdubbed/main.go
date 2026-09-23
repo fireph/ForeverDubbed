@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"foreverdubbed/internal/appstate"
 	"foreverdubbed/internal/platform"
 	"foreverdubbed/internal/pocket"
 	"foreverdubbed/internal/protocol"
@@ -24,6 +25,8 @@ import (
 const version = "0.5.0"
 
 func main() {
+	prepareConsole()
+	log.SetOutput(os.Stderr)
 	log.SetFlags(log.Ltime)
 	if err := run(); err != nil {
 		log.Print(err)
@@ -34,7 +37,7 @@ func main() {
 func run() error {
 	var files, voice, snapshot, captureApp string
 	var backend, configPath, testText, testRace, testGender string
-	var mute, list, showVersion bool
+	var mute, list, showVersion, headless bool
 	var rate, threads int
 	var nativeDir, modelsDir string
 	var poll, scan time.Duration
@@ -55,6 +58,7 @@ func run() error {
 	flag.StringVar(&testRace, "race", "Human", "race for -speak-test")
 	flag.StringVar(&testGender, "gender", "male", "gender for -speak-test")
 	flag.BoolVar(&showVersion, "version", false, "print version and optical format, then exit")
+	flag.BoolVar(&headless, "headless", false, "run in the terminal without the desktop interface")
 	flag.BoolVar(&mute, "mute", false, "print decoded JSON without speaking")
 	flag.BoolVar(&list, "voices", false, "list configured voice profiles (OS voices with -tts system)")
 	flag.IntVar(&rate, "rate", 0, "system speech rate, -10 through 10 (only with -tts system/sapi)")
@@ -124,133 +128,160 @@ func run() error {
 		}
 		return nil
 	}
-	var speak func(context.Context, protocol.Message) error
-	if !mute && snapshot == "" || list || testText != "" {
-		if backend != "system" {
-			config, err := speech.Load(configPath)
-			if err != nil {
-				return fmt.Errorf("voice config: %w", err)
-			}
-			if list {
-				ids := make([]string, 0, len(config.Profiles))
-				for id := range config.Profiles {
-					ids = append(ids, id)
+	guiMode := desktopEnabled && !headless && !list && testText == "" && snapshot == ""
+	state := appstate.New(captureApp, backend, mute)
+	work := func() error {
+		var speak func(context.Context, protocol.Message) error
+		if !mute && snapshot == "" || list || testText != "" {
+			if backend != "system" {
+				config, err := speech.Load(configPath)
+				if err != nil {
+					return fmt.Errorf("voice config: %w", err)
 				}
-				sort.Strings(ids)
-				for _, id := range ids {
-					fmt.Printf("%s (%s)\n", id, config.Profiles[id].Voice)
+				if list {
+					ids := make([]string, 0, len(config.Profiles))
+					for id := range config.Profiles {
+						ids = append(ids, id)
+					}
+					sort.Strings(ids)
+					for _, id := range ids {
+						fmt.Printf("%s (%s)\n", id, config.Profiles[id].Voice)
+					}
+					return nil
 				}
-				return nil
-			}
-			local, err := speech.OpenLocal(config, voice, nativeDir, modelsDir, threads)
-			if err != nil {
-				return err
-			}
-			defer local.Close()
-			log.Print("PocketTTS.cpp: native CPU streaming ready")
-			speak = func(ctx context.Context, m protocol.Message) error {
-				id, err := config.Voice(m, voice)
+				local, err := speech.OpenLocal(config, voice, nativeDir, modelsDir, threads)
 				if err != nil {
 					return err
 				}
-				log.Printf("Voice %s (race=%q gender=%q NPC=%q)", id, m.Race, m.Gender, m.NPCID)
-				return local.Speak(ctx, m)
-			}
-		} else {
-			speak = func(ctx context.Context, m protocol.Message) error {
-				return platform.Speak(ctx, m.Speech(), voice, rate)
-			}
-		}
-	}
-	if testText != "" {
-		return speak(ctx, protocol.Message{Text: testText, Race: testRace, Gender: testGender})
-	}
-	if err := platform.Init(captureApp); err != nil {
-		return err
-	}
-	defer platform.CloseCapture()
-	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
-		log.Printf("Capture is limited to windows owned by %q; waiting if the game is unavailable.", captureApp)
-	}
-	if snapshot != "" {
-		return saveSnapshot(ctx, snapshot)
-	}
-	// A single worker serializes speech and cancels it when newer dialog arrives.
-	speech := make(chan protocol.Message, 1)
-	done := make(chan struct{})
-	go func() { defer close(done); speakLoop(ctx, speech, speak) }()
-	defer func() { stop(); <-done }()
-	log.Printf("ForeverDubbed %s (FDB5, 16 colors). Searching; in WoW: /fdb unlock. Ctrl+C to quit.", version)
-	var location *protocol.Location
-	failures := 0
-	var lastError time.Time
-	for ctx.Err() == nil {
-		delay := poll
-		var p protocol.Packet
-		var err error
-		if location == nil {
-			delay = scan
-			im, captureErr := platform.Capture(platform.Desktop())
-			if captureErr != nil {
-				err = captureErr
-			} else {
-				l, packet, findErr := protocol.Find(im)
-				if findErr == nil {
-					location = &l
-					p = packet
-					failures = 0
-					delay = poll
-					log.Printf("Found tile at (%d, %d), %dpx cells, %d bytes/page.", l.X, l.Y, l.Cell, protocol.PayloadBytes)
-				} else {
-					err = findErr
-				}
-			}
-		} else {
-			im, captureErr := platform.Capture(location.Rect())
-			if captureErr != nil {
-				err = captureErr
-			} else {
-				p, err = protocol.Decode(im, *location)
-			}
-			if err != nil {
-				failures++
-				if failures >= 4 {
-					location = nil
-					log.Print("Tile lost; searching again.")
-				}
-			} else {
-				failures = 0
-			}
-		}
-		if err == nil {
-			m, assemblyErr := assembler.Add(p, time.Now())
-			if assemblyErr != nil {
-				log.Printf("Discarding message: %v", assemblyErr)
-			}
-			if m != nil {
-				if err := output.Encode(m); err != nil {
-					return err
-				}
-				if !mute {
-					select {
-					case <-speech:
-					default:
+				defer local.Close()
+				log.Print("PocketTTS.cpp: native CPU streaming ready")
+				speak = func(ctx context.Context, m protocol.Message) error {
+					id, err := config.Voice(m, voice)
+					if err != nil {
+						return err
 					}
-					speech <- *m
+					log.Printf("Voice %s (race=%q gender=%q NPC=%q)", id, m.Race, m.Gender, m.NPCID)
+					state.Update(func(v *appstate.Snapshot) { v.Voice = id })
+					ctx = platform.WithPlaybackObserver(ctx, func() { state.Audio("Playing audio") })
+					return local.Speak(ctx, m)
+				}
+			} else {
+				speak = func(ctx context.Context, m protocol.Message) error {
+					state.Audio("Speaking (system voice)")
+					return platform.Speak(ctx, m.Speech(), voice, rate)
 				}
 			}
-		} else if time.Since(lastError) > 15*time.Second {
-			log.Printf("Waiting: %v", err)
-			lastError = time.Now()
 		}
-		timer := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-		case <-timer.C:
+		if testText != "" {
+			return speak(ctx, protocol.Message{Text: testText, Race: testRace, Gender: testGender})
 		}
+		if err := platform.Init(captureApp); err != nil {
+			return err
+		}
+		defer platform.CloseCapture()
+		if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+			log.Printf("Capture is limited to windows owned by %q; waiting if the game is unavailable.", captureApp)
+		}
+		if snapshot != "" {
+			return saveSnapshot(ctx, snapshot)
+		}
+		state.Update(func(v *appstate.Snapshot) {
+			v.Ready = true
+			if !mute {
+				v.Audio = "Idle"
+			}
+		})
+		// A single worker serializes speech and cancels it when newer dialog arrives.
+		speech := make(chan protocol.Message, 1)
+		done := make(chan struct{})
+		speechCtx, cancelSpeech := context.WithCancel(ctx)
+		go func() { defer close(done); speakLoop(speechCtx, speech, speak, state) }()
+		defer func() { cancelSpeech(); <-done }()
+		log.Printf("ForeverDubbed %s (FDB5, 16 colors). Searching; in WoW: /fdb unlock. Ctrl+C to quit.", version)
+		var location *protocol.Location
+		failures := 0
+		var lastError time.Time
+		for ctx.Err() == nil {
+			delay := poll
+			var p protocol.Packet
+			windowOK, tileOK := false, false
+			var err error
+			if location == nil {
+				delay = scan
+				im, captureErr := platform.Capture(platform.Desktop())
+				if captureErr != nil {
+					err = captureErr
+				} else {
+					windowOK = true
+					l, packet, findErr := protocol.Find(im)
+					if findErr == nil {
+						tileOK = true
+						location = &l
+						p = packet
+						failures = 0
+						delay = poll
+						log.Printf("Found tile at (%d, %d), %dpx cells, %d bytes/page.", l.X, l.Y, l.Cell, protocol.PayloadBytes)
+					} else {
+						err = findErr
+					}
+				}
+			} else {
+				im, captureErr := platform.Capture(location.Rect())
+				if captureErr != nil {
+					err = captureErr
+				} else {
+					windowOK = true
+					p, err = protocol.Decode(im, *location)
+					tileOK = err == nil
+				}
+				if err != nil {
+					failures++
+					if failures >= 4 {
+						location = nil
+						log.Print("Tile lost; searching again.")
+					}
+				} else {
+					failures = 0
+				}
+			}
+			state.Capture(windowOK, tileOK, err)
+			if err == nil {
+				m, assemblyErr := assembler.Add(p, time.Now())
+				if assemblyErr != nil {
+					log.Printf("Discarding message: %v", assemblyErr)
+				}
+				if m != nil {
+					state.Received(*m)
+					if !guiMode {
+						if err := output.Encode(m); err != nil {
+							return err
+						}
+					}
+					if !mute {
+						select {
+						case <-speech:
+						default:
+						}
+						speech <- *m
+					}
+				}
+			} else if time.Since(lastError) > 15*time.Second {
+				log.Printf("Waiting: %v", err)
+				lastError = time.Now()
+			}
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+			case <-timer.C:
+			}
+		}
+		return nil
 	}
-	return nil
+	if guiMode {
+		return runDesktop(ctx, stop, state, work)
+	}
+	return work()
 }
 
 func saveSnapshot(ctx context.Context, path string) error {
@@ -287,7 +318,7 @@ func saveSnapshot(ctx context.Context, path string) error {
 	return nil
 }
 
-func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func(context.Context, protocol.Message) error) {
+func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func(context.Context, protocol.Message) error, state *appstate.State) {
 	var cancel context.CancelFunc
 	var finished chan error
 	stopCurrent := func() {
@@ -296,6 +327,7 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 			<-finished
 			cancel = nil
 			finished = nil
+			state.Audio("Idle")
 		}
 	}
 	defer stopCurrent()
@@ -305,14 +337,17 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 			return
 		case message := <-requests:
 			stopCurrent()
+			state.Update(func(v *appstate.Snapshot) { v.Audio = "Preparing speech"; v.SpeechError = "" })
 			child, c := context.WithCancel(ctx)
 			cancel = c
 			result := make(chan error, 1)
 			finished = result
 			go func() { result <- speak(child, message) }()
 		case err := <-finished:
+			state.Audio("Idle")
 			if err != nil && ctx.Err() == nil {
 				log.Printf("TTS error: %v", err)
+				state.Update(func(v *appstate.Snapshot) { v.SpeechError = err.Error() })
 			}
 			cancel()
 			cancel = nil

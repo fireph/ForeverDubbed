@@ -2,11 +2,13 @@
 
 The Windows companion captures only the game window owned by **WoWB.exe**, using Windows Graphics Capture and Direct3D 11. It requires Windows 10 version 1903 or newer (Windows 11 is supported). There is no desktop capture fallback. Window discovery reads process/window metadata, then binds capture to that game's HWND.
 
-Run the prepared release normally:
+Run the prepared release to open the status dashboard:
 
 ```powershell
 .\foreverdubbed.exe
 ```
+
+Close or minimize the dashboard to keep it running in the system tray. Use **Show ForeverDubbed** to restore it or **Quit** to stop capture and audio. Use `-headless` for terminal-only capture and JSON output.
 
 The executable filename is matched case-insensitively against the owning process's full image path. A window title alone cannot match, and `WoW.exe` is not selected. To target a particular installation, use its full executable path:
 

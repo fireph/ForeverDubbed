@@ -32,7 +32,7 @@ type Engine struct {
 
 func DefaultDir() string {
 	exe, _ := os.Executable()
-	for _, dir := range []string{filepath.Join(filepath.Dir(exe), "native"), filepath.Join(filepath.Dir(exe), "..", ".runtime", "native"), filepath.Join(".runtime", "native")} {
+	for _, dir := range []string{filepath.Join(filepath.Dir(exe), "..", "Resources", "native"), filepath.Join(filepath.Dir(exe), "native"), filepath.Join(filepath.Dir(exe), "..", ".runtime", "native"), filepath.Join(".runtime", "native")} {
 		if _, err := os.Stat(filepath.Join(dir, "models", "bundle.json")); err == nil {
 			absolute, _ := filepath.Abs(dir)
 			return absolute

@@ -26,6 +26,7 @@ func playPCM(ctx context.Context, chunks <-chan []byte, device pcmDevice) (err e
 			err = closeErr
 		}
 	}()
+	started := false
 	ticker := time.NewTicker(5 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -65,6 +66,10 @@ func playPCM(ctx context.Context, chunks <-chan []byte, device pcmDevice) (err e
 			}
 			if err := device.Queue(pcm); err != nil {
 				return err
+			}
+			if !started {
+				started = true
+				playbackStarted(ctx)
 			}
 		}
 	}

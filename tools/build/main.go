@@ -106,17 +106,26 @@ func build() error {
 	nativeEnv := buildEnv(os.Environ(), targetOS, targetArch)
 	nativeEnv[len(nativeEnv)-1] = "CGO_ENABLED=1"
 	nativeEnv = append(nativeEnv, "CC="+cc, "CXX="+cxx)
-	buildArgs := []string{"build", "-tags", "pocket_native", "-buildvcs=false", "-trimpath"}
+	buildArgs := []string{"build", "-tags", "pocket_native,gui", "-buildvcs=false", "-trimpath"}
 	if targetOS == "darwin" {
 		// cgo source directives reject @-prefixed rpaths. Pass these deliberate
 		// release loader paths through the Go external linker instead.
-		buildArgs = append(buildArgs, "-ldflags", "-extldflags=-Wl,-rpath,@executable_path/native,-rpath,@executable_path/../.runtime/native")
+		buildArgs = append(buildArgs, "-ldflags", "-extldflags=-Wl,-rpath,@executable_path/../Resources/native,-rpath,@executable_path/native,-rpath,@executable_path/../.runtime/native")
+	}
+	if targetOS == "windows" {
+		buildArgs = append(buildArgs, "-ldflags", "-H=windowsgui")
 	}
 	buildArgs = append(buildArgs, "-o", binary, "./cmd/foreverdubbed")
 	if err := run(root, nativeEnv, buildArgs...); err != nil {
 		return err
 	}
 	bundle[binaryName] = binary
+	if targetOS == "darwin" {
+		bundle, err = macApp(dist, bundle)
+		if err != nil {
+			return err
+		}
+	}
 	if err := writeZIP(filepath.Join(dist, "ForeverDubbed-addon.zip"), addon); err != nil {
 		return err
 	}

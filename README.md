@@ -10,15 +10,11 @@ See [CHANGELOG.md](CHANGELOG.md) for earlier releases and [PROTOCOL.md](PROTOCOL
 
 ## Quick start on macOS
 
-Requires macOS 14+ on Apple Silicon or Intel. Choose `ForeverDubbed-darwin-arm64.zip` for Apple Silicon or `ForeverDubbed-darwin-amd64.zip` for Intel, then extract the entire ZIP and keep its files together. Go and compiler tools are not needed to run a prepared release.
+Requires macOS 14+ on Apple Silicon or Intel. Choose `ForeverDubbed-darwin-arm64.zip` for Apple Silicon or `ForeverDubbed-darwin-amd64.zip` for Intel, then extract the ZIP.
 
-Open Terminal in the extracted directory and run:
+Drag **ForeverDubbed.app** to Applications (or keep it in the extracted folder) and double-click it. The app includes its speech libraries, models, and voices; no Terminal, Go, or compiler tools are needed. The addon is included separately in the ZIP.
 
-```sh
-./foreverdubbed
-```
-
-Grant **Screen Recording** permission under **System Settings → Privacy & Security**, then restart the terminal/application if needed. Capture is limited to the **World of Warcraft Beta.app** game window; it waits when the game is unavailable and never falls back to the desktop.
+Grant **Screen Recording** permission under **System Settings → Privacy & Security**, then quit and reopen ForeverDubbed if needed. Capture is limited to the **World of Warcraft Beta.app** game window; it waits when the game is unavailable and never falls back to the desktop.
 
 Install the addon and test it using the steps below. See the [macOS guide](docs/macos.md) for capture troubleshooting and building on Linux, GitHub Actions, or a Mac.
 
@@ -29,6 +25,14 @@ Windows capture targets **WoWB.exe** only, using Windows Graphics Capture (Windo
 From a release ZIP, extract the entire folder and run `foreverdubbed.exe` (or the optional `Start-ForeverDubbed.cmd`). Keep the ONNX Runtime DLLs, `native/`, and `tts/` beside the executable. Python, uv, and Go are not needed to run a prepared release.
 
 For source builds on Windows or Linux/WSL, see the [Windows build guide](native/README.md#build).
+
+## Desktop companion
+
+The Fyne interface shows whether the game window is available, whether the addon tile is connected, and whether speech is preparing, playing, idle, or muted. The latest decoded dialogue appears below the status cards. Expand **Details & troubleshooting** for capture or speech errors.
+
+Close or minimize the window, or click **Minimize to tray**, to keep the companion running in the Windows system tray or macOS menu bar. Choose **Show ForeverDubbed** from its tray icon to reopen it. Choose **Quit** to stop capture and audio and exit.
+
+For terminal-only operation, use `-headless`. One-shot commands such as `-voices`, `-version`, `-speak-test`, `-snapshot`, and `-image` run without opening the GUI. To save decoded dialogue, run with `-headless -mute` and redirect stdout to a file.
 
 ## Set up the addon
 
@@ -119,10 +123,10 @@ PocketTTS.cpp and ONNX Runtime run inside the Go process. The app performs no ne
 
 Python remains under `tools/voices/` only for optional custom-voice export. See [the voice export guide](docs/VOICE_CLONING.md). Profiles use presets or `.safetensors` paths; raw recordings must be exported before use. Base models, recordings, previews, and developer environments remain Git-ignored. Only configured custom voice states are packaged.
 
-Decoded messages are printed as one JSON object per line on stdout. Discovery and speech diagnostics go to stderr. To save text without speech:
+In headless mode, decoded messages are printed as one JSON object per line on stdout. Discovery and speech diagnostics go to stderr. To save text without speech:
 
 ```powershell
-.\foreverdubbed.exe -mute > dialogue.jsonl
+.\foreverdubbed.exe -headless -mute > dialogue.jsonl
 ```
 
 The reader searches only the selected game window about once per second until it finds the square. It then decodes the tile region every 75 ms from game-window frames. Four failed reads trigger rediscovery, including after resizing or reopening the game. Windows selects `WoWB.exe`; macOS selects `World of Warcraft Beta.app`. If the game is unavailable, the reader waits; it never captures the desktop instead. Captures stay in memory; normal reading neither saves nor uploads screenshots.

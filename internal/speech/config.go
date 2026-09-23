@@ -28,7 +28,7 @@ func DefaultConfigPath() string {
 	if err != nil {
 		return "tts/voices.json"
 	}
-	for _, p := range []string{filepath.Join(filepath.Dir(exe), "tts", "voices.json"), filepath.Join(filepath.Dir(exe), "..", "tts", "voices.json"), "tts/voices.json"} {
+	for _, p := range []string{filepath.Join(filepath.Dir(exe), "..", "Resources", "tts", "voices.json"), filepath.Join(filepath.Dir(exe), "tts", "voices.json"), filepath.Join(filepath.Dir(exe), "..", "tts", "voices.json"), "tts/voices.json"} {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}

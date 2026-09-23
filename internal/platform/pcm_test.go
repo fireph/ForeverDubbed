@@ -152,3 +152,23 @@ func TestPCMHardwareDrainAndCancellation(t *testing.T) {
 		}
 	}
 }
+
+func TestPlaybackObserverStartsOnlyAfterSuccessfulQueue(t *testing.T) {
+	for _, fail := range []error{nil, errors.New("queue failed")} {
+		chunks := make(chan []byte, 2)
+		chunks <- []byte{1, 0}
+		chunks <- []byte{2, 0}
+		close(chunks)
+		device := &testPCMDevice{queued: make(chan []byte, 2), fail: fail}
+		device.finished.Store(true)
+		calls := 0
+		ctx := WithPlaybackObserver(context.Background(), func() { calls++ })
+		err := playPCM(ctx, chunks, device)
+		if fail == nil && (err != nil || calls != 1) {
+			t.Fatalf("successful playback: calls=%d err=%v", calls, err)
+		}
+		if fail != nil && (err == nil || calls != 0) {
+			t.Fatalf("failed queue reported playback: calls=%d err=%v", calls, err)
+		}
+	}
+}
