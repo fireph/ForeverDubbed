@@ -103,3 +103,52 @@ func TestPCMClosesOnDeviceError(t *testing.T) {
 		t.Fatal("device not closed")
 	}
 }
+
+type drainingPCMDevice struct {
+	testPCMDevice
+	draining chan struct{}
+	release  chan struct{}
+}
+
+func (d *drainingPCMDevice) Drain(ctx context.Context) error {
+	close(d.draining)
+	select {
+	case <-d.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+func TestPCMHardwareDrainAndCancellation(t *testing.T) {
+	for _, cancelDrain := range []bool{false, true} {
+		chunks := make(chan []byte)
+		close(chunks)
+		d := &drainingPCMDevice{draining: make(chan struct{}), release: make(chan struct{})}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		done := make(chan error, 1)
+		go func() { done <- playPCM(ctx, chunks, d) }()
+		select {
+		case <-d.draining:
+		case <-ctx.Done():
+			t.Fatal("drain never started")
+		}
+		select {
+		case <-done:
+			t.Fatal("closed before hardware drain")
+		default:
+		}
+		if cancelDrain {
+			cancel()
+		} else {
+			close(d.release)
+		}
+		err := <-done
+		cancel()
+		if cancelDrain && !errors.Is(err, context.Canceled) || !cancelDrain && err != nil {
+			t.Fatal(err)
+		}
+		if !d.closed {
+			t.Fatal("device not closed after drain")
+		}
+	}
+}

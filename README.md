@@ -1,12 +1,16 @@
 # ForeverDubbed
 
-A WoW Forever addon and Go companion that read NPC and quest dialogue aloud. The addon draws a small RGB data square; the Windows app finds it anywhere on the desktop, decodes the text, and speaks using **Pocket TTS on your CPU**. The Go companion captures, decodes, selects voices, and streams audio through an in-process PocketTTS.cpp engine. No Python interpreter or local HTTP service is used at runtime. Speech stays on your computer. No OCR or game-memory access is used. Windows SAPI remains available as a fallback.
+A WoW Forever addon and Go companion that read NPC and quest dialogue aloud. The addon draws a small RGB data square; the Windows/macOS app finds it on the desktop, decodes the text, and speaks using **Pocket TTS on your CPU**. The Go companion captures, decodes, selects voices, and streams audio through an in-process PocketTTS.cpp engine. No Python interpreter or local HTTP service is used at runtime. Speech stays on your computer. No OCR or game-memory access is used. Windows SAPI and macOS system voices remain available as fallbacks.
 
 The square uses **16 subtle dark-navy calibrated colors** and a **48 × 48 data grid**, with a one-cell calibration ring and a **light-blue 2px outer outline**. At the default **2 × 2 pixel cell size**, it occupies **104 × 104 physical pixels** and carries **1,056 bytes per page**. The outline stays 2 physical pixels thick at every cell size. A crisp light-blue sine wave with a 2-cell stroke measured perpendicular to the curve drifts left through the middle half of the data area, animating at 15 fps and completing a loop every 3.2 seconds. Its hard-coded shape moves one whole cell per frame with edge wrapping, so the stroke never changes shape during motion. Both encoder and decoder skip its cells. This FDB5 format requires updating both the addon and companion to 0.5.0. You can enlarge cells with `/fdb cell 3` (154 × 154 pixels) if your display needs more sampling margin; the capacity stays the same. This is a custom optical format, not a standard QR code.
 
 **Native runtime migration:** rebuild the companion and bundle the native runtime/model files below. Existing April-model `.safetensors` voices are preserved. The old Python service and setup scripts are no longer used.
 
 See [CHANGELOG.md](CHANGELOG.md) for earlier releases and [PROTOCOL.md](PROTOCOL.md) for the optical format.
+
+## macOS
+
+The companion supports macOS 14+ on Apple Silicon and Intel. You can build the full macOS release **on Linux**, including in GitHub Actions, using the pinned OSXCross setup. See [macOS builds and setup](docs/macos.md) for commands, Screen Recording permission, and validation steps. Linux cross-compilation checks the native code; live capture/audio still need testing on a Mac.
 
 ## Quick start on Windows
 
@@ -32,14 +36,14 @@ go run ./tools/models
 go run ./tools/build
 ```
 
-The tools automatically select MinGW-w64 and download Windows DLLs even when running in Ubuntu. Run the resulting app in Windows, or extract `dist/ForeverDubbed-windows-amd64.zip` there. Ubuntu is the build host; desktop capture and playback still require Windows.
+The tools automatically select MinGW-w64 and download Windows DLLs even when running in Ubuntu. Run the resulting app in Windows, or extract `dist/ForeverDubbed-windows-amd64.zip` there. These commands produce the Windows release; for macOS releases from Linux, follow [the macOS guide](docs/macos.md).
 
 1. Copy `addon/ForeverDubbed` into the Forever client's `Interface\AddOns` directory and enable it in the game.
 2. Run the companion. It loads the native engine directly; there is no separate service to start.
 3. Enter `/fdb test`. You should see the tile detected and hear the connection test.
 4. Use `/fdb unlock`, move the tile, then `/fdb lock`. Prefer windowed or borderless game mode.
 
-The release contains one application executable plus ONNX Runtime libraries, ONNX models, and `.safetensors` voices. It is not a single statically linked binary. Desktop capture/playback remain Windows-only; the native voice-test tool also runs on Linux/macOS.
+The release contains one application executable plus ONNX Runtime libraries, ONNX models, and `.safetensors` voices. It is not a single statically linked binary. Desktop capture/playback support Windows and macOS 14+; the native voice-test tool also runs on Linux.
 
 ### Streaming speech
 
@@ -90,7 +94,7 @@ Run these in PowerShell from the directory containing the executable:
 .\foreverdubbed.exe -version
 ```
 
-Pocket TTS is the default (`-tts pocket`; `-tts local` is an alias). The EXE loads the native engine automatically; no launcher or service is required. `-voices` lists profile IDs and the associated Pocket preset without starting the model. `-voice orc_male` forces one profile for every speaker. `-tts sapi -voices` lists installed Windows SAPI voices; `-rate -10..10` applies only to SAPI.
+Pocket TTS is the default (`-tts pocket`; `-tts local` is an alias). The EXE loads the native engine automatically; no launcher or service is required. `-voices` lists profile IDs and the associated Pocket preset without starting the model. `-voice orc_male` forces one profile for every speaker. `-tts sapi -voices` lists installed Windows SAPI voices; `-tts system` selects OS voices on either platform; `-rate -10..10` applies to system voices.
 
 To hear a voice without opening WoW, run from the project/bundle root:
 
@@ -156,7 +160,7 @@ go run ./tools/models
 go run ./tools/build
 ```
 
-`tools/build` produces the Windows/amd64 release. Both it and `tools/native` automatically select the installed MinGW-w64 cross-compilers on Ubuntu/WSL; explicit `CC`/`CXX` values override this selection. `tools/native` prepares matching dependencies in `.runtime/sdk/windows_amd64` and DLLs in `.runtime/native`. For an alternate runtime directory, use `-out <directory>` with setup/model downloads and `-native-dir <directory>` with the builder. It rejects missing or wrong-architecture libraries. `scripts/build.ps1` delegates to this Go tool.
+`tools/build` defaults to the Windows/amd64 release; `-target darwin -arch arm64|amd64` produces macOS releases (see [the Linux/macOS build guide](docs/macos.md)). Both it and `tools/native` automatically select the installed MinGW-w64 cross-compilers on Ubuntu/WSL; explicit `CC`/`CXX` values override this selection. `tools/native` prepares matching dependencies in `.runtime/sdk/windows_amd64` and DLLs in `.runtime/native`. For an alternate runtime directory, use `-out <directory>` with setup/model downloads and `-native-dir <directory>` with the builder. It rejects missing or wrong-architecture libraries. `scripts/build.ps1` delegates to this Go tool.
 
 Real native speech checks (no game or audio device required):
 

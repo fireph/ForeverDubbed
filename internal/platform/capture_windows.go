@@ -25,7 +25,7 @@ var (
 	gdiFlush     = gdi32.NewProc("GdiFlush")
 )
 
-func Init() error {
+func Init(_ string) error {
 	// Opt out of DPI virtualization so detection and capture use physical pixels.
 	p := user32.NewProc("SetProcessDpiAwarenessContext")
 	if p.Find() == nil {

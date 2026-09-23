@@ -1,4 +1,4 @@
-// Prepare dependencies for the Windows release, or the host's native speech tools.
+// Prepare native dependencies for Windows, macOS, or the host.
 package main
 
 import (
@@ -19,21 +19,22 @@ func main() {
 }
 func run() error {
 	out := flag.String("out", ".runtime/native", "native runtime directory")
-	target := flag.String("target", "windows", "dependency target: windows (x64 release) or host (native speech tools)")
+	target := flag.String("target", "windows", "dependency target: windows, darwin, or host")
+	arch := flag.String("arch", "", "target architecture: amd64 or arm64")
 	flag.Parse()
-	if flag.NArg() != 0 || (*target != "windows" && *target != "host") {
-		return fmt.Errorf("usage: go run ./tools/native [-target windows|host] [-out path]")
+	if flag.NArg() != 0 {
+		return fmt.Errorf("unexpected arguments: %v", flag.Args())
 	}
-	targetOS, targetArch := runtime.GOOS, runtime.GOARCH
-	env := os.Environ()
-	if *target == "windows" {
-		targetOS, targetArch = "windows", "amd64"
-		cc, cxx, err := buildtool.WindowsCompilers()
-		if err != nil {
-			return err
-		}
-		env = append(env, "CC="+cc, "CXX="+cxx)
+	targetSpec, err := buildtool.ResolveTarget(*target, *arch)
+	if err != nil {
+		return err
 	}
+	targetOS, targetArch := targetSpec.OS, targetSpec.Arch
+	cc, cxx, err := targetSpec.Compilers()
+	if err != nil {
+		return err
+	}
+	env := append(os.Environ(), "CC="+cc, "CXX="+cxx)
 	dir, err := filepath.Abs(*out)
 	if err != nil {
 		return err
@@ -42,9 +43,7 @@ func run() error {
 	// Windows, and old Linux/MSVC caches cannot be reused for cross-compilation.
 	build := filepath.Join(dir, "build-"+runtime.GOOS+"-"+runtime.GOARCH+"-"+targetOS+"-"+targetArch)
 	configure := []string{"-S", "native", "-B", build, "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=" + dir}
-	if targetOS == "windows" {
-		configure = append(configure, "-DCMAKE_SYSTEM_NAME=Windows", "-DCMAKE_SYSTEM_PROCESSOR=AMD64")
-	}
+	configure = append(configure, targetSpec.CMakeArgs()...)
 	if runtime.GOOS == "windows" {
 		// CMake otherwise defaults to MSVC, which is incompatible with cgo's GCC ABI.
 		configure = append(configure, "-G", "MinGW Makefiles")

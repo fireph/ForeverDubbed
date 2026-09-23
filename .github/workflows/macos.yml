@@ -1,0 +1,56 @@
+name: macOS builds from Linux
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: false
+      - name: Linux compiler prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm lld cmake build-essential curl git xz-utils bzip2 cpio
+      - name: Cache OSXCross
+        id: cross
+        uses: actions/cache@v4
+        with:
+          path: .runtime/osxcross
+          key: osxcross-llvm-ubuntu24-27d21e49-sdk14.5-v1
+      - name: Prepare OSXCross
+        if: steps.cross.outputs.cache-hit != 'true'
+        run: bash scripts/setup-macos-cross.sh
+      - name: Test on Linux
+        run: |
+          go test ./...
+          go vet ./...
+      - name: Prepare macOS dependencies
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          source scripts/macos-cross-env.sh "$TARGET_ARCH"
+          go run ./tools/native -target darwin -arch "$TARGET_ARCH" -out ".runtime/native-darwin-$TARGET_ARCH"
+          go run ./tools/models -out ".runtime/native-darwin-$TARGET_ARCH"
+      - name: Build macOS release
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          source scripts/macos-cross-env.sh "$TARGET_ARCH"
+          go run ./tools/build -target darwin -arch "$TARGET_ARCH" -native-dir ".runtime/native-darwin-$TARGET_ARCH"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ForeverDubbed-darwin-${{ matrix.arch }}
+          path: dist/ForeverDubbed-darwin-${{ matrix.arch }}.zip
+          if-no-files-found: error

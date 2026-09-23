@@ -37,6 +37,11 @@ func playPCM(ctx context.Context, chunks <-chan []byte, device pcmDevice) (err e
 			return err
 		}
 		if chunks == nil && pending == 0 {
+			// Some devices return buffers before the final samples reach the
+			// speaker. Drain normally, while cancellation still closes at once.
+			if d, ok := device.(interface{ Drain(context.Context) error }); ok {
+				return d.Drain(ctx)
+			}
 			return nil
 		}
 		input := chunks

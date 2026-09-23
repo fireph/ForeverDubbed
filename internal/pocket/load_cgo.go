@@ -19,7 +19,7 @@ package pocket
 #cgo LDFLAGS: -lsentencepiece -lonnxruntime
 #cgo windows LDFLAGS: -static -lstdc++ -lws2_32
 #cgo linux LDFLAGS: -lstdc++ -lm -lpthread -Wl,-rpath,$ORIGIN/native -Wl,-rpath,$ORIGIN/../.runtime/native
-#cgo darwin LDFLAGS: -lc++ -Wl,-rpath,@executable_path/native -Wl,-rpath,@executable_path/../.runtime/native
+#cgo darwin LDFLAGS: -lc++
 #include <stdlib.h>
 #include "bridge.h"
 */

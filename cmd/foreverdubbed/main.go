@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -31,7 +32,7 @@ func main() {
 }
 
 func run() error {
-	var files, voice, snapshot string
+	var files, voice, snapshot, captureApp string
 	var backend, configPath, testText, testRace, testGender string
 	var mute, list, showVersion bool
 	var rate, threads int
@@ -41,19 +42,22 @@ func run() error {
 	flag.StringVar(&modelsDir, "models-dir", "", "ONNX models directory (default: native-dir/models)")
 	flag.IntVar(&threads, "cpu-threads", 1, "native inference CPU thread budget")
 	flag.StringVar(&files, "image", "", "decode PNG file(s), comma-separated, without screen capture or TTS")
-	flag.StringVar(&voice, "voice", "", "Pocket TTS profile override, or Windows voice name with -tts sapi")
-	flag.StringVar(&snapshot, "snapshot", "", "save one desktop PNG after 3 seconds, report detection, then exit")
-	flag.StringVar(&backend, "tts", "pocket", "speech backend: pocket (local CPU) or sapi")
+	flag.StringVar(&voice, "voice", "", "Pocket TTS profile override, or system voice name with -tts system")
+	flag.StringVar(&snapshot, "snapshot", "", "save one capture PNG after 3 seconds (game window on macOS, desktop on Windows), then exit")
+	if runtime.GOOS == "darwin" {
+		flag.StringVar(&captureApp, "capture-app", "World of Warcraft", "capture only this macOS application (exact name or bundle identifier)")
+	}
+	flag.StringVar(&backend, "tts", "pocket", "speech backend: pocket (local CPU) or system (OS voices; sapi is a Windows alias)")
 	flag.StringVar(&configPath, "voice-config", speech.DefaultConfigPath(), "local race/voice mapping JSON")
 	flag.StringVar(&testText, "speak-test", "", "speak this text once without screen capture")
 	flag.StringVar(&testRace, "race", "Human", "race for -speak-test")
 	flag.StringVar(&testGender, "gender", "male", "gender for -speak-test")
 	flag.BoolVar(&showVersion, "version", false, "print version and optical format, then exit")
 	flag.BoolVar(&mute, "mute", false, "print decoded JSON without speaking")
-	flag.BoolVar(&list, "voices", false, "list configured voice profiles (Windows voices with -tts sapi)")
-	flag.IntVar(&rate, "rate", 0, "SAPI speech rate, -10 through 10 (only with -tts sapi)")
+	flag.BoolVar(&list, "voices", false, "list configured voice profiles (OS voices with -tts system)")
+	flag.IntVar(&rate, "rate", 0, "system speech rate, -10 through 10 (only with -tts system/sapi)")
 	flag.DurationVar(&poll, "poll", 75*time.Millisecond, "capture interval while tracking the tile")
-	flag.DurationVar(&scan, "scan", time.Second, "full desktop search interval when tile is missing")
+	flag.DurationVar(&scan, "scan", time.Second, "capture search interval when tile is missing")
 	flag.Parse()
 	if showVersion {
 		fmt.Printf("ForeverDubbed %s, FDB5, 16 colors, %d bytes/page\n", version, protocol.PayloadBytes)
@@ -70,10 +74,16 @@ func run() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	if backend != "pocket" && backend != "local" && backend != "sapi" {
-		return fmt.Errorf("-tts must be pocket or sapi")
+	if backend == "sapi" && runtime.GOOS != "windows" {
+		return fmt.Errorf("-tts sapi requires Windows; use -tts system for macOS voices")
 	}
-	if list && backend == "sapi" {
+	if backend == "sapi" {
+		backend = "system"
+	}
+	if backend != "pocket" && backend != "local" && backend != "system" {
+		return fmt.Errorf("-tts must be pocket or system (OS voices; sapi is a Windows alias)")
+	}
+	if list && backend == "system" {
 		s, err := platform.Voices(ctx)
 		fmt.Print(s)
 		return err
@@ -114,7 +124,7 @@ func run() error {
 	}
 	var speak func(context.Context, protocol.Message) error
 	if !mute && snapshot == "" || list || testText != "" {
-		if backend != "sapi" {
+		if backend != "system" {
 			config, err := speech.Load(configPath)
 			if err != nil {
 				return fmt.Errorf("voice config: %w", err)
@@ -153,8 +163,11 @@ func run() error {
 	if testText != "" {
 		return speak(ctx, protocol.Message{Text: testText, Race: testRace, Gender: testGender})
 	}
-	if err := platform.Init(); err != nil {
+	if err := platform.Init(captureApp); err != nil {
 		return err
+	}
+	if runtime.GOOS == "darwin" {
+		log.Printf("Capture is limited to windows owned by %q; waiting if the game is unavailable.", captureApp)
 	}
 	if snapshot != "" {
 		return saveSnapshot(ctx, snapshot)
@@ -238,7 +251,7 @@ func run() error {
 }
 
 func saveSnapshot(ctx context.Context, path string) error {
-	log.Print("Capturing the desktop in 3 seconds. Keep the game and square visible.")
+	log.Print("Taking a snapshot in 3 seconds (game window on macOS, desktop on Windows). Keep the game and square visible.")
 	timer := time.NewTimer(3 * time.Second)
 	defer timer.Stop()
 	select {
@@ -262,7 +275,7 @@ func saveSnapshot(ctx context.Context, path string) error {
 	if closeErr != nil {
 		return closeErr
 	}
-	log.Printf("Saved desktop PNG %s (%d × %d).", path, im.Bounds().Dx(), im.Bounds().Dy())
+	log.Printf("Saved capture PNG %s (%d × %d).", path, im.Bounds().Dx(), im.Bounds().Dy())
 	l, p, err := protocol.Find(im)
 	if err != nil {
 		return err
