@@ -53,7 +53,7 @@ func newStatusCard(title string) *statusCard {
 	label := canvas.NewText(strings.ToUpper(title), soft)
 	label.TextSize = 11
 	label.TextStyle.Bold = true
-	dot := container.NewGridWrap(fyne.NewSize(9, 9), c.dot)
+	dot := container.NewCenter(container.NewGridWrap(fyne.NewSize(9, 9), c.dot))
 	content := container.NewVBox(label, container.NewHBox(dot, c.value), c.detail)
 	bg := canvas.NewRectangle(color.NRGBA{R: 25, G: 34, B: 49, A: 255})
 	bg.CornerRadius = 12
