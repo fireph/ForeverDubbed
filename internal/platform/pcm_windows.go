@@ -74,7 +74,7 @@ func PlayPCM(ctx context.Context, rate int, chunks <-chan []byte) error {
 	if err := waveResult("waveOutOpen", code); err != nil {
 		return err
 	}
-	return playPCM(ctx, chunks, device)
+	return playPCM(ctx, rate, chunks, device)
 }
 
 func (d *waveDevice) Queue(pcm []byte) error {

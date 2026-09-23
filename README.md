@@ -28,7 +28,7 @@ For source builds on Windows or Linux/WSL, see the [Windows build guide](native/
 
 ## Desktop companion
 
-The Fyne interface shows whether the game window is available, whether the addon tile is connected, and whether speech is preparing, playing, idle, or muted. The latest decoded dialogue appears below the status cards. Expand **Details & troubleshooting** for capture or speech errors.
+The Fyne interface is styled like a classic WoW quest dialog, with parchment, a dark frame, serif text, and red-and-gold buttons. It shows whether the game window is available, whether the addon tile is connected, and whether speech is preparing, playing, idle, or muted. The **Stop** button beneath Audio interrupts the current speech without stopping game detection. It is enabled only while audio is playing. Expand **Details & troubleshooting** for capture or speech errors.
 
 Close or minimize the window, or click **Minimize to tray**, to keep the companion running in the Windows system tray or macOS menu bar. Choose **Show ForeverDubbed** from its tray icon to reopen it. Choose **Quit** to stop capture and audio and exit.
 

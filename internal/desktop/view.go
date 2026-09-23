@@ -4,39 +4,14 @@ package desktop
 
 import (
 	"fmt"
-	"image/color"
-	"strings"
 
 	"foreverdubbed/internal/appstate"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
-
-var gold = color.NRGBA{R: 231, G: 188, B: 112, A: 255}
-var green = color.NRGBA{R: 118, G: 209, B: 168, A: 255}
-var soft = color.NRGBA{R: 163, G: 175, B: 197, A: 255}
-
-type companionTheme struct{ fyne.Theme }
-
-func (t companionTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
-	switch n {
-	case theme.ColorNameBackground:
-		return color.NRGBA{R: 16, G: 22, B: 34, A: 255}
-	case theme.ColorNameInputBackground:
-		return color.NRGBA{R: 24, G: 33, B: 48, A: 255}
-	case theme.ColorNameForeground:
-		return color.NRGBA{R: 234, G: 239, B: 247, A: 255}
-	case theme.ColorNamePrimary:
-		return gold
-	case theme.ColorNameDisabled:
-		return soft
-	}
-	return t.Theme.Color(n, theme.VariantDark)
-}
 
 type statusCard struct {
 	value  *canvas.Text
@@ -47,21 +22,19 @@ type statusCard struct {
 
 func newStatusCard(title string) *statusCard {
 	c := &statusCard{value: canvas.NewText("Starting", soft), detail: widget.NewLabel(""), dot: canvas.NewCircle(soft)}
-	c.value.TextSize = 20
+	c.value.TextSize = 19
 	c.value.TextStyle.Bold = true
 	c.detail.Wrapping = fyne.TextWrapWord
-	label := canvas.NewText(strings.ToUpper(title), soft)
-	label.TextSize = 11
+	label := canvas.NewText(title, soft)
+	label.TextSize = 15
 	label.TextStyle.Bold = true
 	dot := container.NewCenter(container.NewGridWrap(fyne.NewSize(9, 9), c.dot))
 	content := container.NewVBox(label, container.NewHBox(dot, c.value), c.detail)
-	bg := canvas.NewRectangle(color.NRGBA{R: 25, G: 34, B: 49, A: 255})
-	bg.CornerRadius = 12
-	c.root = container.NewStack(bg, container.NewPadded(content))
+	c.root = inset(3, content)
 	return c
 }
 func (c *statusCard) set(value, detail string, active bool) {
-	col := color.Color(soft)
+	col := soft
 	if active {
 		col = green
 	}
@@ -72,39 +45,43 @@ func (c *statusCard) set(value, detail string, active bool) {
 }
 
 type dashboard struct {
-	root                                           fyne.CanvasObject
-	headline                                       *canvas.Text
-	hint, diagnostics, speaker, received, dialogue *widget.Label
-	window, tile, audio                            *statusCard
+	root                fyne.CanvasObject
+	headline            *canvas.Text
+	hint, diagnostics   *widget.Label
+	window, tile, audio *statusCard
+	stop                *widget.Button
 }
 
-func newDashboard(version string, hide, quit func()) *dashboard {
+func newDashboard(version string, hide, quit, stop func()) *dashboard {
 	d := &dashboard{window: newStatusCard("Game window"), tile: newStatusCard("Dialogue tile"), audio: newStatusCard("Audio")}
-	brand := canvas.NewText("FOREVERDUBBED", gold)
-	brand.TextSize = 14
-	brand.TextStyle.Bold = true
-	d.headline = canvas.NewText("Bringing Azeroth to life.", color.White)
-	d.headline.TextSize = 28
+	title := canvas.NewText("ForeverDubbed", gold)
+	title.TextSize = 27
+	title.TextStyle.Bold = true
+	subtitle := canvas.NewText("World of Warcraft companion", gold)
+	subtitle.TextSize = 14
+	banner := container.NewBorder(nil, nil, questMedallion(), nil, container.NewCenter(container.NewVBox(title, subtitle)))
+	d.headline = canvas.NewText("Bringing Azeroth to life.", ink)
+	d.headline.TextSize = 23
 	d.headline.TextStyle.Bold = true
 	d.hint = widget.NewLabel("Starting your companion…")
 	d.hint.Wrapping = fyne.TextWrapWord
-	d.speaker = widget.NewLabelWithStyle("Waiting for dialogue", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	d.speaker.Wrapping = fyne.TextWrapWord
-	d.received = widget.NewLabel("")
-	d.dialogue = widget.NewLabel("Open a conversation or quest in WoW to hear it read aloud.")
-	d.dialogue.Wrapping = fyne.TextWrapWord
-	scroll := container.NewVScroll(d.dialogue)
-	scroll.SetMinSize(fyne.NewSize(0, 155))
-	dialogue := widget.NewCard("Latest dialogue", "", container.NewBorder(container.NewVBox(d.speaker, d.received), nil, nil, nil, scroll))
+	d.stop = widget.NewButton("Stop", stop)
+	d.stop.Disable()
+	audioCard := container.NewVBox(d.audio.root, inset(3, container.NewHBox(questButtonWidget(d.stop))))
 	d.diagnostics = widget.NewLabel("")
 	d.diagnostics.Wrapping = fyne.TextWrapWord
-	diagnostics := widget.NewAccordion(widget.NewAccordionItem("Details & troubleshooting", d.diagnostics))
-	privacy := widget.NewLabelWithStyle("Only your game window is captured. Speech stays on this computer.", fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
-	privacy.Wrapping = fyne.TextWrapWord
-	hideButton := widget.NewButtonWithIcon("Minimize to tray", theme.ViewRestoreIcon(), hide)
-	footer := container.NewHBox(widget.NewLabel("v"+version), layout.NewSpacer(), hideButton, widget.NewButton("Quit", quit))
-	header := container.NewVBox(brand, d.headline, d.hint, widget.NewSeparator(), container.NewGridWithColumns(3, d.window.root, d.tile.root, d.audio.root))
-	d.root = container.New(layout.NewCustomPaddedLayout(18, 18, 18, 18), container.NewBorder(header, container.NewVBox(diagnostics, privacy, footer), nil, nil, dialogue))
+	detailScroll := container.NewVScroll(d.diagnostics)
+	detailScroll.SetMinSize(fyne.NewSize(0, 110))
+	diagnostics := widget.NewAccordion(widget.NewAccordionItem("Details & troubleshooting", detailScroll))
+	header := container.NewVBox(d.headline, d.hint, questRule(), container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), questRule())
+	paper := parchment(container.NewBorder(header, nil, nil, nil, container.NewVScroll(container.NewVBox(diagnostics))))
+	privacy := canvas.NewText("Only your game window is captured. Speech stays on this computer.", gold)
+	privacy.TextSize = 12
+	privacy.TextStyle.Italic = true
+	versionLabel := canvas.NewText("v"+version, gold)
+	versionLabel.TextSize = 13
+	footer := container.NewVBox(container.NewCenter(privacy), container.NewHBox(container.NewCenter(versionLabel), layout.NewSpacer(), questButton("Minimize to tray", hide), questButton("Quit", quit)))
+	d.root = questFrame(container.NewBorder(inset(5, banner), inset(5, footer), nil, nil, paper))
 	return d
 }
 func (d *dashboard) render(s appstate.Snapshot) {
@@ -154,19 +131,12 @@ func (d *dashboard) render(s appstate.Snapshot) {
 	if s.Voice != "" {
 		audioDetail = s.Voice
 	}
-	d.audio.set(audio, audioDetail, s.Audio == "Playing audio" || s.Audio == "Speaking (system voice)")
-	if !s.Received.IsZero() {
-		speaker := s.Message.Speaker
-		if speaker == "" {
-			speaker = "Dialogue"
-		}
-		d.speaker.SetText(speaker)
-		d.received.SetText(s.Received.Format("15:04:05"))
-		text := s.Message.Text
-		if s.Message.Title != "" {
-			text = s.Message.Title + "\n\n" + text
-		}
-		d.dialogue.SetText(text)
+	playing := !s.Stopped && (s.Audio == "Playing audio" || s.Audio == "Speaking (system voice)")
+	d.audio.set(audio, audioDetail, playing)
+	if playing && s.PlaybackID != 0 {
+		d.stop.Enable()
+	} else {
+		d.stop.Disable()
 	}
 	details := fmt.Sprintf("Capture target: %s\nSpeech engine: %s", s.Target, s.Backend)
 	if s.CaptureError != "" {
@@ -179,4 +149,6 @@ func (d *dashboard) render(s appstate.Snapshot) {
 		details += "\n\nStartup: " + s.FatalError
 	}
 	d.diagnostics.SetText(details)
+	// Wrapped status text can change child minimum sizes.
+	d.root.Refresh()
 }

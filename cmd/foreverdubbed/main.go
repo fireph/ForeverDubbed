@@ -163,6 +163,9 @@ func run() error {
 					log.Printf("Voice %s (race=%q gender=%q NPC=%q)", id, m.Race, m.Gender, m.NPCID)
 					state.Update(func(v *appstate.Snapshot) { v.Voice = id })
 					ctx = platform.WithPlaybackObserver(ctx, func() { state.Audio("Playing audio") })
+					ctx = platform.WithPlaybackProgress(ctx, func(played, total time.Duration, known bool) {
+						state.Update(func(v *appstate.Snapshot) { v.Played, v.Duration, v.DurationKnown = played, total, known })
+					})
 					return local.Speak(ctx, m)
 				}
 			} else {
@@ -321,13 +324,14 @@ func saveSnapshot(ctx context.Context, path string) error {
 func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func(context.Context, protocol.Message) error, state *appstate.State) {
 	var cancel context.CancelFunc
 	var finished chan error
+	var nextID uint64
 	stopCurrent := func() {
 		if cancel != nil {
 			cancel()
 			<-finished
 			cancel = nil
 			finished = nil
-			state.Audio("Idle")
+			state.ResetPlayback()
 		}
 	}
 	defer stopCurrent()
@@ -335,16 +339,26 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 		select {
 		case <-ctx.Done():
 			return
+		case id := <-state.AudioStops():
+			if id == state.Snapshot().PlaybackID {
+				stopCurrent()
+			}
 		case message := <-requests:
 			stopCurrent()
-			state.Update(func(v *appstate.Snapshot) { v.Audio = "Preparing speech"; v.SpeechError = "" })
+			nextID++
+			state.Update(func(v *appstate.Snapshot) {
+				v.Audio = "Preparing speech"
+				v.SpeechError = ""
+				v.PlaybackID = nextID
+				v.PlayingSpeaker = message.Speaker
+			})
 			child, c := context.WithCancel(ctx)
 			cancel = c
 			result := make(chan error, 1)
 			finished = result
 			go func() { result <- speak(child, message) }()
 		case err := <-finished:
-			state.Audio("Idle")
+			state.ResetPlayback()
 			if err != nil && ctx.Err() == nil {
 				log.Printf("TTS error: %v", err)
 				state.Update(func(v *appstate.Snapshot) { v.SpeechError = err.Error() })

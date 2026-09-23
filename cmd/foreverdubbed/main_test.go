@@ -12,8 +12,8 @@ func TestSpeechReplacementAndQuitWaitForCleanup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	requests := make(chan protocol.Message, 1)
-	started := make(chan string, 2)
-	stopped := make(chan string, 2)
+	started := make(chan string, 3)
+	stopped := make(chan string, 3)
 	state := appstate.New("game", "pocket", false)
 	speak := func(ctx context.Context, m protocol.Message) error {
 		state.Audio("Playing audio")
@@ -40,8 +40,15 @@ func TestSpeechReplacementAndQuitWaitForCleanup(t *testing.T) {
 	requests <- protocol.Message{Text: "second"}
 	receive(stopped, "first")
 	receive(started, "second")
-	cancel()
+	state.StopAudio()
 	receive(stopped, "second")
+	requests <- protocol.Message{Text: "third"}
+	receive(started, "third")
+	if v := state.Snapshot(); v.SpeechError != "" || v.PlaybackID == 0 {
+		t.Fatal("stop prevented subsequent speech", v)
+	}
+	cancel()
+	receive(stopped, "third")
 	select {
 	case <-done:
 	case <-time.After(time.Second):

@@ -14,14 +14,19 @@ type Snapshot struct {
 	Window, Tile                          bool
 	CaptureError, SpeechError, FatalError string
 	Audio                                 string
+	PlaybackID                            uint64
+	Played, Duration                      time.Duration
+	DurationKnown                         bool
+	PlayingSpeaker                        string
 	Voice                                 string
 	Message                               protocol.Message
 	Received                              time.Time
 }
 
 type State struct {
-	mu    sync.RWMutex
-	value Snapshot
+	mu        sync.RWMutex
+	value     Snapshot
+	stopAudio chan uint64
 }
 
 func New(target, backend string, muted bool) *State {
@@ -29,7 +34,7 @@ func New(target, backend string, muted bool) *State {
 	if muted {
 		audio = "Muted"
 	}
-	return &State{value: Snapshot{Target: target, Backend: backend, Audio: audio}}
+	return &State{stopAudio: make(chan uint64, 1), value: Snapshot{Target: target, Backend: backend, Audio: audio}}
 }
 func (s *State) Snapshot() Snapshot {
 	s.mu.RLock()
@@ -61,8 +66,32 @@ func (s *State) Finished(err error) {
 		v.Stopped = true
 		v.Ready, v.Window, v.Tile = false, false, false
 		v.Audio = "Stopped"
+		v.PlaybackID = 0
 		if err != nil {
 			v.FatalError = err.Error()
 		}
+	})
+}
+
+// StopAudio requests cancellation of the utterance visible when clicked.
+// IDs prevent a delayed click from interrupting its replacement.
+func (s *State) StopAudio() {
+	id := s.Snapshot().PlaybackID
+	if id == 0 {
+		return
+	}
+	select {
+	case s.stopAudio <- id:
+	default:
+	}
+}
+func (s *State) AudioStops() <-chan uint64 { return s.stopAudio }
+func (s *State) ResetPlayback() {
+	s.Update(func(v *Snapshot) {
+		v.Audio = "Idle"
+		v.PlaybackID = 0
+		v.Played, v.Duration = 0, 0
+		v.DurationKnown = false
+		v.PlayingSpeaker = ""
 	})
 }

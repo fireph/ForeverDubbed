@@ -34,7 +34,7 @@ func TestPCMQueueBoundAndCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- playPCM(ctx, chunks, device) }()
+	go func() { done <- playPCM(ctx, 24000, chunks, device) }()
 	for i := 0; i < 4; i++ {
 		select {
 		case p := <-device.queued:
@@ -72,7 +72,7 @@ func TestPCMWaitsForDeviceDrain(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- playPCM(ctx, chunks, device) }()
+	go func() { done <- playPCM(ctx, 24000, chunks, device) }()
 	select {
 	case <-device.queued:
 	case <-ctx.Done():
@@ -96,7 +96,7 @@ func TestPCMClosesOnDeviceError(t *testing.T) {
 	chunks := make(chan []byte, 1)
 	chunks <- []byte{1, 0}
 	device := &testPCMDevice{queued: make(chan []byte, 1), fail: errors.New("device failed")}
-	if err := playPCM(context.Background(), chunks, device); !errors.Is(err, device.fail) {
+	if err := playPCM(context.Background(), 24000, chunks, device); !errors.Is(err, device.fail) {
 		t.Fatal(err)
 	}
 	if !device.closed {
@@ -126,7 +126,7 @@ func TestPCMHardwareDrainAndCancellation(t *testing.T) {
 		d := &drainingPCMDevice{draining: make(chan struct{}), release: make(chan struct{})}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		done := make(chan error, 1)
-		go func() { done <- playPCM(ctx, chunks, d) }()
+		go func() { done <- playPCM(ctx, 24000, chunks, d) }()
 		select {
 		case <-d.draining:
 		case <-ctx.Done():
@@ -163,12 +163,48 @@ func TestPlaybackObserverStartsOnlyAfterSuccessfulQueue(t *testing.T) {
 		device.finished.Store(true)
 		calls := 0
 		ctx := WithPlaybackObserver(context.Background(), func() { calls++ })
-		err := playPCM(ctx, chunks, device)
+		err := playPCM(ctx, 24000, chunks, device)
 		if fail == nil && (err != nil || calls != 1) {
 			t.Fatalf("successful playback: calls=%d err=%v", calls, err)
 		}
 		if fail != nil && (err == nil || calls != 0) {
 			t.Fatalf("failed queue reported playback: calls=%d err=%v", calls, err)
 		}
+	}
+}
+
+func TestPlaybackProgressCountsCompletedBuffers(t *testing.T) {
+	chunks := make(chan []byte, 2)
+	chunks <- make([]byte, 4800)
+	chunks <- make([]byte, 2400)
+	close(chunks)
+	device := &testPCMDevice{queued: make(chan []byte, 2)}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	ready := make(chan struct{}, 1)
+	var played, total time.Duration
+	var known bool
+	ctx = WithPlaybackProgress(ctx, func(p, d time.Duration, k bool) {
+		played, total, known = p, d, k
+		if k && p == 0 && d == 150*time.Millisecond {
+			select {
+			case ready <- struct{}{}:
+			default:
+			}
+		}
+	})
+	done := make(chan error, 1)
+	go func() { done <- playPCM(ctx, 24000, chunks, device) }()
+	select {
+	case <-ready: // Queued audio is not counted as played.
+	case <-ctx.Done():
+		t.Fatal("missing queued duration")
+	}
+	device.finished.Store(true)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if !known || played != 150*time.Millisecond || total != played {
+		t.Fatalf("played=%v total=%v known=%v", played, total, known)
 	}
 }

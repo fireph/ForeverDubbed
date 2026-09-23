@@ -33,7 +33,7 @@ func PlayPCM(ctx context.Context, rate int, chunks <-chan []byte) error {
 	if err := audioResult("AudioQueueNewOutput", status); err != nil {
 		return err
 	}
-	return playPCM(ctx, chunks, &macAudio{handle})
+	return playPCM(ctx, rate, chunks, &macAudio{handle})
 }
 func (d *macAudio) Queue(pcm []byte) error {
 	// The bridge copies bytes into AudioQueue-owned memory before returning.

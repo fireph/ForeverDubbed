@@ -93,7 +93,7 @@ Extract the ZIP, move **ForeverDubbed.app** to Applications if desired, and doub
 
 On the first capture attempt, allow **Screen Recording** (called **Screen & System Audio Recording** on some versions) for **ForeverDubbed** under **System Settings → Privacy & Security**. Quit using the tray menu and reopen the app after granting access. Keep WoW visible and use `/fdb unlock` to display the tile.
 
-The GUI displays capture, tile, and audio status alongside the latest dialogue. Closing or minimizing it keeps it running in the menu bar; use **Show ForeverDubbed** to restore it or **Quit** to exit.
+The GUI displays capture, tile, and audio status with a **Stop** button beneath Audio that is enabled only during playback. Closing or minimizing it keeps it running in the menu bar; use **Show ForeverDubbed** to restore it or **Quit** to exit.
 
 Local release builds are signed with a persistent self-signed certificate. They are not Developer ID signed or notarized. If macOS blocks a downloaded build, review its source and use [**System Settings → Privacy & Security → Open Anyway**](https://support.apple.com/en-gb/102445) for that app. Public notarized distribution requires a separate signing/notarization step.
 

@@ -22,7 +22,7 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 	a.SetIcon(Icon)
 	a.Settings().SetTheme(companionTheme{theme.DefaultTheme()})
 	w := a.NewWindow("ForeverDubbed")
-	w.Resize(fyne.NewSize(840, 660))
+	w.Resize(fyne.NewSize(760, 600))
 	w.CenterOnScreen()
 	quit := func() { stop() }
 	show := func() { restoreMinimized(w); w.Show(); w.RequestFocus() }
@@ -32,7 +32,7 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 			w.Hide()
 		}
 	}
-	d := newDashboard(version, hide, quit)
+	d := newDashboard(version, hide, quit, state.StopAudio)
 	w.SetContent(d.root)
 	d.render(state.Snapshot())
 	if hasTray {

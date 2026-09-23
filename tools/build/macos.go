@@ -33,6 +33,10 @@ func macAppSigned(dist string, files map[string]string, sign func(string) error)
 		switch {
 		case name == "foreverdubbed":
 			target = "Contents/MacOS/foreverdubbed"
+		case strings.HasPrefix(name, "docs/licenses/"):
+			// Keep redistributable font notices with the standalone app too.
+			result[name] = source
+			target = "Contents/Resources/licenses/" + strings.TrimPrefix(name, "docs/licenses/")
 		case strings.HasPrefix(name, "native/") || strings.HasPrefix(name, "tts/"):
 			target = "Contents/Resources/" + name
 		default:
