@@ -21,13 +21,22 @@ go run ./tools/models
 go run ./tools/build
 ```
 
-When migrating an old MSVC dependency build, remove its generated `.runtime/native/build` directory before preparing dependencies with MinGW.
+These commands target the Windows x64 release on every host. On Ubuntu 24.04+/WSL, install the prerequisites with:
+
+```sh
+sudo apt-get update
+sudo apt-get install golang-go cmake git build-essential g++-mingw-w64-x86-64-posix
+```
+
+Both setup and packaging automatically select `x86_64-w64-mingw32-gcc-posix` / `x86_64-w64-mingw32-g++-posix` (or the unsuffixed MinGW-w64 commands if those are available). Set both `CC` and `CXX` to override this. Do not set `GOOS=windows` for `go run`: the setup/build tools themselves must run on Ubuntu; they select the Windows target for their child builds.
+
+CMake caches are separated by host and target under `.runtime/native/build-<host-os>-<host-arch>-<target-os>-<target-arch>`, so existing Linux or MSVC caches in the old `build/` directory do not interfere. If changing compilers for the same host/target, remove that target's generated build directory first.
 
 `tools/native` uses CMake to fetch pinned dependencies and build static SentencePiece. Headers and link libraries are installed into `.runtime/sdk/<os>_<arch>/`; runtime libraries and license notices go into `.runtime/native/`. Go compiles our bridge and PocketTTS.cpp itself. The `pocket_native` build tag enables this integration; the release builder always sets it and enables cgo. Builds without this tag support model-free tests and setup tools, but return an explicit error if asked to synthesize speech.
 
-The dependencies are ONNX Runtime 1.23.2, SentencePiece 0.2.1, nlohmann/json 3.12.0, and dr_libs revision `dfe8377631000664666519fdb83da193fd8037f4`. Windows may need Microsoft's Visual C++ x64 redistributable for ONNX Runtime. The Windows link requests static C++/GCC runtimes. If your MinGW toolchain requires additional runtime DLLs (for example winpthreads), place them in the native runtime directory; the packager copies them beside the executable. The verified Zig cross-build requires only ONNX Runtime and Windows system libraries.
+The dependencies are ONNX Runtime 1.23.2, SentencePiece 0.2.1, nlohmann/json 3.12.0, and dr_libs revision `dfe8377631000664666519fdb83da193fd8037f4`. Windows may need Microsoft's Visual C++ x64 redistributable for ONNX Runtime. The Windows link uses static C++/GCC and thread runtimes, including with Ubuntu's POSIX MinGW-w64 toolchain. ONNX Runtime still uses its DLL through an import library. If a custom toolchain requires additional runtime DLLs, place them in the native runtime directory; the packager copies them beside the executable.
 
-The packager targets Windows x64. Cross-compiling also requires Windows-targeting `CC`/`CXX` and matching dependencies in `.runtime/sdk/windows_amd64`; changing `GOOS` alone is insufficient. Configure CMake with the appropriate toolchain when preparing cross dependencies, then pass `-native-dir` pointing to their runtime libraries and model/preset assets. Prefer building releases on each target OS. Desktop capture/playback remain Windows-only.
+The packager targets Windows x64. The default setup prepares `.runtime/sdk/windows_amd64` and Windows DLLs in `.runtime/native`, including when run from Ubuntu/WSL. To use another runtime directory, pass `-out` to both `tools/native` and `tools/models`, then use the same path as `tools/build -native-dir`. Desktop capture/playback remain Windows-only.
 
 Windows release layout:
 
@@ -44,9 +53,11 @@ tts/custom/                      # custom safetensors
 
 The packager also copies ONNX Runtime DLLs beside `dist/foreverdubbed.exe` for development launches. `-native-dir` selects model/preset data; shared-library discovery happens through the OS loader before Go starts.
 
-For direct speech development commands, use `CGO_ENABLED=1` and `-tags pocket_native`. Add the absolute `.runtime/native` directory to `PATH` on Windows, `LD_LIBRARY_PATH` on Linux, or `DYLD_LIBRARY_PATH` on macOS. For example, on Linux after preparing dependencies and models:
+For direct speech development on Linux/macOS, prepare host libraries with `go run ./tools/native -target host`; the default Windows dependencies cannot be linked into a Linux/macOS executable. Use `CGO_ENABLED=1` and `-tags pocket_native`. Add the absolute `.runtime/native` directory to `PATH` on Windows, `LD_LIBRARY_PATH` on Linux, or `DYLD_LIBRARY_PATH` on macOS. For example, on Linux:
 
 ```sh
+go run ./tools/native -target host
+go run ./tools/models
 export CGO_ENABLED=1
 export LD_LIBRARY_PATH="$PWD/.runtime/native${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 go run -tags pocket_native ./tools/voicecheck

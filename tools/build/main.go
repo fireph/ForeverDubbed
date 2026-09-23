@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"foreverdubbed/internal/buildtool"
 	"foreverdubbed/internal/pocket"
 	"io"
 	"io/fs"
@@ -44,6 +45,10 @@ func build() error {
 	if err != nil {
 		return err
 	}
+	cc, cxx, err := buildtool.WindowsCompilers()
+	if err != nil {
+		return err
+	}
 	bundle, addon, err := packageFiles(root)
 	if err != nil {
 		return err
@@ -78,6 +83,7 @@ func build() error {
 	binary := filepath.Join(dist, "foreverdubbed.exe")
 	nativeEnv := buildEnv(os.Environ(), targetOS, targetArch)
 	nativeEnv[len(nativeEnv)-1] = "CGO_ENABLED=1"
+	nativeEnv = append(nativeEnv, "CC="+cc, "CXX="+cxx)
 	if err := run(root, nativeEnv, "build", "-tags", "pocket_native", "-buildvcs=false", "-trimpath", "-o", binary, "./cmd/foreverdubbed"); err != nil {
 		return err
 	}
@@ -295,7 +301,7 @@ func addNativeFiles(bundle map[string]string, dir string) error {
 		filename := filepath.Join(dir, name)
 		image, err := pe.Open(filename)
 		if err != nil {
-			return fmt.Errorf("need Windows x64 native runtime at %s (build with go run ./tools/native on Windows, or pass -native-dir): %w", dir, err)
+			return fmt.Errorf("need Windows x64 native runtime at %s (prepare it with go run ./tools/native, or pass -native-dir): %w", dir, err)
 		}
 		machine := image.Machine
 		image.Close()

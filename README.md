@@ -20,7 +20,19 @@ go run ./tools/models
 go run ./tools/build
 ```
 
-This prepares native dependencies, downloads pinned model/preset assets, compiles PocketTTS.cpp into the Go executable with cgo, and and produces `dist/foreverdubbed.exe` and the addon/Windows ZIPs. See [native build details](native/README.md) for Windows toolchains and cross-host packaging.
+This prepares Windows x64 native dependencies, downloads pinned model/preset assets, compiles PocketTTS.cpp into the Go executable with cgo, and produces `dist/foreverdubbed.exe` and the addon/Windows ZIPs. See [native build details](native/README.md) for Windows toolchains and cross-host packaging.
+
+To build the same Windows release from **Ubuntu 24.04+/WSL**, install the build prerequisites once, then run those same three Go commands from the repository root:
+
+```sh
+sudo apt-get update
+sudo apt-get install golang-go cmake git build-essential g++-mingw-w64-x86-64-posix
+go run ./tools/native
+go run ./tools/models
+go run ./tools/build
+```
+
+The tools automatically select MinGW-w64 and download Windows DLLs even when running in Ubuntu. Run the resulting app in Windows, or extract `dist/ForeverDubbed-windows-amd64.zip` there. Ubuntu is the build host; desktop capture and playback still require Windows.
 
 1. Copy `addon/ForeverDubbed` into the Forever client's `Interface\AddOns` directory and enable it in the game.
 2. Run the companion. It loads the native engine directly; there is no separate service to start.
@@ -142,11 +154,12 @@ go run ./tools/models
 go run ./tools/build
 ```
 
-`tools/build` runs on any host and produces the Windows/amd64 release. Supply `-native-dir <directory>` containing Windows x64 DLLs and the downloaded assets when cross-compiling, and configure `CC`/`CXX` for the target. Prepare matching dependencies in `.runtime/sdk/windows_amd64` first. It rejects missing or wrong-architecture libraries. `scripts/build.ps1` delegates to this Go tool.
+`tools/build` produces the Windows/amd64 release. Both it and `tools/native` automatically select the installed MinGW-w64 cross-compilers on Ubuntu/WSL; explicit `CC`/`CXX` values override this selection. `tools/native` prepares matching dependencies in `.runtime/sdk/windows_amd64` and DLLs in `.runtime/native`. For an alternate runtime directory, use `-out <directory>` with setup/model downloads and `-native-dir <directory>` with the builder. It rejects missing or wrong-architecture libraries. `scripts/build.ps1` delegates to this Go tool.
 
 Real native speech checks (no game or audio device required):
 
 ```sh
+go run ./tools/native -target host
 go run -tags pocket_native ./tools/voicecheck
 go run -tags pocket_native ./tools/voicecheck -voice undead_male
 ```

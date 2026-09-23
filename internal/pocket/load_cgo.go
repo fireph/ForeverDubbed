@@ -4,6 +4,8 @@ package pocket
 
 /*
 #cgo CXXFLAGS: -std=c++17 -O2 -DPTT_SHARED_LIB
+// ONNX Runtime uses _stdcall, which MinGW omits in strict C++17 mode.
+#cgo windows CXXFLAGS: -D_stdcall=__stdcall
 #cgo windows,amd64 CXXFLAGS: -I${SRCDIR}/../../.runtime/sdk/windows_amd64/include
 #cgo windows,amd64 LDFLAGS: -L${SRCDIR}/../../.runtime/sdk/windows_amd64/lib
 #cgo linux,amd64 CXXFLAGS: -I${SRCDIR}/../../.runtime/sdk/linux_amd64/include
@@ -15,7 +17,7 @@ package pocket
 #cgo darwin,arm64 CXXFLAGS: -I${SRCDIR}/../../.runtime/sdk/darwin_arm64/include
 #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../../.runtime/sdk/darwin_arm64/lib
 #cgo LDFLAGS: -lsentencepiece -lonnxruntime
-#cgo windows LDFLAGS: -lstdc++ -lws2_32 -static-libgcc -static-libstdc++
+#cgo windows LDFLAGS: -static -lstdc++ -lws2_32
 #cgo linux LDFLAGS: -lstdc++ -lm -lpthread -Wl,-rpath,$ORIGIN/native -Wl,-rpath,$ORIGIN/../.runtime/native
 #cgo darwin LDFLAGS: -lc++ -Wl,-rpath,@executable_path/native -Wl,-rpath,@executable_path/../.runtime/native
 #include <stdlib.h>
