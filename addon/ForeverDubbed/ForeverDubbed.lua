@@ -14,7 +14,9 @@ local textures, pages, page, elapsed, expires = {}, nil, 1, 0, 0
 local session = (time() * 1000 + math.floor(GetTime() * 1000) % 1000) % 4294967296
 local sequence, lastBody, lastAt, ready = 0, nil, -1, false
 local PAGE_SECONDS = 0.25
-local VERSION = "0.4.0"
+local WAVE_SECONDS = 1 / 15
+local wavePhase, waveElapsed = 0, 0
+local VERSION = "0.5.0"
 local requestID, lastSpeaker = 0, nil
 
 local function pixelFactor()
@@ -95,9 +97,9 @@ end
 
 local function draw()
     if not pages then return end
-    local cells = Codec.Cells(pages[page])
+    local cells = Codec.Cells(pages[page], wavePhase)
     for i, v in ipairs(cells) do
-        local rgb = Codec.PALETTE[v + 1]
+        local rgb = v == Codec.WAVE and Codec.FINDER or Codec.PALETTE[v + 1]
         textures[i]:SetColorTexture(rgb[1] / 255, rgb[2] / 255, rgb[3] / 255, 1)
     end
     frame:Show()
@@ -161,10 +163,22 @@ frame:SetScript("OnUpdate", function(_, dt)
     if not pages then return end
     if GetTime() > expires and ForeverDubbedDB.locked then frame:Hide(); return end
     elapsed = elapsed + dt
+    waveElapsed = waveElapsed + dt
+    local redraw = false
     if elapsed >= PAGE_SECONDS then
+        local ticks = math.floor(elapsed / PAGE_SECONDS)
         elapsed = elapsed % PAGE_SECONDS
-        if #pages > 1 then page = page % #pages + 1; draw() end
+        page = (page - 1 + ticks) % #pages + 1
+        redraw = #pages > 1
     end
+    if waveElapsed + 1e-9 >= WAVE_SECONDS then
+        local ticks = math.floor((waveElapsed + 1e-9) / WAVE_SECONDS)
+        waveElapsed = math.max(0, waveElapsed - ticks * WAVE_SECONDS)
+        wavePhase = (wavePhase + ticks) % Codec.WAVE_PHASES
+        redraw = true
+    end
+    if redraw then draw() end -- one redraw if page and wave ticks coincide
+
 end)
 
 local events = CreateFrame("Frame")
@@ -182,8 +196,8 @@ events:SetScript("OnEvent", function(_, event, ...)
             db.positionVersion = 2
         end
         -- Upgrade the encoding once while preserving position and other settings.
-        if db.encodingVersion ~= 3 and db.encodingVersion ~= 4 then db.cell = 2 end
-        db.encodingVersion, db.mode = 4, nil
+        if db.encodingVersion ~= 3 and db.encodingVersion ~= 4 and db.encodingVersion ~= 5 then db.cell = 2 end
+        db.encodingVersion, db.mode = 5, nil
         db.cell = math.max(2, math.min(8, math.floor(tonumber(db.cell) or 2)))
         db.x = tonumber(db.x) or 16
         db.y = tonumber(db.y) or (screenHeight() - 16)

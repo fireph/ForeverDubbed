@@ -15,9 +15,10 @@ import (
 const (
 	Grid         = 50
 	DataGrid     = 48
-	FrameBytes   = 1152
+	WaveCells    = 136
+	FrameBytes   = (DataGrid*DataGrid - WaveCells) / 2
 	HeaderBytes  = 24
-	PayloadBytes = 1124
+	PayloadBytes = FrameBytes - HeaderBytes - 4
 	MaxPages     = 256
 )
 
@@ -73,7 +74,7 @@ func Encode(m Message) ([][]byte, error) {
 		end := min((i+1)*capacity, len(body))
 		p := body[i*capacity : end]
 		b := make([]byte, FrameBytes)
-		copy(b, "FDB4")
+		copy(b, "FDB5")
 		binary.BigEndian.PutUint32(b[4:], m.Session)
 		binary.BigEndian.PutUint32(b[8:], m.Sequence)
 		binary.BigEndian.PutUint32(b[12:], adler32.Checksum(body))
@@ -92,7 +93,7 @@ func Encode(m Message) ([][]byte, error) {
 
 func Parse(b []byte) (Packet, error) {
 	p := Packet{}
-	if len(b) != FrameBytes || string(b[:4]) != "FDB4" || b[23] > 1 {
+	if len(b) != FrameBytes || string(b[:4]) != "FDB5" || b[23] > 1 {
 		return p, errors.New("invalid frame header")
 	}
 	checksumAt := len(b) - 4

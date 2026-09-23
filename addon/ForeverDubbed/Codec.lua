@@ -1,7 +1,7 @@
 local _, NS = ...
 local Codec = {}
 NS.Codec = Codec
-Codec.GRID, Codec.PAYLOAD = 50, 1124
+Codec.GRID, Codec.PAYLOAD = 50, 1056
 -- Chromaglyph OKLab pack: h 264, L 0.22, C 0.045; minimum RGB distance sqrt(37).
 -- Palette order is part of the wire format; all sixteen references are sent.
 Codec.OUTLINE = 2 -- physical pixels, independent of cell size
@@ -24,6 +24,25 @@ Codec.PALETTE = {
     {15,27,53},
     {17,25,41},
 }
+
+-- One hard-coded loop with a two-cell perpendicular stroke width.
+-- Each column contains the inclusive zero-based data rows below. Animation
+-- only rotates these columns; it never recalculates or changes the shape.
+Codec.WAVE = 16 -- drawing-only marker, never a data nibble
+Codec.WAVE_PHASES = 48
+local waveColumns = {
+    {22,25}, {24,26}, {25,28}, {27,29}, {28,30}, {29,31}, {30,32}, {31,33},
+    {32,34}, {33,34}, {34,35}, {34,35}, {34,35}, {34,35}, {34,35}, {33,34},
+    {32,34}, {31,33}, {30,32}, {29,31}, {28,30}, {27,29}, {25,28}, {24,26},
+    {22,25}, {21,23}, {19,22}, {18,20}, {17,19}, {16,18}, {15,17}, {14,16},
+    {13,15}, {13,14}, {12,13}, {12,13}, {12,13}, {12,13}, {12,13}, {13,14},
+    {13,15}, {14,16}, {15,17}, {16,18}, {17,19}, {18,20}, {19,22}, {21,23},
+}
+function Codec.IsWave(x, y, phase)
+    if x < 1 or x > 48 or y < 1 or y > 48 then return false end
+    local rows = waveColumns[(x-1 + (phase or 0)) % 48 + 1]
+    return y-1 >= rows[1] and y-1 <= rows[2]
+end
 
 local function uint(n, width)
     local s = ""
@@ -62,11 +81,11 @@ function Codec.Encode(session, sequence, kind, speaker, title, text, race, gende
         flags = 1
     end
     local count = math.ceil(#body / Codec.PAYLOAD)
-    if count > 256 then return nil, "Text exceeds the 287,744-byte transport limit." end
+    if count > 256 then return nil, "Text exceeds the 270,336-byte transport limit." end
     local frames, checksum = {}, Codec.Adler(body)
     for i = 0, count - 1 do
         local payload = body:sub(i * Codec.PAYLOAD + 1, (i + 1) * Codec.PAYLOAD)
-        local frame = "FDB4" .. uint(session, 4) .. uint(sequence, 4) .. uint(checksum, 4)
+        local frame = "FDB5" .. uint(session, 4) .. uint(sequence, 4) .. uint(checksum, 4)
             .. uint(i, 2) .. uint(count, 2) .. uint(#payload, 2) .. string.char(kind, flags)
             .. payload .. string.rep("\0", Codec.PAYLOAD - #payload)
         frames[#frames + 1] = frame .. uint(Codec.Adler(frame), 4)
@@ -74,15 +93,19 @@ function Codec.Encode(session, sequence, kind, speaker, title, text, race, gende
     return frames
 end
 
-function Codec.Cells(frame)
+function Codec.Cells(frame, phase)
     local cells, nibble = {}, 0
     for y = 0, Codec.GRID - 1 do
         for x = 0, Codec.GRID - 1 do
             local value = Codec.Border(x, y)
             if x > 0 and x < Codec.GRID - 1 and y > 0 and y < Codec.GRID - 1 then
-                local byte = frame:byte(math.floor(nibble / 2) + 1)
-                value = math.floor(byte / 16 ^ (1 - nibble % 2)) % 16
-                nibble = nibble + 1
+                if Codec.IsWave(x, y, phase) then
+                    value = Codec.WAVE
+                else
+                    local byte = frame:byte(math.floor(nibble / 2) + 1)
+                    value = math.floor(byte / 16 ^ (1 - nibble % 2)) % 16
+                    nibble = nibble + 1
+                end
             end
             cells[#cells + 1] = value
         end

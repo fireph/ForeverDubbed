@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- Animate a crisp, light-blue sine wave with a constant two-cell stroke width at 15 fps leftward through the middle half of the data area, without touching the calibration ring. Shift one hard-coded loop by whole cells to avoid re-rasterization shimmer.
+- Reserve wave cells during encoding and infer their positions from each captured frame during decoding; single-page messages animate too.
+- Introduce FDB5 with 1,056 payload bytes per page. Update the addon and companion together; tile dimensions and existing settings are preserved.
+
 ## 0.4.0
 
 - Use the dark Chromaglyph palette with a fixed 2px light-blue outline outside the calibration ring. Default tile size is now 104 × 104 physical pixels.

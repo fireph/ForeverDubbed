@@ -1,8 +1,8 @@
-# ForeverDubbed optical protocol FDB4
+# ForeverDubbed optical protocol FDB5
 
-The sole supported format uses 16 dark navy colors and four bits per cell. A tile has a 50 × 50 cell grid including a one-cell calibration ring; its inner 48 × 48 cells carry 9,216 bits (1,152 bytes). A separate light-blue outline surrounds the calibration ring, exactly **2 physical pixels** thick on every side. Cells are integer 2–8 physical pixels wide, default 2. The total square is `50 × cell size + 4` pixels wide: **104 × 104** by default, or **154 × 154** with 3px cells. Coordinates start at the outer outline's top-left; x increases rightward and y downward.
+The sole supported format uses 16 dark navy colors and four bits per cell. A tile has a 50 × 50 cell grid including a one-cell calibration ring; its inner 48 × 48 cells reserve 136 cells for an animated sine wave. The remaining 2,168 cells carry 8,672 bits (1,084 bytes). A separate light-blue outline surrounds the calibration ring, exactly **2 physical pixels** thick on every side. Cells are integer 2–8 physical pixels wide, default 2. The total square is `50 × cell size + 4` pixels wide: **104 × 104** by default, or **154 × 154** with 3px cells. Coordinates start at the outer outline's top-left; x increases rightward and y downward.
 
-FDB4 requires companion and addon version 0.4.0 or newer. Update both together: the bright FDB3 palette and previous optical formats are not accepted. The byte layout and payload capacity are unchanged except for the format magic. Existing tile position, lock state, and FDB3 cell-size settings are preserved.
+FDB5 requires companion and addon version 0.5.0 or newer. Update both together: the static FDB4 format and previous optical formats are not accepted. Header fields are unchanged, but the frame magic and payload capacity have changed. Existing tile position, lock state, and FDB3/FDB4 cell-size settings are preserved.
 
 The addon uses `(768 / physical screen height) / UIParent:GetEffectiveScale()` for its local scale, so cell sizes and outline thickness remain physical pixels regardless of UI scale. Grid origin is two pixels right and down from the outer tile origin.
 
@@ -51,27 +51,37 @@ This deliberately subtle palette trades noise tolerance for appearance. Mild con
 
 Subsequent reads capture the complete discovered rectangle including the blue outline. Rotation, fractional rescaling, perspective, and arbitrary external image resizing are unsupported.
 
+## Animated wave and cell reservation
+
+The wave is one **hard-coded 48-column cell pattern** approximating a two-cell-wide stroke measured perpendicular to a sine curve. Each column lists its inclusive zero-based data row range. The pattern spans data rows 12–35, never the calibration ring, and always contains exactly **136 blue cells**. The same integer pattern is stored in Lua and Go.
+
+Animation only cyclically shifts that pattern left by one whole column per frame. It never interpolates, recalculates a sine curve, or changes the stroke's shape. Cells wrapping off the left edge reappear at the right. At **15 fps**, the 48-frame loop takes **3.2 seconds**. All cells remain opaque and unaliased. Tests compare every captured mask against an exact cyclic translation of the original pattern.
+
+Page rotation remains independent at 250 ms per page; coincident page and animation updates share one redraw. The addon re-packs the current frame's nibbles around the translated mask, including single-page messages. This changes only visual placement, not the packet sequence or checksum. Delayed updates advance by the elapsed number of ticks.
+
+The encoder skips every wave cell, consuming no data nibble there. The decoder recognizes wave cells by comparing them with the captured outline color (within 12 RGB units) and skips them too. It requires one complete cyclic shift of the known pattern, exactly 136 reserved cells, and exactly 2,168 data nibbles. The receiver infers the shift from the screenshot; no clock synchronization or phase metadata is needed. Extra/missing blue cells, malformed masks, and checksum failures invalidate a frame. Captures spanning a redraw can be rejected and retried on the next poll.
+
 ## Frame bytes
 
-Interior cells are read row by row. Each palette index encodes a four-bit nibble; consecutive cells supply a byte's high nibble, then low nibble. All integer fields are unsigned big-endian.
+Interior cells are read row by row, skipping the wave mask. Each palette index encodes a four-bit nibble; consecutive cells supply a byte's high nibble, then low nibble. All integer fields are unsigned big-endian.
 
 | Byte offset | Size | Field |
 | --- | --- | --- |
-| 0 | 4 | ASCII `FDB4` |
+| 0 | 4 | ASCII `FDB5` |
 | 4 | 4 | Session ID, changes when addon reloads |
 | 8 | 4 | Sequence number, increments for each new message |
 | 12 | 4 | Adler-32 of the complete unpadded message |
 | 16 | 2 | Zero-based page index |
 | 18 | 2 | Total page count, 1..256 |
-| 20 | 2 | Payload length, 1..1124 |
+| 20 | 2 | Payload length, 1..1056 |
 | 22 | 1 | Message kind |
 | 23 | 1 | Flags: 0 = text only, 1 = speaker metadata (0.3.0+) |
-| 24 | 1124 | Payload followed by zero padding |
-| 1148 | 4 | Adler-32 of bytes 0..1147, including padding |
+| 24 | 1056 | Payload followed by zero padding |
+| 1080 | 4 | Adler-32 of bytes 0..1079, including padding |
 
-Adler-32 uses initial a=1, b=0, modulus 65521, result b × 65536 + a. All pages except the final one contain exactly 1,124 payload bytes. Maximum message size is 287,744 bytes; oversized messages are rejected visibly in the addon rather than truncated.
+Adler-32 uses initial a=1, b=0, modulus 65521, result b × 65536 + a. All pages except the final one contain exactly 1,056 payload bytes. Maximum message size is 270,336 bytes; oversized messages are rejected visibly in the addon rather than truncated.
 
-With flags 0, the complete message is UTF-8 `speaker + NUL + title + NUL + text`. With flags 1, it is `speaker + NUL + title + NUL + text + NUL + race + NUL + gender + NUL + npcID`. Race is an English race key obtained from the API, an NPC-ID lookup, a model mapping, or a saved user assignment (for example `Orc` or `Skyborne`), gender is `male`, `female`, or empty, and NPC ID is decimal text or empty. Empty metadata fields mean unknown. All other flag values are rejected, and flags must agree across every page. 0.3.0 readers accept both layouts; older readers reject metadata pages, so update both components. Empty speaker/title fields are allowed; embedded NULs in fields are not. Byte chunks may split UTF-8 characters. Decode text only after concatenating and validating every page. WoW formatting escapes are removed before encoding.
+With flags 0, the complete message is UTF-8 `speaker + NUL + title + NUL + text`. With flags 1, it is `speaker + NUL + title + NUL + text + NUL + race + NUL + gender + NUL + npcID`. Race is an English race key obtained from the API, an NPC-ID lookup, a model mapping, or a saved user assignment (for example `Orc` or `Skyborne`), gender is `male`, `female`, or empty, and NPC ID is decimal text or empty. Empty metadata fields mean unknown. All other flag values are rejected, and flags must agree across every page. FDB5 readers accept both layouts; older optical formats remain unsupported. Empty speaker/title fields are allowed; embedded NULs in fields are not. Byte chunks may split UTF-8 characters. Decode text only after concatenating and validating every page. WoW formatting escapes are removed before encoding.
 
 Kinds: 0=test, 1=gossip/greeting, 2=quest offer, 3=quest progress, 4=quest completion, 5=NPC chat, 6=item/book text. Pocket TTS speaks title and text using the metadata-selected voice. The SAPI fallback joins nonempty speaker, title, and text fields. Metadata is never spoken.
 

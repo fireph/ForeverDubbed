@@ -39,7 +39,7 @@ func TestDiscoveryExplainsRejectedCandidate(t *testing.T) {
 }
 
 func TestPaletteCapacityAndSeparation(t *testing.T) {
-	if Grid*2+2*Outline != 104 || DataGrid*DataGrid*4/8 != FrameBytes || PayloadBytes != 1124 {
+	if Grid*2+2*Outline != 104 || (DataGrid*DataGrid-WaveCells)*4/8 != FrameBytes || PayloadBytes != 1056 {
 		t.Fatal("incorrect layout")
 	}
 	for i, a := range colors {
@@ -49,13 +49,13 @@ func TestPaletteCapacityAndSeparation(t *testing.T) {
 			}
 		}
 	}
-	for _, n := range []int{1, 1122, 1123, 2246} {
+	for _, n := range []int{1, PayloadBytes - 2, PayloadBytes - 1, 2*PayloadBytes - 2} {
 		frames := framesFor(t, Message{Text: string(bytes.Repeat([]byte{'x'}, n))})
 		if len(frames) != (n+2+PayloadBytes-1)/PayloadBytes {
 			t.Fatal("incorrect page boundary")
 		}
 	}
-	for _, magic := range []string{"FDB1", "FDB2", "FDB3"} {
+	for _, magic := range []string{"FDB1", "FDB2", "FDB3", "FDB4"} {
 		b := colorFixture(t)
 		copy(b, magic)
 		binary.BigEndian.PutUint32(b[FrameBytes-4:], adler32.Checksum(b[:FrameBytes-4]))
@@ -119,7 +119,8 @@ func TestOutlineGeometryAndRejection(t *testing.T) {
 		for y := 0; y < size; y++ {
 			for x := 0; x < size; x++ {
 				outer := x < 2 || y < 2 || x >= size-2 || y >= size-2
-				if (im.RGBAAt(x, y) == finderColor) != outer {
+				wave := !outer && isWave((x-Outline)/cell, (y-Outline)/cell, 0)
+				if (im.RGBAAt(x, y) == finderColor) != (outer || wave) {
 					t.Fatalf("outline thickness changed at %d,%d for cell %d", x, y, cell)
 				}
 			}

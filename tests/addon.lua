@@ -70,7 +70,7 @@ events.scripts.OnEvent(events, "ADDON_LOADED", "ForeverDubbed")
 assert(ForeverDubbedDB.cell==2 and ForeverDubbedDB.locked)
 assert(ForeverDubbedDB.x==38 and ForeverDubbedDB.y==1688 and not ForeverDubbedDB.chat)
 assert(ForeverDubbedDB.positionVersion==2)
-assert(ForeverDubbedDB.encodingVersion==4 and ForeverDubbedDB.mode==nil)
+assert(ForeverDubbedDB.encodingVersion==5 and ForeverDubbedDB.mode==nil)
 assert(tile.width==104 and tile.height==104 and #tile.textures==2504)
 ForeverDubbedDB.chat=true
 for _, event in ipairs({"GOSSIP_SHOW","QUEST_GREETING","QUEST_DETAIL","QUEST_PROGRESS","QUEST_COMPLETE"}) do
@@ -81,9 +81,28 @@ end
 -- The rendered cells use the exact ordered palette, after the four outline strips.
 local expected = ns.Codec.Cells(actual(unpack(calls[#calls]))[1])
 for i, value in ipairs(expected) do
-    local rgb, t = ns.Codec.PALETTE[value+1], tile.textures[i+4]
+    local rgb, t = value==ns.Codec.WAVE and ns.Codec.FINDER or ns.Codec.PALETTE[value+1], tile.textures[i+4]
     assert(t.color[1]==rgb[1]/255 and t.color[2]==rgb[2]/255 and t.color[3]==rgb[3]/255)
     assert(t.point[4]==2+((i-1)%50)*2 and t.point[5]==-2-math.floor((i-1)/50)*2)
+end
+-- A single page redraws around every wave phase without creating new messages.
+local waveFrame, sent = actual(unpack(calls[#calls]))[1], #calls
+for phase=1,ns.Codec.WAVE_PHASES do
+    tile.scripts.OnUpdate(tile,1/30)
+    local previous = ns.Codec.Cells(waveFrame, phase-1)
+    for i,value in ipairs(previous) do
+        local rgb = value==ns.Codec.WAVE and ns.Codec.FINDER or ns.Codec.PALETTE[value+1]
+        local t = tile.textures[i+4]
+        assert(t.color[1]==rgb[1]/255 and t.color[2]==rgb[2]/255 and t.color[3]==rgb[3]/255)
+    end
+    tile.scripts.OnUpdate(tile,1/30)
+    local cells = ns.Codec.Cells(waveFrame, phase)
+    for i,value in ipairs(cells) do
+        local rgb = value==ns.Codec.WAVE and ns.Codec.FINDER or ns.Codec.PALETTE[value+1]
+        local t = tile.textures[i+4]
+        assert(t.color[1]==rgb[1]/255 and t.color[2]==rgb[2]/255 and t.color[3]==rgb[3]/255)
+    end
+    assert(#calls==sent)
 end
 assert(calls[3][7]=="Orc" and calls[3][8]=="male" and calls[3][9]=="4949")
 assert(calls[3][6] == "Quest body\n\nQuest objectives")
@@ -118,14 +137,27 @@ assert(tile.width==154 and tile.height==154)
 assert(loadfile("addon/ForeverDubbed/ForeverDubbed.lua"))("ForeverDubbed", ns)
 events, tile = objects[#objects], ForeverDubbedTile
 events.scripts.OnEvent(events, "ADDON_LOADED", "ForeverDubbed")
-assert(ForeverDubbedDB.cell==3 and ForeverDubbedDB.encodingVersion==4)
+assert(ForeverDubbedDB.cell==3 and ForeverDubbedDB.encodingVersion==5)
 assert(tile.width==154 and tile.height==154)
 now = now + 1
 GetQuestText = function() return string.rep("A long quest. ", 200) end
 events.scripts.OnEvent(events, "QUEST_DETAIL")
-tile.scripts.OnUpdate(tile, 0.3)
+local animatedPages = actual(unpack(calls[#calls]))
+assert(#animatedPages>1)
+local function checkPage(index,phase)
+    for i,value in ipairs(ns.Codec.Cells(animatedPages[index],phase)) do
+        local rgb=value==ns.Codec.WAVE and ns.Codec.FINDER or ns.Codec.PALETTE[value+1]
+        local t=tile.textures[i+4]
+        assert(t.color[1]==rgb[1]/255 and t.color[2]==rgb[2]/255 and t.color[3]==rgb[3]/255)
+    end
+end
+tile.scripts.OnUpdate(tile, 0.2)
+checkPage(1,3) -- three animation ticks, still the first page
+tile.scripts.OnUpdate(tile, 0.05)
+checkPage(2,3) -- page changes at 250ms, independently of the next wave tick
+tile.scripts.OnUpdate(tile, 0.05)
+checkPage(2,4)
 assert(tile.visible)
-assert(#actual(unpack(calls[#calls]))>1)
 -- GetEffectiveScale alone is not a physical-pixel conversion. Exercise both
 -- PixelUtil and its fallback across resolutions and user-selected UI scales.
 for _, config in ipairs({{768,0.75},{1080,0.8},{1440,0.64},{2160,0.9}}) do

@@ -29,7 +29,40 @@ var colors = [16]color.RGBA{
 	{17, 25, 41, 255},
 }
 
-func palette(v byte) color.RGBA { return colors[v] }
+const waveSymbol byte = 16
+
+func palette(v byte) color.RGBA {
+	if v == waveSymbol {
+		return finderColor
+	}
+	return colors[v]
+}
+
+const WavePhases = DataGrid // one integer-column shift per frame
+
+// One hard-coded loop, identical to Lua. Inclusive zero-based data rows per
+// column approximate a two-cell perpendicular stroke. Only translate it;
+// never re-rasterize the curve between animation frames.
+var waveColumns = [DataGrid][2]int{
+	{22, 25}, {24, 26}, {25, 28}, {27, 29}, {28, 30}, {29, 31}, {30, 32}, {31, 33},
+	{32, 34}, {33, 34}, {34, 35}, {34, 35}, {34, 35}, {34, 35}, {34, 35}, {33, 34},
+	{32, 34}, {31, 33}, {30, 32}, {29, 31}, {28, 30}, {27, 29}, {25, 28}, {24, 26},
+	{22, 25}, {21, 23}, {19, 22}, {18, 20}, {17, 19}, {16, 18}, {15, 17}, {14, 16},
+	{13, 15}, {13, 14}, {12, 13}, {12, 13}, {12, 13}, {12, 13}, {12, 13}, {13, 14},
+	{13, 15}, {14, 16}, {15, 17}, {16, 18}, {17, 19}, {18, 20}, {19, 22}, {21, 23},
+}
+
+func waveRange(x, phase int) (int, int) {
+	rows := waveColumns[((x+phase)%DataGrid+DataGrid)%DataGrid]
+	return rows[0], rows[1]
+}
+func isWave(x, y, phase int) bool {
+	if x < 1 || x > DataGrid || y < 1 || y > DataGrid {
+		return false
+	}
+	lo, hi := waveRange(x-1, phase)
+	return y-1 >= lo && y-1 <= hi
+}
 
 // The dark calibration ring contains a known pattern and sixteen bottom-row
 // reference swatches. The separate light-blue outline locates the tile.
@@ -49,8 +82,11 @@ func Border(x, y int) byte {
 	return byte((y*5 + 4) % 8)
 }
 
-func Render(frame []byte, cell int) (*image.RGBA, error) {
-	if len(frame) != FrameBytes || string(frame[:4]) != "FDB4" || cell < 2 || cell > 8 {
+func Render(frame []byte, cell int) (*image.RGBA, error) { return RenderWave(frame, cell, 0) }
+
+// RenderWave produces a complete frame with data packed around the wave mask.
+func RenderWave(frame []byte, cell, phase int) (*image.RGBA, error) {
+	if len(frame) != FrameBytes || string(frame[:4]) != "FDB5" || cell < 2 || cell > 8 {
 		return nil, errors.New("invalid frame or cell size (2–8)")
 	}
 	im := image.NewRGBA((Location{Cell: cell}).Rect())
@@ -64,8 +100,12 @@ func Render(frame []byte, cell int) (*image.RGBA, error) {
 		for x := 0; x < Grid; x++ {
 			v := Border(x, y)
 			if x > 0 && x < Grid-1 && y > 0 && y < Grid-1 {
-				v = (frame[nibble/2] >> uint(4*(1-nibble%2))) & 15
-				nibble++
+				if isWave(x, y, phase) {
+					v = waveSymbol
+				} else {
+					v = (frame[nibble/2] >> uint(4*(1-nibble%2))) & 15
+					nibble++
+				}
 			}
 			for py := y * cell; py < (y+1)*cell; py++ {
 				for px := x * cell; px < (x+1)*cell; px++ {
@@ -157,6 +197,8 @@ func Decode(im image.Image, l Location) (Packet, error) {
 		return Packet{}, err
 	}
 	b := make([]byte, FrameBytes)
+	var wave [DataGrid][DataGrid]bool
+	waveColor := pixel(im, l.X, l.Y)
 	nibble := 0
 	for y := 0; y < Grid; y++ {
 		for x := 0; x < Grid; x++ {
@@ -171,19 +213,65 @@ func Decode(im image.Image, l Location) (Packet, error) {
 				}
 				continue
 			}
+			if distance(pixel(im, px, py), waveColor) <= 12*12 {
+				wave[x-1][y-1] = true
+				continue
+			}
 			v, ok := c.decode(pixel(im, px, py))
 			if !ok {
 				return Packet{}, fmt.Errorf("ambiguous color at cell (%d,%d): RGB %v", x, y, pixel(im, px, py))
 			}
+			if nibble >= FrameBytes*2 {
+				return Packet{}, errors.New("missing wave cells")
+			}
 			b[nibble/2] |= v << uint(4*(1-nibble%2))
 			nibble++
 		}
+	}
+	if nibble != FrameBytes*2 || !validWave(wave) {
+		return Packet{}, errors.New("invalid wave mask")
 	}
 	p, err := Parse(b)
 	if err != nil {
 		return p, fmt.Errorf("decoded header %q: %w", b[:4], err)
 	}
 	return p, nil
+}
+
+// Infer the mask from the captured wave, not an animation clock. A complete
+// known phase is required, rejecting extra/missing blue cells and torn frames.
+func validWave(mask [DataGrid][DataGrid]bool) bool {
+	var captured [DataGrid]int
+	for x := 0; x < DataGrid; x++ {
+		lo, hi, count := -1, -1, 0
+		for y := 0; y < DataGrid; y++ {
+			if mask[x][y] {
+				if lo < 0 {
+					lo = y
+				}
+				hi = y
+				count++
+			}
+		}
+		if lo < 12 || hi > 35 || count < 2 || count > 4 || hi-lo+1 != count {
+			return false
+		}
+		captured[x] = lo*64 + hi
+	}
+	for phase := 0; phase < WavePhases; phase++ {
+		matches := true
+		for x := 0; x < DataGrid; x++ {
+			lo, hi := waveRange(x, phase)
+			if captured[x] != lo*64+hi {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return true
+		}
+	}
+	return false
 }
 
 // Validate both pixels of all four sides against the captured outline color.

@@ -209,7 +209,7 @@ func TestLuaCompatibility(t *testing.T) {
 	m := fixture()
 	m.Race, m.Gender, m.NPCID = "Orc", "male", "4949"
 	want := framesFor(t, m)
-	if len(lines) != len(want)*2+2 {
+	if len(lines) != len(want)*(WavePhases+1)+2 {
 		t.Fatalf("unexpected Lua output: %s", out)
 	}
 	rgb, err := hex.DecodeString(lines[0])
@@ -226,22 +226,28 @@ func TestLuaCompatibility(t *testing.T) {
 	}
 	lines = lines[2:]
 	for i, b := range want {
-		got, e := hex.DecodeString(lines[i*2])
+		got, e := hex.DecodeString(lines[i*(WavePhases+1)])
 		if e != nil || !bytes.Equal(got, b) {
 			t.Fatalf("Lua frame %d differs", i)
 		}
-		cells, e := hex.DecodeString(lines[i*2+1])
-		if e != nil || len(cells) != Grid*Grid {
-			t.Fatal("invalid cells")
-		}
-		im := image.NewRGBA((Location{Cell: 2}).Rect())
-		draw.Draw(im, im.Bounds(), &image.Uniform{finderColor}, image.Point{}, draw.Src)
-		for j, v := range cells {
-			draw.Draw(im, image.Rect(Outline+j%Grid*2, Outline+j/Grid*2, Outline+j%Grid*2+2, Outline+j/Grid*2+2), &image.Uniform{palette(v)}, image.Point{}, draw.Src)
-		}
-		l, p, e := Find(im)
-		if e != nil || l.Cell != 2 || !reflect.DeepEqual(p, packetFor(t, b)) {
-			t.Fatal("Lua cells do not decode", e)
+		for phase := 0; phase < WavePhases; phase++ {
+			cells, e := hex.DecodeString(lines[i*(WavePhases+1)+1+phase])
+			if e != nil || len(cells) != Grid*Grid {
+				t.Fatal("invalid cells")
+			}
+			im := image.NewRGBA((Location{Cell: 2}).Rect())
+			draw.Draw(im, im.Bounds(), &image.Uniform{finderColor}, image.Point{}, draw.Src)
+			for j, v := range cells {
+				draw.Draw(im, image.Rect(Outline+j%Grid*2, Outline+j/Grid*2, Outline+j%Grid*2+2, Outline+j/Grid*2+2), &image.Uniform{palette(v)}, image.Point{}, draw.Src)
+			}
+			reference, err := RenderWave(b, 2, phase)
+			if err != nil || !bytes.Equal(reference.Pix, im.Pix) {
+				t.Fatalf("Lua/Go wave mismatch at phase %d: %v", phase, err)
+			}
+			l, p, e := Find(im)
+			if e != nil || l.Cell != 2 || !reflect.DeepEqual(p, packetFor(t, b)) {
+				t.Fatal("Lua cells do not decode", e)
+			}
 		}
 	}
 	cmd = exec.Command(lua, "tests/speakers.lua")

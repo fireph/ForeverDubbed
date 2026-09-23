@@ -10,7 +10,9 @@ print(table.concat(palette))
 print(string.format("%d:%02x%02x%02x", ns.Codec.OUTLINE, unpack(ns.Codec.FINDER)))
 for _, frame in ipairs(frames) do
     print((frame:gsub(".", function(c) return string.format("%02x", c:byte()) end)))
-    local cells = ns.Codec.Cells(frame)
-    for i, v in ipairs(cells) do cells[i] = string.format("%02x", v) end
-    print(table.concat(cells))
+    for phase=0,ns.Codec.WAVE_PHASES-1 do
+        local cells = ns.Codec.Cells(frame, phase)
+        for i, v in ipairs(cells) do cells[i] = string.format("%02x", v) end
+        print(table.concat(cells))
+    end
 end
