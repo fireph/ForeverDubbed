@@ -1,6 +1,6 @@
 # ForeverDubbed
 
-A WoW Forever addon and Go companion that read NPC and quest dialogue aloud. The addon draws a small RGB data square; the Windows/macOS app finds it on the desktop, decodes the text, and speaks using **Pocket TTS on your CPU**. The Go companion captures, decodes, selects voices, and streams audio through an in-process PocketTTS.cpp engine. No Python interpreter or local HTTP service is used at runtime. Speech stays on your computer. No OCR or game-memory access is used. Windows SAPI and macOS system voices remain available as fallbacks.
+A WoW Forever addon and Go companion that read NPC and quest dialogue aloud. The addon draws a small RGB data square; the Go app finds it on the Windows desktop or inside the WoW window on macOS, decodes the text, and speaks using **Pocket TTS on your CPU**. The Go companion captures, decodes, selects voices, and streams audio through an in-process PocketTTS.cpp engine. No Python interpreter or local HTTP service is used at runtime. Speech stays on your computer. No OCR or game-memory access is used. Windows SAPI and macOS system voices remain available as fallbacks.
 
 The square uses **16 subtle dark-navy calibrated colors** and a **48 × 48 data grid**, with a one-cell calibration ring and a **light-blue 2px outer outline**. At the default **2 × 2 pixel cell size**, it occupies **104 × 104 physical pixels** and carries **1,056 bytes per page**. The outline stays 2 physical pixels thick at every cell size. A crisp light-blue sine wave with a 2-cell stroke measured perpendicular to the curve drifts left through the middle half of the data area, animating at 15 fps and completing a loop every 3.2 seconds. Its hard-coded shape moves one whole cell per frame with edge wrapping, so the stroke never changes shape during motion. Both encoder and decoder skip its cells. This FDB5 format requires updating both the addon and companion to 0.5.0. You can enlarge cells with `/fdb cell 3` (154 × 154 pixels) if your display needs more sampling margin; the capacity stays the same. This is a custom optical format, not a standard QR code.
 
@@ -10,7 +10,7 @@ See [CHANGELOG.md](CHANGELOG.md) for earlier releases and [PROTOCOL.md](PROTOCOL
 
 ## macOS
 
-The companion supports macOS 14+ on Apple Silicon and Intel. You can build the full macOS release **on Linux**, including in GitHub Actions, using the pinned OSXCross setup. See [macOS builds and setup](docs/macos.md) for commands, Screen Recording permission, and validation steps. Linux cross-compilation checks the native code; live capture/audio still need testing on a Mac.
+The companion supports macOS 14+ on Apple Silicon and Intel. macOS captures only the World of Warcraft Beta.app game window, including for `-snapshot`; it waits when the game is unavailable and never falls back to the desktop. You can build the full macOS release **on Linux**, including in GitHub Actions, using the pinned OSXCross setup. See [macOS builds and setup](docs/macos.md) for commands, Screen Recording permission, and validation steps. Linux cross-compilation checks the native code; live capture/audio still need testing on a Mac.
 
 ## Quick start on Windows
 
@@ -131,7 +131,7 @@ Decoded messages are printed as one JSON object per line on stdout. Discovery an
 
 The reader scans all monitors about once per second until it finds the square. It then samples only that region every 75 ms. Four failed reads trigger rediscovery, including after dragging, resizing, or moving the game window. Only one visible addon instance is supported at a time. Full desktop scans stay in memory; screenshots are neither saved nor uploaded.
 
-For a diagnostic screenshot, explicitly run `.\foreverdubbed.exe -snapshot capture.png`. It waits three seconds, saves one PNG of the entire desktop, reports whether it found a valid tile, and exits. Keep WoW visible, use `/fdb unlock` so the square stays displayed, and move the pointer and other windows away from it. The PNG can be inspected locally or passed to `-image capture.png`. The capture includes other visible windows. The normal reader never saves images.
+For a diagnostic screenshot, explicitly run `.\foreverdubbed.exe -snapshot capture.png`. It waits three seconds, saves one PNG of the capture surface (the WoW window on macOS, the entire desktop on Windows), reports whether it found a valid tile, and exits. Keep WoW visible, use `/fdb unlock` so the square stays displayed, and move the pointer and other windows away from it. The PNG can be inspected locally or passed to `-image capture.png`. Windows desktop snapshots include other visible windows; macOS snapshots contain only the selected game window. The normal reader never saves images.
 
 ## Troubleshooting
 

@@ -6,6 +6,7 @@
 #import <AudioToolbox/AudioToolbox.h>
 #include <stdatomic.h>
 #include <math.h>
+#include <libproc.h>
 #include "native_darwin.h"
 
 // This file is compiled with ARC; callbacks own their results even if a wait
@@ -19,6 +20,12 @@ static int fail(char *error, size_t size, NSString *message) {
 
 int fdb_screen_init(char *error, size_t size) {
     @autoreleasepool {
+        // A command-line process has no AppKit startup to initialize the
+        // WindowServer connection. The independent-window filter can otherwise
+        // abort in CGS_REQUIRE_INIT, even after permission/discovery succeeds.
+        // Reading a display ID initializes CoreGraphics; it captures no pixels.
+        if (CGMainDisplayID() == kCGNullDirectDisplay)
+            return fail(error, size, @"No macOS desktop session is available; run from a terminal in your logged-in desktop session.");
         if (!CGPreflightScreenCaptureAccess()) {
             CGRequestScreenCaptureAccess();
             return fail(error, size, @"Allow Screen Recording for your terminal or ForeverDubbed in System Settings > Privacy & Security, then quit and reopen it.");
@@ -49,9 +56,14 @@ int fdb_window_list(char **json, char *error, size_t size) {
         for (SCWindow *window in availableWindows) {
             SCRunningApplication *app = window.owningApplication;
             if (!app) continue;
+            char executable[PROC_PIDPATHINFO_MAXSIZE] = {0};
+            NSString *executablePath = @"";
+            if (proc_pidpath(app.processID, executable, sizeof(executable)) > 0)
+                executablePath = [NSString stringWithUTF8String:executable] ?: @"";
             [metadata addObject:@{
                 @"ID": @(window.windowID), @"PID": @(app.processID),
                 @"App": app.applicationName ?: @"", @"Bundle": app.bundleIdentifier ?: @"",
+                @"Executable": executablePath,
                 @"Width": @(window.frame.size.width), @"Height": @(window.frame.size.height),
                 @"Layer": @(window.windowLayer), @"OnScreen": @(window.isOnScreen)
             }];

@@ -1,6 +1,6 @@
 # macOS companion
 
-The macOS companion targets macOS 14 Sonoma or newer, on Apple Silicon (`arm64`) or Intel (`amd64`). It uses ScreenCaptureKit for the optical tile and AudioQueue for streamed PocketTTS audio. `-tts system` uses the installed macOS voices through `say`. Windows continues to support PocketTTS and `-tts sapi` (also available as `-tts system`).
+The macOS companion targets macOS 14 Sonoma or newer, on Apple Silicon (`arm64`) or Intel (`amd64`). It uses ScreenCaptureKit to capture only the game window for the optical tile and AudioQueue for streamed PocketTTS audio. `-tts system` uses the installed macOS voices through `say`. Windows continues to support PocketTTS and `-tts sapi` (also available as `-tts system`).
 
 ## Build macOS releases on Linux
 
@@ -76,6 +76,24 @@ Useful checks:
 ./foreverdubbed -image capture.png
 ```
 
-Capture searches every display at its native pixel scale. For mixed Retina/non-Retina displays, screenshots arrange the displays side by side; logged tile coordinates refer to that combined image, not macOS desktop points. Keep the whole tile on one display. Restart after connecting/disconnecting a monitor or changing display resolution. Screenshots include the other visible windows and are saved only when explicitly requested with `-snapshot`.
+Capture is restricted to a window owned by the **World of Warcraft Beta.app** bundle. The default matches the `.app` bundle containing the owning process's executable, so the retail client or a browser window titled World of Warcraft cannot be selected. The expected game executable is `/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app/Contents/MacOS/World of Warcraft`. It waits if the game is closed, minimized, or unavailable, and automatically rediscovers the window after it reopens or changes size. It never falls back to desktop capture. If more than one matching game process is open, close the other instance.
 
-Before distributing a build, check on a Mac that a tile decodes at the top and bottom of each display, tracked-region decoding matches the initial full-screen scan, long speech finishes without losing its ending, and new dialogue/Ctrl+C interrupts playback. Linux compilation and tests cannot verify Screen Recording permission, Retina capture, or speaker output.
+If your game's app bundle differs, specify its exact bundle name, absolute app/executable path, application name, or bundle identifier:
+
+```sh
+./foreverdubbed -capture-app "World of Warcraft Beta.app"
+# To target this particular installation:
+./foreverdubbed -capture-app "/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app"
+```
+
+ScreenCaptureKit captures the selected game window at native pixel scale. The reader crops the detected tile from that image in memory; neither the desktop nor other applications' windows are included. Coordinates are relative to the game window. `-snapshot` also saves only the selected game window. No images are saved unless you explicitly request a snapshot.
+
+Before distributing a build, check on a Mac that the tile decodes in windowed and full-screen modes, that covering the game with another app does not add that app to `-snapshot`, and that closing/reopening or resizing the game recovers. Also check that long speech finishes without losing its ending, and new dialogue/Ctrl+C interrupts playback. Linux compilation and tests cannot verify Screen Recording permission, Retina capture, or speaker output.
+
+For an opt-in native startup regression test on a Mac with the game open and Screen Recording permission granted, run:
+
+```sh
+FDB_TEST_CAPTURE_APP="World of Warcraft Beta.app" CGO_ENABLED=1 go test ./internal/platform -run TestMacWindowCaptureStartup -count=1
+```
+
+This exercises the real command-line CoreGraphics initialization and single-window capture path. The captured game image stays in memory.

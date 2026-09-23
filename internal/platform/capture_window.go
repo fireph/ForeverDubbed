@@ -3,6 +3,7 @@ package platform
 import (
 	"fmt"
 	"image"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -11,29 +12,60 @@ import (
 // Window titles are intentionally not used for identity: unrelated apps can
 // show a page or document named "World of Warcraft".
 type captureWindow struct {
-	ID            uint32
-	PID           int32
-	App, Bundle   string
-	Width, Height float64
-	Layer         int
-	OnScreen      bool
+	ID                      uint32
+	PID                     int32
+	App, Bundle, Executable string
+	Width, Height           float64
+	Layer                   int
+	OnScreen                bool
+}
+
+// Resolve the app bundle from the process's actual executable, not its window
+// title or display name. This distinguishes Beta from other installed clients.
+func executableBundle(executable string) string {
+	if !path.IsAbs(executable) {
+		return ""
+	}
+	for dir := path.Dir(executable); ; dir = path.Dir(dir) {
+		if strings.HasSuffix(strings.ToLower(dir), ".app") {
+			return dir
+		}
+		if path.Dir(dir) == dir {
+			return ""
+		}
+	}
+}
+
+func matchesCaptureApp(w captureWindow, app string) bool {
+	bundle := executableBundle(w.Executable)
+	if path.IsAbs(app) {
+		return path.Clean(app) == w.Executable || (bundle != "" && path.Clean(app) == bundle)
+	}
+	if strings.HasSuffix(strings.ToLower(app), ".app") {
+		return bundle != "" && strings.EqualFold(path.Base(bundle), app)
+	}
+	return strings.EqualFold(w.App, app) || strings.EqualFold(w.Bundle, app)
 }
 
 func chooseCaptureWindow(windows []captureWindow, app string, previous captureWindow) (captureWindow, error) {
+	app = strings.TrimSpace(app)
+	if app == "" {
+		return captureWindow{}, fmt.Errorf("capture application must not be empty")
+	}
 	var best captureWindow
 	for _, w := range windows {
-		if !strings.EqualFold(w.App, app) && !strings.EqualFold(w.Bundle, app) {
+		if !matchesCaptureApp(w, app) {
 			continue
 		}
 		if w.ID == 0 || w.PID <= 0 || !w.OnScreen || w.Layer != 0 || w.Width < 100 || w.Height < 100 {
 			continue
 		}
 		if best.ID != 0 && best.PID != w.PID {
-			return captureWindow{}, fmt.Errorf("multiple processes match %q; close the other game instance or use -capture-app with the game's exact bundle identifier", app)
+			return captureWindow{}, fmt.Errorf("multiple processes match %q; close the other game instance or use -capture-app with the game's exact app path or bundle identifier", app)
 		}
 		// Keep the current window if it is still available, so opening another game
 		// window doesn't silently switch the capture target.
-		if best.ID == previous.ID && best.PID == previous.PID {
+		if best.ID != 0 && best.ID == previous.ID && best.PID == previous.PID {
 			continue
 		}
 		if best.ID == 0 || (w.ID == previous.ID && w.PID == previous.PID) || w.Width*w.Height > best.Width*best.Height || (w.Width*w.Height == best.Width*best.Height && w.ID < best.ID) {
@@ -41,7 +73,7 @@ func chooseCaptureWindow(windows []captureWindow, app string, previous captureWi
 		}
 	}
 	if best.ID == 0 {
-		return captureWindow{}, fmt.Errorf("waiting for a visible game window owned by %q (use -capture-app for a different application name or bundle identifier)", app)
+		return captureWindow{}, fmt.Errorf("waiting for a visible game window owned by %q (use -capture-app for a different app bundle name, path, or identifier)", app)
 	}
 	return best, nil
 }

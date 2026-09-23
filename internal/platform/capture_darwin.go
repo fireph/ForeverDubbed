@@ -25,7 +25,7 @@ func Init(app string) error {
 	defer macScreen.Unlock()
 	app = strings.TrimSpace(app)
 	if app == "" {
-		return fmt.Errorf("-capture-app must name the game application or its bundle identifier")
+		return fmt.Errorf("-capture-app must name the game app bundle, absolute path, or bundle identifier")
 	}
 	var message [1024]C.char
 	if C.fdb_screen_init(&message[0], C.size_t(len(message))) != 0 {
