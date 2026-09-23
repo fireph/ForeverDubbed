@@ -30,7 +30,7 @@ Normal captures stay in memory. Only an explicit `-snapshot` writes a PNG. Cover
 
 ## Build and test
 
-The normal `tools/native`, `tools/models`, and `tools/build` commands in the root README build this backend, including from Linux with MinGW-w64. Capture requires cgo and a Windows C/C++ compiler, even for a system-voice-only build. No extra capture DLL, Windows SDK download, C++/WinRT package, or Go module is needed. The small WinRT ABI declarations in `internal/platform/wgc_abi_windows.h` let the code compile with MinGW.
+Follow the [Windows build instructions](../native/README.md#build) to prepare dependencies and package this backend, including from Linux with MinGW-w64. Capture requires cgo and a Windows C/C++ compiler, even for a system-voice-only build. No extra capture DLL, Windows SDK download, C++/WinRT package, or Go module is needed. The small WinRT ABI declarations in `internal/platform/wgc_abi_windows.h` let the code compile with MinGW.
 
 For an opt-in live regression test on Windows with the game open:
 

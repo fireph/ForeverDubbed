@@ -7,6 +7,11 @@ mkdir -p "$destination"
 destination=$(cd "$destination" && pwd)
 revision=27d21e4977c9751d01199c7a226a6faf494c3dd9
 sdk_sha256=6e146275d19f027faa2e8354da5e0267513abf013b8f16ad65a231653a2b1c5d
+# Ubuntu exposes some tools only as versioned names in /usr/bin. The
+# matching LLVM bin directory contains ld64.lld and the other unsuffixed tools.
+if command -v llvm-config >/dev/null 2>&1; then
+    export PATH="$(llvm-config --bindir):$PATH"
+fi
 for tool in clang clang++ llvm-config ld64.lld cmake git curl make xz; do
     command -v "$tool" >/dev/null || { echo "Missing $tool; see docs/macos.md for Linux prerequisites." >&2; exit 1; }
 done

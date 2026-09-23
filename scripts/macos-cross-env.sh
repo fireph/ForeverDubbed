@@ -15,7 +15,11 @@ fdb_macos_cross_env() {
         echo "Expected one OSXCross compiler and SDK in $target; run scripts/setup-macos-cross.sh first." >&2
         return 1
     fi
-    export PATH="$target/bin:$PATH"
+    # OSXCross's LLVM wrappers also need these tools after a cache restore,
+    # when setup-macos-cross.sh has not run in the current shell.
+    local llvm_bin
+    llvm_bin=$(llvm-config --bindir) || return 1
+    export PATH="$target/bin:$llvm_bin:$PATH"
     export CC="${compilers[0]}" CXX="${compilers[0]}++" MACOS_SDK="${sdks[0]}"
     export MACOSX_DEPLOYMENT_TARGET=14.0
     # Host-side Go tools (notably net/http in tools/models) must not use

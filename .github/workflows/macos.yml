@@ -22,13 +22,14 @@ jobs:
       - name: Linux compiler prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang llvm lld cmake build-essential curl git xz-utils bzip2 cpio
+          sudo apt-get install -y clang-18 llvm-18 lld-18 cmake build-essential curl git xz-utils bzip2 cpio
+          llvm-config-18 --bindir >> "$GITHUB_PATH"
       - name: Cache OSXCross
         id: cross
         uses: actions/cache@v4
         with:
           path: .runtime/osxcross
-          key: osxcross-llvm-ubuntu24-27d21e49-sdk14.5-v1
+          key: osxcross-llvm18-ubuntu24-27d21e49-sdk14.5-v2
       - name: Prepare OSXCross
         if: steps.cross.outputs.cache-hit != 'true'
         run: bash scripts/setup-macos-cross.sh

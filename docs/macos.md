@@ -6,13 +6,16 @@ The macOS companion targets macOS 14 Sonoma or newer, on Apple Silicon (`arm64`)
 
 The Go build tools run on Linux. OSXCross supplies the macOS C/C++/Objective-C compiler, linker, and Apple SDK for the cgo parts. Setting only `GOOS=darwin` is insufficient because both screen capture and PocketTTS use native libraries.
 
-On Ubuntu 24.04 or newer, install Go 1.22+ and these prerequisites:
+On Ubuntu 24.04, install Go 1.22+ and these prerequisites. Run these commands from the repository root in Bash:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y clang llvm lld cmake build-essential curl git xz-utils bzip2 cpio
+sudo apt-get install -y clang-18 llvm-18 lld-18 cmake build-essential curl git xz-utils bzip2 cpio
+export PATH="$(llvm-config-18 --bindir):$PATH"
 bash scripts/setup-macos-cross.sh
 ```
+
+Repeat the `export PATH` command in a new shell before loading the cross-build environment. It makes the unversioned LLVM commands available and prevents `Missing ld64.lld` during setup. The setup and environment scripts also add `llvm-config --bindir` to `PATH`, since Ubuntu may expose `ld64.lld` only inside that directory (and as a versioned command in `/usr/bin`). The GitHub workflow installs matching LLVM 18 packages and keeps that directory on `PATH` across steps, including cache restores.
 
 Setup pins an [OSXCross](https://github.com/tpoechtrager/osxcross) revision and downloads the [macOS 14.5 SDK archive](https://github.com/joseluisq/macosx-sdks/releases/tag/14.5), verifying its SHA-256. Everything is installed under `.runtime/osxcross`; the setup does not change your system compiler. You can also supply an existing OSXCross installation as the second argument to the environment script below.
 
@@ -41,6 +44,8 @@ Run that binary with `-tts system` or `-mute`. The default PocketTTS backend req
 ## GitHub Actions
 
 [The macOS workflow](../.github/workflows/macos.yml) builds both architectures on `ubuntu-24.04`, runs the portable Go tests/vet, caches the pinned OSXCross toolchain, and uploads the two release ZIPs. It runs for pull requests, pushes to `main`, and manual dispatch. It does not publish releases or run macOS executables on Linux. Native screen/audio behavior must be checked on a Mac.
+
+The workflow uses Go 1.25.x and matching LLVM 18 packages. It adds LLVM's `bin` directory to `GITHUB_PATH` before toolchain setup or cache restore, so subsequent steps can find `ld64.lld` and the other LLVM tools. Download the `ForeverDubbed-darwin-arm64` (Apple Silicon) or `ForeverDubbed-darwin-amd64` (Intel) artifact from the workflow run for its release ZIP.
 
 ## Build directly on a Mac
 

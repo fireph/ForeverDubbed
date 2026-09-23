@@ -8,9 +8,19 @@ The square uses **16 subtle dark-navy calibrated colors** and a **48 × 48 data 
 
 See [CHANGELOG.md](CHANGELOG.md) for earlier releases and [PROTOCOL.md](PROTOCOL.md) for the optical format.
 
-## macOS
+## Quick start on macOS
 
-The companion supports macOS 14+ on Apple Silicon and Intel. macOS captures only the World of Warcraft Beta.app game window, including for `-snapshot`; it waits when the game is unavailable and never falls back to the desktop. You can build the full macOS release **on Linux**, including in GitHub Actions, using the pinned OSXCross setup. See [macOS builds and setup](docs/macos.md) for commands, Screen Recording permission, and validation steps. Linux cross-compilation checks the native code; live capture/audio still need testing on a Mac.
+Requires macOS 14+ on Apple Silicon or Intel. Choose `ForeverDubbed-darwin-arm64.zip` for Apple Silicon or `ForeverDubbed-darwin-amd64.zip` for Intel, then extract the entire ZIP and keep its files together. Go and compiler tools are not needed to run a prepared release.
+
+Open Terminal in the extracted directory and run:
+
+```sh
+./foreverdubbed
+```
+
+Grant **Screen Recording** permission under **System Settings → Privacy & Security**, then restart the terminal/application if needed. Capture is limited to the **World of Warcraft Beta.app** game window; it waits when the game is unavailable and never falls back to the desktop.
+
+Install the addon and test it using the steps below. See the [macOS guide](docs/macos.md) for capture troubleshooting and building on Linux, GitHub Actions, or a Mac.
 
 ## Quick start on Windows
 
@@ -18,27 +28,11 @@ Windows capture targets **WoWB.exe** only, using Windows Graphics Capture (Windo
 
 From a release ZIP, extract the entire folder and run `foreverdubbed.exe` (or the optional `Start-ForeverDubbed.cmd`). Keep the ONNX Runtime DLLs, `native/`, and `tts/` beside the executable. Python, uv, and Go are not needed to run a prepared release.
 
-From source, install Go 1.22+, CMake 3.28+, Git, and an x64 MinGW-w64 C/C++17 toolchain (GCC/G++ on PATH), then run:
+For source builds on Windows or Linux/WSL, see the [Windows build guide](native/README.md#build).
 
-```sh
-go run ./tools/native
-go run ./tools/models
-go run ./tools/build
-```
+## Set up the addon
 
-This prepares Windows x64 native dependencies, downloads pinned model/preset assets, compiles PocketTTS.cpp into the Go executable with cgo, and produces `dist/foreverdubbed.exe` and the addon/Windows ZIPs. See [native build details](native/README.md) for Windows toolchains and cross-host packaging.
-
-To build the same Windows release from **Ubuntu 24.04+/WSL**, install the build prerequisites once, then run those same three Go commands from the repository root:
-
-```sh
-sudo apt-get update
-sudo apt-get install golang-go cmake git build-essential g++-mingw-w64-x86-64-posix
-go run ./tools/native
-go run ./tools/models
-go run ./tools/build
-```
-
-The tools automatically select MinGW-w64 and download Windows DLLs even when running in Ubuntu. Run the resulting app in Windows, or extract `dist/ForeverDubbed-windows-amd64.zip` there. These commands produce the Windows release; for macOS releases from Linux, follow [the macOS guide](docs/macos.md).
+On either platform:
 
 1. Copy `addon/ForeverDubbed` into the Forever client's `Interface\AddOns` directory and enable it in the game.
 2. Run the companion. It loads the native engine directly; there is no separate service to start.
@@ -51,7 +45,7 @@ The release contains one application executable plus ONNX Runtime libraries, ONN
 
 Streaming is always enabled. The decoder generates audio in batches of up to 1.2 seconds, including the first batch; shorter sentence endings are flushed immediately. Playback starts when the first batch is ready, so startup delay depends on generation speed. Audio is queued in at most 100 ms buffers for responsive cancellation. New dialogue stops playback and cancels native generation. The model is reused after its workers finish, preserving safe voice changes.
 
-Generate clips and measure first-audio latency with `go run -tags pocket_native ./tools/voicecheck`. Samples and the timing report go to `.runtime/voice-samples/`. These times measure PCM availability after model loading, not screen capture or speaker latency.
+See [native speech validation](native/README.md#validate-real-voices) for generating sample clips and measuring first-audio latency.
 
 ## What it reads
 
@@ -150,36 +144,10 @@ The border includes a reference swatch for every palette color. The decoder meas
 
 There is no forward error correction. Per-page and whole-message Adler-32 checksums reject most accidental damage, and repeated pages provide retries. Checksums are for accidental corruption, not authentication. The companion accepts a valid tile anywhere within the selected game window.
 
-## Build and test
+## Building from source and development
 
-The Go code requires Go 1.22+. Building embedded PocketTTS additionally requires CMake, Git, and C/C++17 compilers. Runtime dependencies are native libraries and data files, not Python. [Native build documentation](native/README.md) describes pinned dependencies, model checksums, and export compatibility.
-
-```sh
-go test ./...
-go vet ./...
-go run ./tools/native
-go run ./tools/models
-go run ./tools/build
-```
-
-`tools/build` defaults to the Windows/amd64 release; `-target darwin -arch arm64|amd64` produces macOS releases (see [the Linux/macOS build guide](docs/macos.md)). Both it and `tools/native` automatically select the installed MinGW-w64 cross-compilers on Ubuntu/WSL; explicit `CC`/`CXX` values override this selection. `tools/native` prepares matching dependencies in `.runtime/sdk/windows_amd64` and DLLs in `.runtime/native`. For an alternate runtime directory, use `-out <directory>` with setup/model downloads and `-native-dir <directory>` with the builder. It rejects missing or wrong-architecture libraries. `scripts/build.ps1` delegates to this Go tool.
-
-Real native speech checks (no game or audio device required):
-
-```sh
-go run ./tools/native -target host
-go run -tags pocket_native ./tools/voicecheck
-go run -tags pocket_native ./tools/voicecheck -voice undead_male
-```
-
-Speech commands require `CGO_ENABLED=1`, C/C++ compilers, and ONNX Runtime on the OS library search path (see [native instructions](native/README.md)); live capture/playback are not implemented on Linux. The model-free Go tests run without native libraries. Python export-tool tests are optional: `python -m unittest discover -s tools/voices -p 'test_*.py'`. Lua 5.1+ enables additional addon compatibility tests through `LUA=/path/to/lua`.
-
-The portable decoder can read PNGs on any OS. For a paged message, supply one unmodified screenshot of each distinct page, in any order:
-
-```sh
-go run ./cmd/foreverdubbed -image page1.png,page2.png,page3.png
-```
-
-Tests cover voice routing and overrides, cancellation, native voice selection and errors, streamed PCM validation and bounded playback, speaker metadata, the Lua/Go byte and palette contract, Unicode spanning pages, out-of-order/duplicate pages, session changes, sequence wraparound, invalid dimensions, corruption, gamma/tint/noise transforms, damaged reference swatches, moved tiles, negative monitor coordinates, missing NPC races, display lookup precedence, model-load timing and stale identities, saved race assignments, settings migration, physical pixel sizing at multiple resolutions/UI scales, and all supported cell sizes. Lua tests use mocked game APIs; they do not substitute for testing the real client. Tests explicitly skip the Lua checks if an interpreter is unavailable.
+- [macOS builds](docs/macos.md): Linux cross-compilation, GitHub Actions, and native Mac builds.
+- [Windows builds and native runtime](native/README.md): Windows and Linux/WSL toolchains, dependencies, and packaging.
+- [Development and testing](docs/development.md): Go tests, speech validation, and decoder checks.
 
 See [PROTOCOL.md](PROTOCOL.md) for the wire format. API references used: [Forever gossip API source](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipInfoDocumentation.lua), [Forever quest UI source](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua), [Windows Graphics Capture](https://learn.microsoft.com/en-us/windows/win32/api/windows.graphics.capture.interop/nf-windows-graphics-capture-interop-igraphicscaptureiteminterop-createforwindow), and [SpeechSynthesizer.Speak](https://learn.microsoft.com/en-us/dotnet/api/system.speech.synthesis.speechsynthesizer.speak?view=netframework-4.8.1).
