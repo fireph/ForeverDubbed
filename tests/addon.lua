@@ -1,5 +1,6 @@
 -- Minimal UI/API doubles exercise event routing, configuration and page lifetime.
 local now, objects, messages = 100, {}, {}
+local colorWrites = 0
 local physicalHeight, uiScale = 1440, 0.75
 local methods = {}
 function methods:SetScript(name, fn) self.scripts[name] = fn end
@@ -16,6 +17,7 @@ function methods:SetSize(w,h) self.width, self.height = w,h end
 function methods:SetScale(scale) self.scale=scale end
 function methods:SetColorTexture(r,g,b,a)
     assert(r>=0 and r<=1 and g>=0 and g<=1 and b>=0 and b<=1 and a==1)
+    colorWrites = colorWrites + 1
     self.color={r,g,b,a}
 end
 function methods:Show() self.visible = true end
@@ -88,15 +90,22 @@ end
 -- A single page redraws around every wave phase without creating new messages.
 local waveFrame, sent = actual(unpack(calls[#calls]))[1], #calls
 for phase=1,ns.Codec.WAVE_PHASES do
+    local beforeWrites = colorWrites
     tile.scripts.OnUpdate(tile,1/30)
+    assert(colorWrites==beforeWrites, "redrew between animation ticks")
     local previous = ns.Codec.Cells(waveFrame, phase-1)
     for i,value in ipairs(previous) do
         local rgb = value==ns.Codec.WAVE and ns.Codec.FINDER or ns.Codec.PALETTE[value+1]
         local t = tile.textures[i+4]
         assert(t.color[1]==rgb[1]/255 and t.color[2]==rgb[2]/255 and t.color[3]==rgb[3]/255)
     end
-    tile.scripts.OnUpdate(tile,1/30)
     local cells = ns.Codec.Cells(waveFrame, phase)
+    local changed = 0
+    for i,value in ipairs(cells) do
+        if value~=previous[i] then changed=changed+1 end
+    end
+    tile.scripts.OnUpdate(tile,1/30)
+    assert(colorWrites-beforeWrites==changed, "must update exactly the changed cells")
     for i,value in ipairs(cells) do
         local rgb = value==ns.Codec.WAVE and ns.Codec.FINDER or ns.Codec.PALETTE[value+1]
         local t = tile.textures[i+4]
@@ -104,6 +113,10 @@ for phase=1,ns.Codec.WAVE_PHASES do
     end
     assert(#calls==sent)
 end
+-- A stalled frame can skip a whole wave cycle; the displayed image is identical.
+local beforeWrites = colorWrites
+tile.scripts.OnUpdate(tile, ns.Codec.WAVE_PHASES / 15)
+assert(colorWrites==beforeWrites, "redrew an identical page and wave phase")
 assert(calls[3][7]=="Orc" and calls[3][8]=="male" and calls[3][9]=="4949")
 assert(calls[3][6] == "Quest body\n\nQuest objectives")
 events.scripts.OnEvent(events,"CHAT_MSG_MONSTER_SAY","|cffffffffHello|r |Hitem:1|hfriend|h |Ticon:16|t","NPC")
@@ -151,12 +164,29 @@ local function checkPage(index,phase)
         assert(t.color[1]==rgb[1]/255 and t.color[2]==rgb[2]/255 and t.color[3]==rgb[3]/255)
     end
 end
-tile.scripts.OnUpdate(tile, 0.2)
-checkPage(1,3) -- three animation ticks, still the first page
-tile.scripts.OnUpdate(tile, 0.05)
-checkPage(2,3) -- page changes at 250ms, independently of the next wave tick
-tile.scripts.OnUpdate(tile, 0.05)
-checkPage(2,4)
+local function advancePage(dt,index,phase)
+    local changed, before = 0, colorWrites
+    for i,value in ipairs(ns.Codec.Cells(animatedPages[index],phase)) do
+        local rgb=value==ns.Codec.WAVE and ns.Codec.FINDER or ns.Codec.PALETTE[value+1]
+        local color=tile.textures[i+4].color
+        if color[1]~=rgb[1]/255 or color[2]~=rgb[2]/255 or color[3]~=rgb[3]/255 then
+            changed=changed+1
+        end
+    end
+    tile.scripts.OnUpdate(tile,dt)
+    checkPage(index,phase)
+    assert(colorWrites-before==changed, "page change must update exactly the changed cells")
+end
+advancePage(0.2,1,3) -- three animation ticks, still the first page
+advancePage(0.05,2,3) -- page changes at 250ms, independently of the next wave tick
+advancePage(0.05,2,4)
+-- Reuse the page buffer through several page wraps and coinciding wave ticks.
+local pageIndex = 2
+for tick=1,#animatedPages*4 do
+    pageIndex=pageIndex%#animatedPages+1
+    local phase=math.floor((0.3+tick*0.25)*15+1e-9)%ns.Codec.WAVE_PHASES
+    advancePage(0.25,pageIndex,phase)
+end
 assert(tile.visible)
 -- GetEffectiveScale alone is not a physical-pixel conversion. Exercise both
 -- PixelUtil and its fallback across resolutions and user-selected UI scales.

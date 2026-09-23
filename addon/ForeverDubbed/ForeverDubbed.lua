@@ -18,6 +18,13 @@ local WAVE_SECONDS = 1 / 15
 local wavePhase, waveElapsed = 0, 0
 local VERSION = "0.5.0"
 local requestID, lastSpeaker = 0, nil
+local drawnColors, pageValues = {}, {}
+local drawnFrame, drawnPhase
+local colors = {}
+for value = 0, Codec.WAVE do
+    local rgb = value == Codec.WAVE and Codec.FINDER or Codec.PALETTE[value + 1]
+    colors[value] = {rgb[1] / 255, rgb[2] / 255, rgb[3] / 255}
+end
 
 local function pixelFactor()
     -- GetEffectiveScale is measured against WoW's 768-unit canvas, not desktop
@@ -97,10 +104,21 @@ end
 
 local function draw()
     if not pages then return end
-    local cells = Codec.Cells(pages[page], wavePhase)
-    for i, v in ipairs(cells) do
-        local rgb = v == Codec.WAVE and Codec.FINDER or Codec.PALETTE[v + 1]
-        textures[i]:SetColorTexture(rgb[1] / 255, rgb[2] / 255, rgb[3] / 255, 1)
+    local current = pages[page]
+    if current ~= drawnFrame or wavePhase ~= drawnPhase then
+        if current ~= drawnFrame then Codec.Values(current, pageValues) end
+        local layout = Codec.Layout(wavePhase)
+        for i = 1, #layout do
+            local value = pageValues[layout[i]]
+            -- Most cells (especially zero padding and the calibration border)
+            -- retain their color. Avoid dirtying their textures in WoW's UI.
+            if drawnColors[i] ~= value then
+                local rgb = colors[value]
+                textures[i]:SetColorTexture(rgb[1], rgb[2], rgb[3], 1)
+                drawnColors[i] = value
+            end
+        end
+        drawnFrame, drawnPhase = current, wavePhase
     end
     frame:Show()
 end

@@ -93,22 +93,48 @@ function Codec.Encode(session, sequence, kind, speaker, title, text, race, gende
     return frames
 end
 
-function Codec.Cells(frame, phase)
-    local cells, nibble = {}, 0
+-- A layout depends only on the wave phase, not on the message. Positive
+-- entries address data nibbles; negative entries address fixed palette colors
+-- (including the wave). Cache at most 48 layouts across all messages/pages.
+local layouts = {}
+function Codec.Layout(phase)
+    phase = (phase or 0) % Codec.WAVE_PHASES
+    if layouts[phase] then return layouts[phase] end
+    local layout, nibble = {}, 0
     for y = 0, Codec.GRID - 1 do
         for x = 0, Codec.GRID - 1 do
-            local value = Codec.Border(x, y)
+            local source
             if x > 0 and x < Codec.GRID - 1 and y > 0 and y < Codec.GRID - 1 then
                 if Codec.IsWave(x, y, phase) then
-                    value = Codec.WAVE
+                    source = -Codec.WAVE - 1
                 else
-                    local byte = frame:byte(math.floor(nibble / 2) + 1)
-                    value = math.floor(byte / 16 ^ (1 - nibble % 2)) % 16
                     nibble = nibble + 1
+                    source = nibble
                 end
+            else
+                source = -Codec.Border(x, y) - 1
             end
-            cells[#cells + 1] = value
+            layout[#layout + 1] = source
         end
     end
+    layouts[phase] = layout
+    return layout
+end
+
+-- Decode once per page change, rather than extracting every nibble again on
+-- every animation tick. The optional buffer keeps page cycling allocation-free.
+function Codec.Values(frame, values)
+    values = values or {}
+    for value = 0, Codec.WAVE do values[-value - 1] = value end
+    for i = 1, #frame do
+        local byte = frame:byte(i)
+        values[i * 2 - 1], values[i * 2] = math.floor(byte / 16), byte % 16
+    end
+    return values
+end
+
+function Codec.Cells(frame, phase)
+    local cells, values, layout = {}, Codec.Values(frame), Codec.Layout(phase)
+    for i = 1, #layout do cells[i] = values[layout[i]] end
     return cells
 end
