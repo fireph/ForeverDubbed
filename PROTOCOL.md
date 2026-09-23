@@ -76,10 +76,12 @@ Interior cells are read row by row, skipping the wave mask. Each palette index e
 | 20 | 2 | Payload length, 1..1056 |
 | 22 | 1 | Message kind |
 | 23 | 1 | Flags: 0 = text only, 1 = speaker metadata (0.3.0+) |
-| 24 | 1056 | Payload followed by zero padding |
+| 24 | 1056 | Payload followed by cosmetic noise padding (legacy encoders use zeros) |
 | 1080 | 4 | Adler-32 of bytes 0..1079, including padding |
 
 Adler-32 uses initial a=1, b=0, modulus 65521, result b × 65536 + a. All pages except the final one contain exactly 1,056 payload bytes. Maximum message size is 270,336 bytes; oversized messages are rejected visibly in the addon rather than truncated.
+
+Padding is ignored when assembling the message, but remains covered by the frame checksum. Its values may be arbitrary; existing FDB5 decoders accept both zero and noise padding. The encoders use a cached deterministic noise sequence so unused cells have texture without generating fresh noise on animation ticks. Starting with state 1, each padding byte updates state to `(state * 48271) mod 2147483647` and uses `state mod 256`. Each page's padding starts at the beginning of this sequence. No payload bytes, calibration cells, or wave cells are replaced.
 
 With flags 0, the complete message is UTF-8 `speaker + NUL + title + NUL + text`. With flags 1, it is `speaker + NUL + title + NUL + text + NUL + race + NUL + gender + NUL + npcID`. Race is an English race key obtained from the API, an NPC-ID lookup, a model mapping, or a saved user assignment (for example `Orc` or `Skyborne`), gender is `male`, `female`, or empty, and NPC ID is decimal text or empty. Empty metadata fields mean unknown. All other flag values are rejected, and flags must agree across every page. FDB5 readers accept both layouts; older optical formats remain unsupported. Empty speaker/title fields are allowed; embedded NULs in fields are not. Byte chunks may split UTF-8 characters. Decode text only after concatenating and validating every page. WoW formatting escapes are removed before encoding.
 

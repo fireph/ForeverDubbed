@@ -58,7 +58,7 @@ It captures text exposed through the game API, not arbitrary text drawn by other
 
 Each new message replaces the previous transmission. Rapidly clicking through dialogue or overlapping NPC chat can therefore skip earlier passages; this version follows the latest message rather than maintaining a narration backlog. A fully decoded new message interrupts the current speech. `/fdb chat` disables ambient NPC chat if you only want interaction windows.
 
-The addon keeps the wave at 15 fps and switches text pages every 250 ms. It caches the 48 wave layouts, reuses a page decoding buffer, and updates only textures whose colors changed, reducing Lua work and texture updates without changing the transmitted pixels.
+The addon keeps the wave at 15 fps and switches text pages every 250 ms. It caches the 48 wave layouts, reuses a page decoding buffer, and updates only textures whose colors changed, reducing Lua work and texture updates. Unused data cells contain a cached noise pattern so the texture fills the square even for short messages. The receiver ignores this padding when reading the text; existing FDB5 companions remain compatible.
 
 The square remains visible for at least 15 seconds after text arrives, or three complete page cycles for very long text, then hides. Closing a quest window does not immediately hide it, allowing the reader to finish. While unlocked, it remains visible for positioning. Settings and position are stored through WoW SavedVariables when the client saves them.
 

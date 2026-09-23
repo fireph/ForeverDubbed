@@ -53,6 +53,19 @@ local function uint(n, width)
     return s
 end
 
+-- Cosmetic padding, generated once without touching WoW's shared random state.
+-- Park-Miller products stay exact in Lua 5.1's doubles. Keep this sequence in
+-- sync with the Go encoder; the decoder only uses the declared payload length.
+local padding
+do
+    local bytes, state = {}, 1
+    for i = 1, Codec.PAYLOAD do
+        state = (state * 48271) % 2147483647
+        bytes[i] = string.char(state % 256)
+    end
+    padding = table.concat(bytes)
+end
+
 function Codec.Adler(s)
     local a, b = 1, 0
     for i = 1, #s do
@@ -87,7 +100,7 @@ function Codec.Encode(session, sequence, kind, speaker, title, text, race, gende
         local payload = body:sub(i * Codec.PAYLOAD + 1, (i + 1) * Codec.PAYLOAD)
         local frame = "FDB5" .. uint(session, 4) .. uint(sequence, 4) .. uint(checksum, 4)
             .. uint(i, 2) .. uint(count, 2) .. uint(#payload, 2) .. string.char(kind, flags)
-            .. payload .. string.rep("\0", Codec.PAYLOAD - #payload)
+            .. payload .. padding:sub(1, Codec.PAYLOAD - #payload)
         frames[#frames + 1] = frame .. uint(Codec.Adler(frame), 4)
     end
     return frames

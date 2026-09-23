@@ -22,6 +22,18 @@ const (
 	MaxPages     = 256
 )
 
+// Cosmetic noise for unused payload bytes, shared with the Lua encoder.
+// Generate once; keeping it stable avoids randomizing textures on every tick.
+var padding = func() [PayloadBytes]byte {
+	var data [PayloadBytes]byte
+	state := uint64(1)
+	for i := range data {
+		state = state * 48271 % 2147483647
+		data[i] = byte(state % 256)
+	}
+	return data
+}()
+
 type Packet struct {
 	Session, Sequence, Checksum uint32
 	Index, Count                uint16
@@ -85,6 +97,7 @@ func Encode(m Message) ([][]byte, error) {
 		b[23] = flags
 		copy(b[24:], p)
 		checksumAt := len(b) - 4
+		copy(b[HeaderBytes+len(p):checksumAt], padding[:])
 		binary.BigEndian.PutUint32(b[checksumAt:], adler32.Checksum(b[:checksumAt]))
 		frames[i] = b
 	}

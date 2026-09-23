@@ -61,6 +61,59 @@ func TestMultipageUnicodeOutOfOrder(t *testing.T) {
 	}
 }
 
+func TestNoisePadding(t *testing.T) {
+	// Include a short message, exact page boundaries, and partial final pages.
+	for _, size := range []int{3, PayloadBytes - 1, PayloadBytes, PayloadBytes + 1, 2 * PayloadBytes, 2*PayloadBytes + 1} {
+		want := Message{Session: 1, Sequence: 2, Text: strings.Repeat("x", size-2)}
+		frames := framesFor(t, want)
+		if !reflect.DeepEqual(frames, framesFor(t, want)) {
+			t.Fatal("padding changed when re-encoding the same message")
+		}
+		var noisy, legacy Assembler
+		for i, frame := range frames {
+			length := int(binary.BigEndian.Uint16(frame[20:]))
+			start, end := HeaderBytes+length, FrameBytes-4
+			if start < end {
+				if bytes.Equal(frame[start:end], make([]byte, end-start)) {
+					t.Fatal("unused cells still have all-zero padding")
+				}
+				bad := bytes.Clone(frame)
+				bad[start] ^= 1
+				if _, err := Parse(bad); err == nil {
+					t.Fatal("padding corruption bypassed the frame checksum")
+				}
+			}
+			if size == 3 {
+				var colors [16]bool
+				for _, b := range frame[start:end] {
+					colors[b>>4], colors[b&15] = true, true
+				}
+				for color, used := range colors {
+					if !used {
+						t.Fatalf("noise never uses palette color %d", color)
+					}
+				}
+			}
+			old := bytes.Clone(frame)
+			clear(old[start:end])
+			binary.BigEndian.PutUint32(old[end:], adler32.Checksum(old[:end]))
+			for assembler, data := range map[*Assembler][]byte{&noisy: frame, &legacy: old} {
+				got, err := assembler.Add(packetFor(t, data), time.Now())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if i == len(frames)-1 {
+					if got == nil || *got != want {
+						t.Fatalf("padding altered message of size %d: %#v", size, got)
+					}
+				} else if got != nil {
+					t.Fatal("premature message")
+				}
+			}
+		}
+	}
+}
+
 func TestCorruptionAndLengths(t *testing.T) {
 	b := framesFor(t, fixture())[0]
 	for i := range b {
