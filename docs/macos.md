@@ -13,6 +13,7 @@ sudo apt-get update
 sudo apt-get install -y clang-18 llvm-18 lld-18 cmake build-essential curl git xz-utils bzip2 cpio
 export PATH="$(llvm-config-18 --bindir):$PATH"
 bash scripts/setup-macos-cross.sh
+bash scripts/setup-macos-signing.sh
 ```
 
 Repeat the `export PATH` command in a new shell before loading the cross-build environment. It makes the unversioned LLVM commands available and prevents `Missing ld64.lld` during setup. The setup and environment scripts also add `llvm-config --bindir` to `PATH`, since Ubuntu may expose `ld64.lld` only inside that directory (and as a versioned command in `/usr/bin`). The GitHub workflow installs matching LLVM 18 packages and keeps that directory on `PATH` across steps, including cache restores.
@@ -43,11 +44,34 @@ GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -tags gui -o dist/foreverdubbed 
 
 Run that binary with `-tts system` or `-mute`. Omit `-tags gui` for a terminal-only build. The default PocketTTS backend requires the full native build above.
 
+## Persistent self-signed identity
+
+Run `bash scripts/setup-macos-signing.sh` once on Linux or macOS. It installs checksum-pinned `rcodesign` 0.29.0 and creates `.runtime/macos-signing/identity.pem`, containing a private key and a ten-year self-signed code-signing certificate. Re-running setup reuses the identity. The file is mode `0600`, and `.runtime/` is Git-ignored. Back it up privately outside this checkout: deleting or replacing it changes the app's identity and requires granting capture permission again.
+
+The regular release builder now signs the entire `.app`, including bundled dylibs and its resource manifest, before making the ZIP. It uses the existing `io.foreverdubbed.companion` bundle ID and a designated requirement tied to the certificate fingerprint. Do not edit files inside the signed app after packaging; use an external `-voice-config` for customization instead.
+
+To reuse the same identity on another build machine, transfer it privately and set `FDB_MACOS_SIGNING_PEM` to its absolute path. Run `bash scripts/setup-macos-signing.sh --tools-only` to install the signer without creating a new identity. `FDB_RCODESIGN` can select a different signer executable. The builder fails if the identity or signer is missing; it never silently generates a replacement. `-mac-unsigned` explicitly opts out for disposable test builds, which will not preserve the signed app's permission identity.
+
+After switching from the old ad-hoc build:
+
+1. Quit ForeverDubbed from its tray menu and replace the old app in `/Applications` with the signed app.
+2. Remove the old ForeverDubbed entry from Screen Recording settings once, add the new app, and approve it.
+3. Quit and reopen it. Future builds signed with this same identity should retain approval; do not alternate them with unsigned builds.
+
+On macOS, verify a downloaded or copied bundle with:
+
+```sh
+codesign --verify --deep --strict --verbose=2 /Applications/ForeverDubbed.app
+codesign -d -r- /Applications/ForeverDubbed.app
+```
+
+The designated requirement should contain `io.foreverdubbed.companion` and a certificate hash, not a build-specific `cdhash`. Cross-builds verify the main executable with `rcodesign`; Apple's signature validation and actual permission persistence still need checking on a Mac. Self-signing does not remove Gatekeeper's unidentified-developer warning or provide notarization. No Keychain trust settings or Screen Recording permissions are changed by the setup script.
+
 ## GitHub Actions
 
-[The macOS workflow](../.github/workflows/macos.yml) builds both architectures on `ubuntu-24.04`, runs the portable Go tests/vet, caches the pinned OSXCross toolchain, and uploads the two release ZIPs. It runs for pull requests, pushes to `main`, and manual dispatch. It does not publish releases or run macOS executables on Linux. Native screen/audio behavior must be checked on a Mac.
+[The macOS workflow](../.github/workflows/macos.yml) builds both architectures on `ubuntu-24.04`, runs the portable Go tests/vet, caches the pinned OSXCross toolchain, and uploads the two release ZIPs. It runs for pull requests, pushes to `main`, and manual dispatch. Pushes and manual runs sign with the `FDB_MACOS_SIGNING_PEM` Actions repository secret. Set its value to the entire contents of the existing `.runtime/macos-signing/identity.pem`, including both PEM blocks. The workflow installs only the signer, writes the identity to a restricted temporary file for the build, and removes that file on step exit, including after a build failure. A missing secret fails the signed build instead of silently switching identities. Pull-request builds never receive the secret: they explicitly use `-mac-unsigned` and label their artifacts with `-unsigned`. Those test artifacts are not permission-preserving updates to the signed app. It does not publish releases or run macOS executables on Linux. Native screen/audio behavior must be checked on a Mac.
 
-The workflow uses Go 1.27.1 and matching LLVM 18 packages. It adds LLVM's `bin` directory to `GITHUB_PATH` before toolchain setup or cache restore, so subsequent steps can find `ld64.lld` and the other LLVM tools. Download the `ForeverDubbed-darwin-arm64` (Apple Silicon) or `ForeverDubbed-darwin-amd64` (Intel) artifact from the workflow run for its release ZIP.
+The workflow uses Go 1.27.1 and matching LLVM 18 packages. It adds LLVM's `bin` directory to `GITHUB_PATH` before toolchain setup or cache restore, so subsequent steps can find `ld64.lld` and the other LLVM tools. Download the `ForeverDubbed-darwin-arm64` (Apple Silicon) or `ForeverDubbed-darwin-amd64` (Intel) artifact from a push or manual workflow run for its signed release ZIP. Pull-request artifacts have an additional `-unsigned` suffix.
 
 ## Build directly on a Mac
 
@@ -55,6 +79,7 @@ Install Go 1.27.1+, CMake 3.28+, Git, and Xcode command-line tools with a macOS 
 
 ```sh
 xcode-select --install
+bash scripts/setup-macos-signing.sh
 go run ./tools/native -target darwin -out .runtime/native-darwin
 go run ./tools/models -out .runtime/native-darwin
 go run ./tools/build -target darwin -native-dir .runtime/native-darwin
@@ -70,7 +95,7 @@ On the first capture attempt, allow **Screen Recording** (called **Screen & Syst
 
 The GUI displays capture, tile, and audio status alongside the latest dialogue. Closing or minimizing it keeps it running in the menu bar; use **Show ForeverDubbed** to restore it or **Quit** to exit.
 
-The Linux-built app is not Developer ID signed or notarized. If macOS blocks a downloaded build, review its source and use [**System Settings → Privacy & Security → Open Anyway**](https://support.apple.com/en-gb/102445) for that app. Public notarized distribution requires a separate signing/notarization step.
+Local release builds are signed with a persistent self-signed certificate. They are not Developer ID signed or notarized. If macOS blocks a downloaded build, review its source and use [**System Settings → Privacy & Security → Open Anyway**](https://support.apple.com/en-gb/102445) for that app. Public notarized distribution requires a separate signing/notarization step.
 
 For optional terminal diagnostics, open Terminal and select the embedded executable (adjust the path if the app is elsewhere):
 
@@ -132,4 +157,4 @@ ForeverDubbed.app/
       tts/                 # voices.json and configured custom voices
 ```
 
-The executable finds models and voice configuration relative to its own location, so Finder launches and moving the app do not depend on the working directory. Its loader paths include `Contents/Resources/native`. To customize voices, use Finder's **Show Package Contents** and edit `Contents/Resources/tts/voices.json`, or supply an external configuration with `-voice-config` when launching from Terminal. Replacing the app during an upgrade also replaces any customizations inside it.
+The executable finds models and voice configuration relative to its own location, so Finder launches and moving the app do not depend on the working directory. Its loader paths include `Contents/Resources/native`. To customize voices, copy the `tts` directory outside the app and use `-voice-config` to select that external configuration when launching from Terminal. Editing resources inside the app invalidates its signature.

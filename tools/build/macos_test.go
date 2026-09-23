@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -106,5 +107,49 @@ func TestMacAppResourceDiscovery(t *testing.T) {
 	cmd.Dir = t.TempDir()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("app resource discovery: %v\n%s", err, out)
+	}
+}
+
+func TestSignedAppManifestAndFailedSigning(t *testing.T) {
+	root := t.TempDir()
+	putFile(t, root, "foreverdubbed", "executable")
+	dist := filepath.Join(root, "dist")
+	putFile(t, dist, "ForeverDubbed.app/previous", "keep until signing succeeds")
+	files := map[string]string{"foreverdubbed": filepath.Join(root, "foreverdubbed")}
+	_, err := macAppSigned(dist, files, func(app string) error { return fmt.Errorf("signing failed") })
+	if err == nil {
+		t.Fatal("ignored signing failure")
+	}
+	if _, err := os.Stat(filepath.Join(dist, "ForeverDubbed.app/previous")); err != nil {
+		t.Fatal("failed signing replaced installed build", err)
+	}
+	manifest, err := macAppSigned(dist, files, func(app string) error {
+		if !strings.HasSuffix(app, ".app") {
+			t.Fatal("signer needs an app bundle path")
+		}
+		putFile(t, app, "Contents/_CodeSignature/CodeResources", "signed resources")
+		return os.WriteFile(filepath.Join(app, "Contents/MacOS/foreverdubbed"), []byte("signed executable"), 0755)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "ForeverDubbed.app/Contents/_CodeSignature/CodeResources"
+	if manifest[name] == "" {
+		t.Fatal("signature resource missing from ZIP manifest")
+	}
+	content, err := os.ReadFile(manifest["ForeverDubbed.app/Contents/MacOS/foreverdubbed"])
+	if err != nil || string(content) != "signed executable" {
+		t.Fatal("packaged original unsigned executable", err)
+	}
+}
+
+func TestMacSignerRequiresPersistentIdentity(t *testing.T) {
+	t.Setenv("FDB_MACOS_SIGNING_PEM", "")
+	root := t.TempDir()
+	if _, err := macSigner(root, false); err == nil {
+		t.Fatal("missing identity silently accepted")
+	}
+	if sign, err := macSigner(root, true); err != nil || sign != nil {
+		t.Fatal("explicit unsigned test build failed", err)
 	}
 }

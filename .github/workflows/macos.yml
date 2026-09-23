@@ -45,14 +45,36 @@ jobs:
           source scripts/macos-cross-env.sh "$TARGET_ARCH"
           go run ./tools/native -target darwin -arch "$TARGET_ARCH" -out ".runtime/native-darwin-$TARGET_ARCH"
           go run ./tools/models -out ".runtime/native-darwin-$TARGET_ARCH"
-      - name: Build macOS release
+      - name: Install macOS signer
+        if: github.event_name != 'pull_request'
+        run: bash scripts/setup-macos-signing.sh --tools-only
+      - name: Build signed macOS release
+        if: github.event_name != 'pull_request'
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+          SIGNING_PEM: ${{ secrets.FDB_MACOS_SIGNING_PEM }}
+        run: |
+          if [ -z "$SIGNING_PEM" ]; then
+            echo 'Missing FDB_MACOS_SIGNING_PEM repository secret; see docs/macos.md.' >&2
+            exit 1
+          fi
+          umask 077
+          identity=$(mktemp "$RUNNER_TEMP/foreverdubbed-signing.XXXXXX.pem")
+          trap 'rm -f "$identity"' EXIT
+          printf '%s\n' "$SIGNING_PEM" > "$identity"
+          unset SIGNING_PEM
+          export FDB_MACOS_SIGNING_PEM="$identity"
+          source scripts/macos-cross-env.sh "$TARGET_ARCH"
+          go run ./tools/build -target darwin -arch "$TARGET_ARCH" -native-dir ".runtime/native-darwin-$TARGET_ARCH"
+      - name: Build unsigned macOS test release
+        if: github.event_name == 'pull_request'
         env:
           TARGET_ARCH: ${{ matrix.arch }}
         run: |
           source scripts/macos-cross-env.sh "$TARGET_ARCH"
-          go run ./tools/build -target darwin -arch "$TARGET_ARCH" -native-dir ".runtime/native-darwin-$TARGET_ARCH"
+          go run ./tools/build -target darwin -arch "$TARGET_ARCH" -native-dir ".runtime/native-darwin-$TARGET_ARCH" -mac-unsigned
       - uses: actions/upload-artifact@v4
         with:
-          name: ForeverDubbed-darwin-${{ matrix.arch }}
+          name: ForeverDubbed-darwin-${{ matrix.arch }}${{ github.event_name == 'pull_request' && '-unsigned' || '' }}
           path: dist/ForeverDubbed-darwin-${{ matrix.arch }}.zip
           if-no-files-found: error

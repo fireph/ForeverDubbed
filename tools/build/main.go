@@ -35,6 +35,7 @@ func main() {
 func build() error {
 	nativeDir := flag.String("native-dir", ".runtime/native", "target ONNX Runtime, models, and presets directory")
 	target := flag.String("target", "windows", "release target: windows or darwin")
+	macUnsigned := flag.Bool("mac-unsigned", false, "explicitly skip macOS certificate signing (test builds only)")
 	arch := flag.String("arch", "", "target architecture: amd64 or arm64")
 	flag.Parse()
 	if flag.NArg() != 0 {
@@ -52,6 +53,13 @@ func build() error {
 		return fmt.Errorf("release target must be windows or darwin")
 	}
 	targetOS, targetArch := spec.OS, spec.Arch
+	var signMac func(string) error
+	if targetOS == "darwin" {
+		signMac, err = macSigner(root, *macUnsigned)
+		if err != nil {
+			return err
+		}
+	}
 	cc, cxx, err := spec.Compilers()
 	if err != nil {
 		return err
@@ -110,7 +118,7 @@ func build() error {
 	if targetOS == "darwin" {
 		// cgo source directives reject @-prefixed rpaths. Pass these deliberate
 		// release loader paths through the Go external linker instead.
-		buildArgs = append(buildArgs, "-ldflags", "-extldflags=-Wl,-rpath,@executable_path/../Resources/native,-rpath,@executable_path/native,-rpath,@executable_path/../.runtime/native")
+		buildArgs = append(buildArgs, "-ldflags", "-s -w -extldflags=-Wl,-rpath,@executable_path/../Resources/native,-rpath,@executable_path/native,-rpath,@executable_path/../.runtime/native")
 	}
 	if targetOS == "windows" {
 		buildArgs = append(buildArgs, "-ldflags", "-H=windowsgui")
@@ -121,7 +129,7 @@ func build() error {
 	}
 	bundle[binaryName] = binary
 	if targetOS == "darwin" {
-		bundle, err = macApp(dist, bundle)
+		bundle, err = macAppSigned(dist, bundle, signMac)
 		if err != nil {
 			return err
 		}
