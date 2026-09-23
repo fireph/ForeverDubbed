@@ -32,7 +32,11 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 			w.Hide()
 		}
 	}
-	d := newDashboard(version, hide, quit, state.StopAudio)
+	state.SetQueueSpeech(a.Preferences().Bool("queueSpeech"))
+	d := newDashboard(version, hide, quit, state.StopAudio, func(enabled bool) {
+		state.SetQueueSpeech(enabled)
+		a.Preferences().SetBool("queueSpeech", enabled)
+	})
 	w.SetContent(d.root)
 	d.render(state.Snapshot())
 	if hasTray {

@@ -19,7 +19,8 @@ func TestDashboardLiveStates(t *testing.T) {
 	defer a.Quit()
 	a.Settings().SetTheme(companionTheme{theme.DefaultTheme()})
 	stops := 0
-	d := newDashboard("0.5.0", func() {}, func() {}, func() { stops++ })
+	queued := false
+	d := newDashboard("0.5.0", func() {}, func() {}, func() { stops++ }, func(enabled bool) { queued = enabled })
 	w := a.NewWindow("ForeverDubbed")
 	defer w.Close()
 	w.SetContent(d.root)
@@ -34,6 +35,19 @@ func TestDashboardLiveStates(t *testing.T) {
 	d.render(state.Snapshot())
 	if d.window.value.Text != "Detected" || d.tile.value.Text != "Searching" {
 		t.Fatal("window and tile states conflated")
+	}
+	test.Tap(d.queue)
+	if !queued {
+		t.Fatal("checkbox did not enable queue mode")
+	}
+	test.Tap(d.queue)
+	if queued {
+		t.Fatal("checkbox did not disable queue mode")
+	}
+	state.SetQueueSpeech(true)
+	d.render(state.Snapshot())
+	if !d.queue.Checked {
+		t.Fatal("saved queue setting not reflected")
 	}
 	state.Capture(true, true, nil)
 	state.Update(func(v *appstate.Snapshot) {

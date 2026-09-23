@@ -58,3 +58,77 @@ func TestSpeechReplacementAndQuitWaitForCleanup(t *testing.T) {
 		t.Fatal(v)
 	}
 }
+
+func TestSpeechQueueAndModeChange(t *testing.T) {
+	for _, switchMode := range []bool{false, true} {
+		t.Run(map[bool]string{false: "ordered playback and stop", true: "switch to newest"}[switchMode], func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			state := appstate.New("game", "pocket", false)
+			state.SetQueueSpeech(true)
+			requests := make(chan protocol.Message)
+			started := make(chan string, 4)
+			complete := make(chan struct{})
+			speak := func(ctx context.Context, m protocol.Message) error {
+				state.Audio("Playing audio")
+				started <- m.Text
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-complete:
+					return nil
+				}
+			}
+			done := make(chan struct{})
+			go func() { defer close(done); speakLoop(ctx, requests, speak, state) }()
+			defer func() { cancel(); <-done }()
+			send := func(text string) {
+				t.Helper()
+				select {
+				case requests <- protocol.Message{Text: text}:
+				case <-ctx.Done():
+					t.Fatal("worker hung")
+				}
+			}
+			expect := func(want string) {
+				t.Helper()
+				select {
+				case got := <-started:
+					if got != want {
+						t.Fatalf("got %q want %q", got, want)
+					}
+				case <-ctx.Done():
+					t.Fatal("speech did not start")
+				}
+			}
+			send("first")
+			expect("first")
+			send("second")
+			send("third")
+			for state.Snapshot().Queued != 2 {
+				select {
+				case <-ctx.Done():
+					t.Fatal("messages not queued")
+				case <-time.After(time.Millisecond):
+				}
+			}
+			select {
+			case got := <-started:
+				t.Fatalf("queue interrupted first with %q", got)
+			default:
+			}
+			if switchMode {
+				state.SetQueueSpeech(false)
+				expect("third")
+			} else {
+				complete <- struct{}{}
+				expect("second")
+				state.StopAudio()
+				expect("third")
+			}
+			if v := state.Snapshot(); v.Queued != 0 || v.SpeechError != "" {
+				t.Fatal(v)
+			}
+		})
+	}
+}

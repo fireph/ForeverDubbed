@@ -45,6 +45,7 @@ func (c *statusCard) set(value, detail string, active bool) {
 }
 
 type dashboard struct {
+	queue               *widget.Check
 	root                fyne.CanvasObject
 	headline            *canvas.Text
 	hint, diagnostics   *widget.Label
@@ -52,7 +53,7 @@ type dashboard struct {
 	stop                *widget.Button
 }
 
-func newDashboard(version string, hide, quit, stop func()) *dashboard {
+func newDashboard(version string, hide, quit, stop func(), queue func(bool)) *dashboard {
 	d := &dashboard{window: newStatusCard("Game window"), tile: newStatusCard("Dialogue tile"), audio: newStatusCard("Audio")}
 	title := canvas.NewText("ForeverDubbed", gold)
 	title.TextSize = 27
@@ -67,13 +68,14 @@ func newDashboard(version string, hide, quit, stop func()) *dashboard {
 	d.hint.Wrapping = fyne.TextWrapWord
 	d.stop = widget.NewButton("Stop", stop)
 	d.stop.Disable()
+	d.queue = widget.NewCheck("Queue new dialogue", queue)
 	audioCard := container.NewVBox(d.audio.root, inset(3, container.NewHBox(questButtonWidget(d.stop))))
 	d.diagnostics = widget.NewLabel("")
 	d.diagnostics.Wrapping = fyne.TextWrapWord
 	detailScroll := container.NewVScroll(d.diagnostics)
 	detailScroll.SetMinSize(fyne.NewSize(0, 110))
 	diagnostics := widget.NewAccordion(widget.NewAccordionItem("Details & troubleshooting", detailScroll))
-	header := container.NewVBox(d.headline, d.hint, questRule(), container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), questRule())
+	header := container.NewVBox(d.headline, d.hint, questRule(), container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), d.queue, questRule())
 	paper := parchment(container.NewBorder(header, nil, nil, nil, container.NewVScroll(container.NewVBox(diagnostics))))
 	privacy := canvas.NewText("Only your game window is captured. Speech stays on this computer.", gold)
 	privacy.TextSize = 12
@@ -85,6 +87,11 @@ func newDashboard(version string, hide, quit, stop func()) *dashboard {
 	return d
 }
 func (d *dashboard) render(s appstate.Snapshot) {
+	// Reflect the saved preference without firing the user's change callback.
+	if d.queue.Checked != s.QueueSpeech {
+		d.queue.Checked = s.QueueSpeech
+		d.queue.Refresh()
+	}
 	headline, hint := "Waiting for your adventure", "Open WoW and keep its game window available."
 	win, winDetail := "Waiting", "No game frames available"
 	tile, tileDetail := "Searching", "In WoW, use /fdb unlock"
@@ -95,6 +102,9 @@ func (d *dashboard) render(s appstate.Snapshot) {
 	if s.Tile {
 		tile, tileDetail = "Connected", "Reading dialogue from the addon"
 		headline, hint = "Ready for the next story", "Talk to an NPC or open a quest. New dialogue interrupts the previous speech."
+	}
+	if s.Tile && s.QueueSpeech {
+		hint = "Talk to an NPC or open a quest. New dialogue waits for the current speech to finish."
 	}
 	if !s.Ready {
 		headline, hint = "Starting your companion", "Loading speech and preparing game-window capture…"
@@ -130,6 +140,9 @@ func (d *dashboard) render(s appstate.Snapshot) {
 	}
 	if s.Voice != "" {
 		audioDetail = s.Voice
+	}
+	if s.Queued > 0 {
+		audioDetail += fmt.Sprintf(" · %d queued", s.Queued)
 	}
 	playing := !s.Stopped && (s.Audio == "Playing audio" || s.Audio == "Speaking (system voice)")
 	d.audio.set(audio, audioDetail, playing)

@@ -14,6 +14,8 @@ type Snapshot struct {
 	Window, Tile                          bool
 	CaptureError, SpeechError, FatalError string
 	Audio                                 string
+	QueueSpeech                           bool
+	Queued                                int
 	PlaybackID                            uint64
 	Played, Duration                      time.Duration
 	DurationKnown                         bool
@@ -24,9 +26,10 @@ type Snapshot struct {
 }
 
 type State struct {
-	mu        sync.RWMutex
-	value     Snapshot
-	stopAudio chan uint64
+	mu           sync.RWMutex
+	value        Snapshot
+	stopAudio    chan uint64
+	queueChanges chan struct{}
 }
 
 func New(target, backend string, muted bool) *State {
@@ -34,7 +37,7 @@ func New(target, backend string, muted bool) *State {
 	if muted {
 		audio = "Muted"
 	}
-	return &State{stopAudio: make(chan uint64, 1), value: Snapshot{Target: target, Backend: backend, Audio: audio}}
+	return &State{stopAudio: make(chan uint64, 1), queueChanges: make(chan struct{}, 1), value: Snapshot{Target: target, Backend: backend, Audio: audio}}
 }
 func (s *State) Snapshot() Snapshot {
 	s.mu.RLock()
@@ -95,3 +98,13 @@ func (s *State) ResetPlayback() {
 		v.PlayingSpeaker = ""
 	})
 }
+
+// SetQueueSpeech wakes the speech worker so mode changes apply immediately.
+func (s *State) SetQueueSpeech(enabled bool) {
+	s.Update(func(v *Snapshot) { v.QueueSpeech = enabled })
+	select {
+	case s.queueChanges <- struct{}{}:
+	default:
+	}
+}
+func (s *State) QueueChanges() <-chan struct{} { return s.queueChanges }

@@ -194,7 +194,7 @@ func run() error {
 				v.Audio = "Idle"
 			}
 		})
-		// A single worker serializes speech and cancels it when newer dialog arrives.
+		// A single worker applies the selected queue/interrupt policy.
 		speech := make(chan protocol.Message, 1)
 		done := make(chan struct{})
 		speechCtx, cancelSpeech := context.WithCancel(ctx)
@@ -262,10 +262,10 @@ func run() error {
 					}
 					if !mute {
 						select {
-						case <-speech:
-						default:
+						case speech <- *m:
+						case <-ctx.Done():
+							return nil
 						}
-						speech <- *m
 					}
 				}
 			} else if time.Since(lastError) > 15*time.Second {
@@ -325,6 +325,8 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 	var cancel context.CancelFunc
 	var finished chan error
 	var nextID uint64
+	var pending []protocol.Message
+	updateQueue := func() { state.Update(func(v *appstate.Snapshot) { v.Queued = len(pending) }) }
 	stopCurrent := func() {
 		if cancel != nil {
 			cancel()
@@ -334,29 +336,63 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 			state.ResetPlayback()
 		}
 	}
-	defer stopCurrent()
+	defer func() { stopCurrent(); pending = nil; updateQueue() }()
+	start := func(message protocol.Message) {
+		nextID++
+		state.Update(func(v *appstate.Snapshot) {
+			v.Audio = "Preparing speech"
+			v.SpeechError = ""
+			v.PlaybackID = nextID
+			v.PlayingSpeaker = message.Speaker
+		})
+		child, c := context.WithCancel(ctx)
+		cancel = c
+		result := make(chan error, 1)
+		finished = result
+		go func() { result <- speak(child, message) }()
+	}
 	for {
+		if ctx.Err() != nil {
+			return
+		}
+		// Switching back to interrupt mode keeps only the newest waiting message.
+		if !state.Snapshot().QueueSpeech && len(pending) > 0 {
+			newest := pending[len(pending)-1]
+			pending = nil
+			updateQueue()
+			stopCurrent()
+			start(newest)
+		}
+		if finished == nil && len(pending) > 0 {
+			next := pending[0]
+			pending[0] = protocol.Message{}
+			pending = pending[1:]
+			updateQueue()
+			start(next)
+		}
 		select {
 		case <-ctx.Done():
 			return
+		case <-state.QueueChanges():
+			// Apply the new policy at the top of the loop.
 		case id := <-state.AudioStops():
 			if id == state.Snapshot().PlaybackID {
 				stopCurrent()
 			}
-		case message := <-requests:
-			stopCurrent()
-			nextID++
-			state.Update(func(v *appstate.Snapshot) {
-				v.Audio = "Preparing speech"
-				v.SpeechError = ""
-				v.PlaybackID = nextID
-				v.PlayingSpeaker = message.Speaker
-			})
-			child, c := context.WithCancel(ctx)
-			cancel = c
-			result := make(chan error, 1)
-			finished = result
-			go func() { result <- speak(child, message) }()
+		case message, ok := <-requests:
+			if !ok {
+				requests = nil
+				continue
+			}
+			if state.Snapshot().QueueSpeech && finished != nil {
+				pending = append(pending, message)
+				updateQueue()
+			} else {
+				pending = nil
+				updateQueue()
+				stopCurrent()
+				start(message)
+			}
 		case err := <-finished:
 			state.ResetPlayback()
 			if err != nil && ctx.Err() == nil {
