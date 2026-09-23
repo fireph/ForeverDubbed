@@ -28,7 +28,7 @@ def main():
     print(f"Generated {len(audio)/model.sample_rate:.2f}s audio in {time.monotonic()-started:.2f}s on CPU", flush=True)
     (RUNTIME / "ready.json").write_text(json.dumps({"model": MODEL,
         "voice_cloning": model.has_voice_cloning}), encoding="utf-8")
-    print("Pocket TTS ready. Launch Start-ForeverDubbed.cmd.", flush=True)
+    print("Python export environment ready. The application uses the native ONNX runtime.", flush=True)
 
 
 if __name__ == "__main__":

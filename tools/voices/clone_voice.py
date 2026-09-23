@@ -101,7 +101,7 @@ def main():
     parser.add_argument("--activate", action="store_true", help="Assign profiles after every export and sample succeeds")
     parser.add_argument("--force", action="store_true", help="Replace existing exported voices")
     parser.add_argument("--decode-steps", type=int, help="1-64 decoding steps for previews and activated profiles; more work is not guaranteed better")
-    parser.add_argument("--cpu-threads", type=int, help="CPU threads for previews and activated profiles; extra threads can be slower")
+    parser.add_argument("--cpu-threads", type=int, help="CPU threads for Python previews only; app uses -cpu-threads")
     args = parser.parse_args()
     if not math.isfinite(args.seconds) or not 3 <= args.seconds <= 30:
         parser.error("--seconds must be between 3 and 30")
@@ -180,6 +180,7 @@ def main():
         backup.write_bytes(original)
         for name in names:
             config["profiles"][name]["voice"] = f"custom/{name}.safetensors"
+            config["profiles"][name].pop("cpu_threads", None)
         temporary = args.config.with_suffix(".pending.json")
         temporary.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
         temporary.replace(args.config)

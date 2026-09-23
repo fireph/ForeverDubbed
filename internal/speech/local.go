@@ -2,72 +2,119 @@ package speech
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
-	"net/http"
-
+	"fmt"
 	"foreverdubbed/internal/platform"
+	"foreverdubbed/internal/pocket"
 	"foreverdubbed/internal/protocol"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
+type Synthesizer interface {
+	Stream(context.Context, string, string, int, func([]byte) error) error
+	Close() error
+}
 type Local struct {
-	Config   *Config
-	Override string
-	Client   *http.Client
-	Play     func(context.Context, int, <-chan []byte) error
+	Config     *Config
+	Override   string
+	PresetsDir string
+	Engine     Synthesizer
+	Play       func(context.Context, int, <-chan []byte) error
 }
 
-// Speak streams model PCM directly into a bounded playback queue. The helper
-// drains cancelled generation before reusing the model, but playback stops now.
+func OpenLocal(config *Config, override, nativeDir, modelsDir string, threads int) (*Local, error) {
+	local := &Local{Config: config, Override: override, PresetsDir: filepath.Join(nativeDir, "presets")}
+	for name := range config.Profiles {
+		path, _, err := local.voiceFile(name)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := os.Stat(path); err != nil {
+			return nil, fmt.Errorf("voice %s: %w (run go run ./tools/models)", name, err)
+		}
+	}
+	if modelsDir == "" {
+		modelsDir = filepath.Join(nativeDir, "models")
+	}
+	engine, err := pocket.Open(nativeDir, modelsDir, threads)
+	if err != nil {
+		return nil, err
+	}
+	local.Engine = engine
+	return local, nil
+}
+func (l *Local) Close() error { return l.Engine.Close() }
+func (l *Local) voiceFile(name string) (string, int, error) {
+	p, ok := l.Config.Profiles[name]
+	if !ok {
+		return "", 0, fmt.Errorf("unknown voice %s", name)
+	}
+	steps := p.DecodeSteps
+	if steps == 0 {
+		steps = 1
+	}
+	path := p.Voice
+	if filepath.Ext(path) == "" {
+		if strings.ContainsAny(path, "/\\:") || path == "." || path == ".." {
+			return "", 0, fmt.Errorf("invalid preset %q", path)
+		}
+		path = filepath.Join(l.PresetsDir, path+".safetensors")
+	} else {
+		if strings.ToLower(filepath.Ext(path)) != ".safetensors" {
+			return "", 0, fmt.Errorf("voice %s needs an exported .safetensors state", name)
+		}
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(l.Config.BaseDir, path)
+		}
+	}
+	return path, steps, nil
+}
+
+// Speak starts one continuous PCM playback queue while native inference produces
+// short chunks. Both native generation and playback stop on cancellation.
 func (l *Local) Speak(parent context.Context, m protocol.Message) error {
-	voice, err := l.Config.Voice(m, l.Override)
+	name, err := l.Config.Voice(m, l.Override)
 	if err != nil {
 		return err
 	}
-	var token [16]byte
-	if _, err := rand.Read(token[:]); err != nil {
+	voice, steps, err := l.voiceFile(name)
+	if err != nil {
 		return err
 	}
-	id := hex.EncodeToString(token[:])
 	ctx, cancel := context.WithCancel(parent)
-	defer func() {
-		cancel()
-		l.cancelRequest(id)
-	}()
+	defer cancel()
 	chunks := make(chan []byte, platform.PCMQueueDepth)
-	ready := make(chan int, 1)
 	done := make(chan struct{})
 	var streamErr error
 	go func() {
 		defer close(done)
-		defer close(ready)
 		defer close(chunks)
-		streamErr = l.receive(ctx, id, voice, m, ready, chunks)
-		if streamErr != nil {
-			cancel()
+		text := strings.TrimSpace(m.Title + ". " + m.Text)
+		if m.Title == "" {
+			text = m.Text
+		}
+		for _, text := range Chunks(text, 180) {
+			streamErr = l.Engine.Stream(ctx, text, voice, steps, func(pcm []byte) error {
+				select {
+				case chunks <- pcm:
+					return nil
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			})
+			if streamErr != nil {
+				cancel()
+				return
+			}
 		}
 	}()
-	var rate int
-	select {
-	case value, ok := <-ready:
-		if !ok {
-			<-done
-			return streamErr
-		}
-		rate = value
-	case <-ctx.Done():
-		<-done
-		if parent.Err() != nil {
-			return parent.Err()
-		}
-		return streamErr
-	}
 	play := l.Play
 	if play == nil {
 		play = platform.PlayPCM
 	}
-	err = play(ctx, rate, chunks)
+	err = play(ctx, pocket.SampleRate, chunks)
 	cancel()
 	<-done
 	if parent.Err() != nil {

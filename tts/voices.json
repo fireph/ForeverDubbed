@@ -1,5 +1,4 @@
 {
-  "endpoint": "http://127.0.0.1:8765",
   "default": {
     "male": "narrator_male",
     "female": "narrator_male",
@@ -77,8 +76,7 @@
     },
     "orc_male": {
       "voice": "custom/orc_male.safetensors",
-      "decode_steps": 4,
-      "cpu_threads": 1
+      "decode_steps": 4
     },
     "orc_female": {
       "voice": "custom/orc_female.safetensors"

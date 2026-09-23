@@ -1,11 +1,9 @@
 package speech
 
 import (
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"foreverdubbed/internal/protocol"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,12 +11,12 @@ import (
 )
 
 type Profile struct {
-	Voice string `json:"voice"`
+	Voice       string `json:"voice"`
+	DecodeSteps int    `json:"decode_steps"`
 }
 
 type Config struct {
-	Digest       string                       `json:"-"`
-	Endpoint     string                       `json:"endpoint"`
+	BaseDir      string                       `json:"-"`
 	Default      map[string]string            `json:"default"`
 	Races        map[string]map[string]string `json:"races"`
 	NPCOverrides map[string]string            `json:"npc_overrides"`
@@ -47,13 +45,15 @@ func Load(path string) (*Config, error) {
 	if err := json.Unmarshal(b, &c); err != nil {
 		return nil, err
 	}
-	u, err := url.Parse(c.Endpoint)
-	if err != nil || u.Scheme != "http" || (u.Hostname() != "127.0.0.1" && u.Hostname() != "localhost" && u.Hostname() != "::1") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-		return nil, fmt.Errorf("TTS endpoint must be a loopback HTTP address")
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
 	}
-	c.Endpoint = strings.TrimRight(c.Endpoint, "/")
-	c.Digest = fmt.Sprintf("%x", sha256.Sum256(b))
+	c.BaseDir = filepath.Dir(abs)
 	for id, profile := range c.Profiles {
+		if profile.DecodeSteps < 0 || profile.DecodeSteps > 64 {
+			return nil, fmt.Errorf("profile %q decode_steps must be 1..64", id)
+		}
 		if strings.TrimSpace(profile.Voice) == "" {
 			return nil, fmt.Errorf("profile %q needs a Pocket TTS voice", id)
 		}

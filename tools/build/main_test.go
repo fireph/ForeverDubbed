@@ -55,8 +55,8 @@ func TestPackageContentsAndLayout(t *testing.T) {
 	if len(bundle) != len(runtimeFiles)+4 {
 		t.Fatalf("unexpected manifest: %v", bundle)
 	}
-	if _, ok := bundle["tts/engine.py"]; !ok {
-		t.Fatal("missing TTS engine")
+	if _, ok := bundle["tts/voices.json"]; !ok {
+		t.Fatal("missing voice config")
 	}
 	if _, ok := bundle["tts/custom/used.safetensors"]; !ok {
 		t.Fatal("missing referenced voice")

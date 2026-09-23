@@ -4,7 +4,7 @@ import os
 from contextlib import contextmanager
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = ROOT / ".runtime" / "pocket"
 LANGUAGE = "english_2026-04"
 MODEL = "Pocket TTS 3.1.0 / " + LANGUAGE

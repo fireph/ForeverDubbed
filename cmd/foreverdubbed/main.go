@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"foreverdubbed/internal/platform"
+	"foreverdubbed/internal/pocket"
 	"foreverdubbed/internal/protocol"
 	"foreverdubbed/internal/speech"
 )
@@ -33,8 +34,12 @@ func run() error {
 	var files, voice, snapshot string
 	var backend, configPath, testText, testRace, testGender string
 	var mute, list, showVersion bool
-	var rate int
+	var rate, threads int
+	var nativeDir, modelsDir string
 	var poll, scan time.Duration
+	flag.StringVar(&nativeDir, "native-dir", pocket.DefaultDir(), "native model and preset directory")
+	flag.StringVar(&modelsDir, "models-dir", "", "ONNX models directory (default: native-dir/models)")
+	flag.IntVar(&threads, "cpu-threads", 1, "native inference CPU thread budget")
 	flag.StringVar(&files, "image", "", "decode PNG file(s), comma-separated, without screen capture or TTS")
 	flag.StringVar(&voice, "voice", "", "Pocket TTS profile override, or Windows voice name with -tts sapi")
 	flag.StringVar(&snapshot, "snapshot", "", "save one desktop PNG after 3 seconds, report detection, then exit")
@@ -125,12 +130,12 @@ func run() error {
 				}
 				return nil
 			}
-			local := &speech.Local{Config: config, Override: voice}
-			health, err := local.Health(ctx)
+			local, err := speech.OpenLocal(config, voice, nativeDir, modelsDir, threads)
 			if err != nil {
 				return err
 			}
-			log.Printf("Local TTS: %s", health)
+			defer local.Close()
+			log.Print("PocketTTS.cpp: native CPU streaming ready")
 			speak = func(ctx context.Context, m protocol.Message) error {
 				id, err := config.Voice(m, voice)
 				if err != nil {

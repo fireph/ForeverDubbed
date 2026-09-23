@@ -1,0 +1,75 @@
+# Native speech runtime
+
+PocketTTS.cpp and our C wrapper are compiled by `go build` through cgo and linked into the application executable. No PocketTTS DLL, `.so`, or `.dylib` is loaded or distributed. ONNX Runtime remains a separate shared library. No Python interpreter, subprocess, HTTP server, or network access is used during synthesis.
+
+`internal/pocket/pocket_tts.hpp` is VolgaGerm/PocketTTS.cpp at commit `e801e7d6c2692121a39e80ae525cb5265174a495`, under `native/vendor/LICENSE`. The source uses a header extension so cgo compiles it once through `internal/pocket/bridge.cpp` and tracks changes for rebuilds. Local changes:
+
+- A friend adapter imports the existing April-model `.safetensors` voice states. No re-cloning or lossy conversion is performed.
+- Correct restoration of dynamic snapshot shapes and initialization of decoder `first` flags for the pinned April export.
+- Exceptions from generation/decoding join the worker before propagating to Go.
+- Windows UTF-8 path conversion allocates space for its terminator.
+
+`bridge.cpp` owns the model and a bounded four-buffer PCM queue. Go polls without blocking on model computation, and cancellation aborts generation and joins both native workers before reuse. Per-profile decode steps are retained. The application's `-cpu-threads` flag configures the native sessions once (default 1); old Python per-profile thread overrides are no longer used.
+
+## Build
+
+Install Go 1.22+, CMake 3.28+, Git, and C/C++17 compilers. Windows builds require an x64 MinGW-w64 GCC/G++ toolchain usable by cgo, with `gcc`, `g++`, and `mingw32-make` on PATH. MSVC alone is not a cgo toolchain. Linux uses GCC/G++ or Clang; macOS uses the Xcode command-line tools. Set `CC` and `CXX` if using different compiler names, consistently for dependency preparation and Go compilation.
+
+```
+go run ./tools/native
+go run ./tools/models
+go run ./tools/build
+```
+
+When migrating an old MSVC dependency build, remove its generated `.runtime/native/build` directory before preparing dependencies with MinGW.
+
+`tools/native` uses CMake to fetch pinned dependencies and build static SentencePiece. Headers and link libraries are installed into `.runtime/sdk/<os>_<arch>/`; runtime libraries and license notices go into `.runtime/native/`. Go compiles our bridge and PocketTTS.cpp itself. The `pocket_native` build tag enables this integration; the release builder always sets it and enables cgo. Builds without this tag support model-free tests and setup tools, but return an explicit error if asked to synthesize speech.
+
+The dependencies are ONNX Runtime 1.23.2, SentencePiece 0.2.1, nlohmann/json 3.12.0, and dr_libs revision `dfe8377631000664666519fdb83da193fd8037f4`. Windows may need Microsoft's Visual C++ x64 redistributable for ONNX Runtime. The Windows link requests static C++/GCC runtimes. If your MinGW toolchain requires additional runtime DLLs (for example winpthreads), place them in the native runtime directory; the packager copies them beside the executable. The verified Zig cross-build requires only ONNX Runtime and Windows system libraries.
+
+The packager targets Windows x64. Cross-compiling also requires Windows-targeting `CC`/`CXX` and matching dependencies in `.runtime/sdk/windows_amd64`; changing `GOOS` alone is insufficient. Configure CMake with the appropriate toolchain when preparing cross dependencies, then pass `-native-dir` pointing to their runtime libraries and model/preset assets. Prefer building releases on each target OS. Desktop capture/playback remain Windows-only.
+
+Windows release layout:
+
+```
+foreverdubbed.exe                 # includes PocketTTS.cpp and SentencePiece
+onnxruntime.dll
+onnxruntime_providers_shared.dll
+native/models/                   # pinned ONNX graphs and tokenizer
+native/presets/                   # preset safetensors
+native/licenses/
+tts/voices.json
+tts/custom/                      # custom safetensors
+```
+
+The packager also copies ONNX Runtime DLLs beside `dist/foreverdubbed.exe` for development launches. `-native-dir` selects model/preset data; shared-library discovery happens through the OS loader before Go starts.
+
+For direct speech development commands, use `CGO_ENABLED=1` and `-tags pocket_native`. Add the absolute `.runtime/native` directory to `PATH` on Windows, `LD_LIBRARY_PATH` on Linux, or `DYLD_LIBRARY_PATH` on macOS. For example, on Linux after preparing dependencies and models:
+
+```sh
+export CGO_ENABLED=1
+export LD_LIBRARY_PATH="$PWD/.runtime/native${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+go run -tags pocket_native ./tools/voicecheck
+FDB_TEST_NATIVE_DIR="$PWD/.runtime/native" go test -tags pocket_native -race ./internal/pocket
+```
+
+Linux/macOS executables also search `native/` beside themselves and `../.runtime/native`. Go's temporary executables used by `go run`/`go test` need the library-search environment above.
+
+## Models and issue #12
+
+`internal/pocket/assets.json` pins the April English ONNX bundle and public preset states by source revision and SHA-256. `go run ./tools/models` downloads and verifies them. The application also verifies the model hashes when opening the engine. Exporting models is not needed to run or build the default application.
+
+[Upstream issue #12](https://github.com/VolgaGerm/PocketTTS.cpp/issues/12) describes the exporter selecting an obsolete config/checkpoint and the extra BOS-before-voice conditioning required by April models. We use KevinAHM's pinned `english_2026-04` export, not the old `b6369a24` weights. Saved voice states already contain BOS conditioning, so the adapter must not prepend it again. Direct WAV/MP3 conditioning is deliberately handled by the optional export tool, not the running app.
+
+To regenerate models in a development environment, use [KevinAHM's April-aware exporter](https://github.com/KevinAHM/pocket-tts-onnx-export), select `english_2026-04`, export and quantize, then validate the graph layouts and regenerate the checked-in asset manifest. Replacing models from a different checkpoint without re-exporting the matching voice states is unsupported.
+
+Models: [KevinAHM/pocket-tts-onnx](https://huggingface.co/KevinAHM/pocket-tts-onnx), CC-BY-4.0; original architecture and weights by Kyutai. Preset state files: [Kyutai](https://huggingface.co/kyutai/pocket-tts-without-voice-cloning), revision recorded in the manifest. Voice source/license details: [kyutai/tts-voices](https://huggingface.co/kyutai/tts-voices). Library licenses are shipped under `native/licenses/`.
+
+## Validate real voices
+
+```
+go run -tags pocket_native ./tools/voicecheck
+go run -tags pocket_native ./tools/voicecheck -voice undead_male
+```
+
+This writes WAV review clips and `report.json` to `.runtime/voice-samples/`. It checks non-silent streamed output, first audio before completion, cancellation, and reuse after cancellation. Clips are collected from PCM callbacks; the application itself uses only streaming playback. Timing excludes initial model loading; the sample tool uses two inference threads. For native error-recovery tests, set `FDB_TEST_NATIVE_DIR` to the absolute native runtime directory and run `go test -tags pocket_native ./internal/pocket`. On Linux/macOS the Go command needs cgo enabled and C/C++ compilers and the library-search environment above.

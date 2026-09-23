@@ -1,41 +1,39 @@
 # ForeverDubbed
 
-A WoW Forever addon and Go companion that read NPC and quest dialogue aloud. The addon draws a small RGB data square; the Windows app finds it anywhere on the desktop, decodes the text, and speaks using **Pocket TTS on your CPU**. The Go companion captures, decodes, selects voices, and streams audio to the Windows sound device; a small local Python helper runs the official Pocket TTS model. Playback begins with the first decoded audio instead of waiting for a complete text chunk. Speech stays on your computer. No OCR or game-memory access is used. Windows SAPI remains available as a fallback.
+A WoW Forever addon and Go companion that read NPC and quest dialogue aloud. The addon draws a small RGB data square; the Windows app finds it anywhere on the desktop, decodes the text, and speaks using **Pocket TTS on your CPU**. The Go companion captures, decodes, selects voices, and streams audio through an in-process PocketTTS.cpp engine. No Python interpreter or local HTTP service is used at runtime. Speech stays on your computer. No OCR or game-memory access is used. Windows SAPI remains available as a fallback.
 
 The square uses **16 calibrated colors** and a **48 × 48 data grid**, with a one-cell border. At the default **2 × 2 pixel cell size**, it occupies **100 × 100 physical pixels** and carries **1,124 bytes per page**. This is the only encoding format. You can enlarge cells with `/fdb cell 3` (150 × 150 pixels) if your display needs more sampling margin; the capacity stays the same. This is a custom optical format, not a standard QR code.
 
-**Upgrading to 0.3.2:** replace the addon and `/reload`. This release adds 15,444 display-ID race/gender mappings from VoiceOver, improving detection when NPC `UnitRace` is unavailable. Use the companion and Python helper from the same checkout: the helper now requires a streaming-capable companion. Existing model downloads and voice configuration remain usable. If upgrading from 0.2.1, replace both addon and companion, run Pocket TTS setup once, and use `Start-ForeverDubbed.cmd` for race-based voices.
+**Native runtime migration:** rebuild the companion and bundle the native runtime/model files below. Existing April-model `.safetensors` voices are preserved. The old Python service and setup scripts are no longer used.
 
 See [CHANGELOG.md](CHANGELOG.md) for earlier releases and [PROTOCOL.md](PROTOCOL.md) for the optical format.
 
 ## Quick start on Windows
 
-**From a Git clone:** install Go 1.22 or newer, then build from the repository root before following the steps below:
+From a release ZIP, extract the entire folder and run `foreverdubbed.exe` (or the optional `Start-ForeverDubbed.cmd`). Keep the ONNX Runtime DLLs, `native/`, and `tts/` beside the executable. Python, uv, and Go are not needed to run a prepared release.
 
-```powershell
+From source, install Go 1.22+, CMake 3.28+, Git, and an x64 MinGW-w64 C/C++17 toolchain (GCC/G++ on PATH), then run:
+
+```sh
+go run ./tools/native
+go run ./tools/models
 go run ./tools/build
 ```
 
-This creates `dist/foreverdubbed.exe` and the addon/Windows ZIP packages. Generated files and downloaded runtimes are not committed to Git. If you already have an extracted Windows bundle with `foreverdubbed.exe`, skip the build step.
+This prepares native dependencies, downloads pinned model/preset assets, compiles PocketTTS.cpp into the Go executable with cgo, and and produces `dist/foreverdubbed.exe` and the addon/Windows ZIPs. See [native build details](native/README.md) for Windows toolchains and cross-host packaging.
 
-1. Copy `addon/ForeverDubbed` from the source tree or Windows bundle into the Forever client's `Interface\AddOns` directory. Alternatively extract the addon-only ZIP there. The result must be `Interface\AddOns\ForeverDubbed\ForeverDubbed.toc` (one folder level, not two).
-2. Enable **ForeverDubbed** in WoW's AddOns list. Restart the client if it was running when the folder was first installed.
-3. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) if it is not on your PATH, then run **`Setup-PocketTTS.cmd` once**. It installs isolated Python 3.12, CPU PyTorch, Pocket TTS 3.1.0, the pinned English model, and 18 preset voices inside `.runtime`. Setup requires internet; normal use is offline. No global Python packages or CUDA installation are needed.
-4. Run **`Start-ForeverDubbed.cmd`** and leave its console open. It starts the helper, waits for it to load, and runs the Go reader. Close it or press Ctrl+C to stop. Prefer WoW's windowed or borderless mode for capture.
-5. Enter `/fdb test`. You should see the square, a “Found tile” message in the companion, and hear the connection test.
-6. Enter `/fdb unlock`, drag the square anywhere within the game window, then `/fdb lock`. The reader finds its new position automatically. No coordinate configuration is needed.
+1. Copy `addon/ForeverDubbed` into the Forever client's `Interface\AddOns` directory and enable it in the game.
+2. Run the companion. It loads the native engine directly; there is no separate service to start.
+3. Enter `/fdb test`. You should see the tile detected and hear the connection test.
+4. Use `/fdb unlock`, move the tile, then `/fdb lock`. Prefer windowed or borderless game mode.
 
-The build produces `dist/ForeverDubbed-windows-amd64.zip`, which bundles the executable, addon, Pocket TTS scripts/config, launchers, and these instructions. Models and Python are downloaded by setup instead of being included in the ZIP. This is a console application; close it or press Ctrl+C to stop.
-
-**Compatibility status:** the manifest targets Forever interface **16001**. The 16-color, 2-pixel transport has been confirmed working in-game. The Pocket TTS integration has been tested on Windows with real CPU synthesis and Go audio playback. Race extraction, including asynchronous display/model lookup, is covered by Lua API doubles; display/model identification should still be checked in-game with `/fdb npc`; NPCs whose race is unavailable use the configured fallback. If a later beta marks the addon out of date, inspect `/fdb status` before updating the TOC.
+The release contains one application executable plus ONNX Runtime libraries, ONNX models, and `.safetensors` voices. It is not a single statically linked binary. Desktop capture/playback remain Windows-only; the native voice-test tool also runs on Linux/macOS.
 
 ### Streaming speech
 
-Rebuild the Go companion and restart `Start-ForeverDubbed.cmd` after updating both the companion and the `tts/` helper files. No new models or Python dependencies are required. An older running helper must be stopped before restarting.
+Streaming is always enabled. The first decoded PCM is queued immediately; generation and playback use bounded buffers. New dialogue stops playback and cancels native generation. The model is reused after its workers finish, preserving safe voice changes.
 
-The speech helper exposes `/stream`, `/health`, and `/cancel`; the former full-WAV `/synthesize` endpoint has been removed. The helper sends mono 16-bit PCM as Pocket TTS decodes it. The companion queues a bounded number of audio buffers on one Windows playback device, including across text chunks. Changing dialogue stops and clears queued playback immediately. Pocket TTS 3.1.0 still finishes the active short generation before starting another request, discarding cancelled audio to keep model state safe.
-
-The TTS log records `first audio in ...s` for each text chunk. This measures the helper's time to its first emitted audio, not capture/transport delay or speaker output latency.
+Generate clips and measure first-audio latency with `go run -tags pocket_native ./tools/voicecheck`. Samples and the timing report go to `.runtime/voice-samples/`. These times measure PCM availability after model loading, not screen capture or speaker latency.
 
 ## What it reads
 
@@ -78,7 +76,7 @@ Run these in PowerShell from the directory containing the executable:
 .\foreverdubbed.exe -version
 ```
 
-Pocket TTS is the default (`-tts pocket`; `-tts local` is an alias). Use the launcher for normal operation; invoking the EXE directly requires the helper to already be running. `-voices` lists profile IDs and the associated Pocket preset without starting the model. `-voice orc_male` forces one profile for every speaker. `-tts sapi -voices` lists installed Windows SAPI voices; `-rate -10..10` applies only to SAPI.
+Pocket TTS is the default (`-tts pocket`; `-tts local` is an alias). The EXE loads the native engine automatically; no launcher or service is required. `-voices` lists profile IDs and the associated Pocket preset without starting the model. `-voice orc_male` forces one profile for every speaker. `-tts sapi -voices` lists installed Windows SAPI voices; `-rate -10..10` applies only to SAPI.
 
 To hear a voice without opening WoW, run from the project/bundle root:
 
@@ -89,22 +87,7 @@ To hear a voice without opening WoW, run from the project/bundle root:
 
 ### Race and gender voices
 
-Edit `tts/voices.json` and restart the launcher. The table below lists the built-in preset assignments; locally cloned voices can replace individual profiles. These presets are ordinary speech voices, not custom fantasy performances. Skyborne and Blood Elves share the Night Elf presets; Draenei share the Tauren presets. There are 24 race/gender profiles plus a narrator fallback, originally using 18 distinct presets:
-
-| Race | Male preset | Female preset |
-| --- | --- | --- |
-| Human | marius | alba |
-| Orc | javert | cosette |
-| Dwarf | george | anna |
-| Night Elf | charles | fantine |
-| Undead | paul | eponine |
-| Tauren | jean | mary |
-| Gnome | michael | azelma |
-| Troll | peter_yearsley | eve |
-| Skyborne | charles | fantine |
-| Goblin | stuart_bell | jane |
-| Blood Elf | charles | fantine |
-| Draenei | jean | mary |
+Edit `tts/voices.json` and restart the companion. The 25 race/gender profiles currently use 13 custom states plus eight distinct presets. `-voices` lists the exact current assignments. Custom states live under `tts/custom/`; preset states live under `native/presets/` in a release. Optional `decode_steps` settings are preserved by the native engine.
 
 Selection order is `-voice`, `npc_overrides`, race/gender, then `default`. Each race has an explicit `unknown` gender fallback. Missing, empty, or unmapped races use the custom narrator for every gender, through the existing `narrator_male` profile ID. This profile uses `custom/narrator_male.safetensors` with two decoding steps. Recognized races keep their configured race/gender voices; explicit voice and NPC overrides still take precedence. The narrator fallback is separate from the Human profiles, so you can change it independently. For example, `"npc_overrides": {"4949": "orc_male"}` assigns that NPC the Orc male profile. The JSON output includes `race`, `gender`, and `npc_id` when available.
 
@@ -114,17 +97,13 @@ A model identifies appearance, which may differ from lore race: an elf model alo
 
 Ambient chat uses public sender GUIDs and confirmed NPC-ID mappings, exact matches to accessible units, or the recent identity cache; it does not guess from NPC names. Secret API values are skipped. `/fdb status` shows the last transmitted NPC's race and whether it came from the API, a lookup, an override, or model appearance.
 
-Pocket speech reads the quest title and text without announcing the speaker's name. Long passages are split into short chunks, with synthesis ahead of playback. New dialogue immediately cancels playback and discards stale audio. Pocket TTS 3.1.0 has no supported generation cancellation API, so its current short chunk finishes before the next synthesis can run.
+Pocket speech reads the quest title and text without announcing the speaker's name. Long passages are split into short chunks, with synthesis ahead of playback. New dialogue immediately cancels playback and discards stale audio. Native generation checks cancellation between chunks and joins its workers before the next request.
 
 ### Local runtime and custom voices
 
-The service binds only to `127.0.0.1:8765`; game text is never sent to an online TTS service. Startup and synthesis run with Hugging Face offline mode. Logs and the setup sample WAV are in `.runtime/pocket/`. The launcher owns and stops the helper process tree it creates; it leaves an already-running compatible helper alone. If you change the voice config, close the existing launcher and its helper before starting a new instance. The configuration is loaded at startup; opening a second launcher does not refresh the first helper.
+PocketTTS.cpp and ONNX Runtime run inside the Go process. The app performs no network requests during synthesis. It loads and verifies the pinned April English models and restores existing voice states directly. `-native-dir` selects the model/preset folder; `-models-dir` optionally overrides its `models/` subfolder. `-cpu-threads` sets the native inference budget (default 1).
 
-The default setup uses the public preset model, so no Hugging Face login is required. For custom voices, `tts/clone_voice.py` accepts WAV or MP3 recordings from `audio_clips/`, prepares reference excerpts, exports reusable `.safetensors` voice states, and generates preview dialogue before optionally assigning profiles. Export requires access to Kyutai's cloning-enabled model; audio processing and synthesis remain local. See [the voice cloning guide](docs/VOICE_CLONING.md) for the Human and Night Elf commands, mixed audio formats, and manual excerpt selection. Profiles also accept local `.wav` or `.safetensors` paths relative to `voices.json`. Voice states must match the selected model (`english_2026-04`). After adding a preset, rerun setup to cache it before offline use.
-
-Upstream documentation: [Pocket TTS](https://github.com/kyutai-labs/pocket-tts), [Python API](https://github.com/kyutai-labs/pocket-tts/blob/main/docs/API%20Reference/python-api.md), and [preset voice sources/licenses](https://huggingface.co/kyutai/tts-voices).
-
-Finished `tts/custom/*.safetensors` voice states can be committed alongside `tts/voices.json` and are included in Windows bundles when referenced by that configuration. Source recordings, previews, local backups, credentials, and base-model downloads remain Git-ignored. A fresh checkout still needs the normal Pocket TTS setup; reference recordings and export metadata are not required to play the saved voices.
+Python remains under `tools/voices/` only for optional custom-voice export. See [the voice export guide](docs/VOICE_CLONING.md). Profiles use presets or `.safetensors` paths; raw recordings must be exported before use. Base models, recordings, previews, and developer environments remain Git-ignored. Only configured custom voice states are packaged.
 
 Decoded messages are printed as one JSON object per line on stdout. Discovery and speech diagnostics go to stderr. To save text without speech:
 
@@ -140,9 +119,9 @@ For a diagnostic screenshot, explicitly run `.\foreverdubbed.exe -snapshot captu
 
 - **No square:** `/fdb on`, `/fdb reset`, then `/fdb test`. Check `/fdb status` and that the addon appears in WoW's AddOns list. `/console scriptErrors 1` enables Lua error reporting.
 - **Square visible but not found:** check that both the addon and companion were updated, and `/fdb status` reports addon 0.3.2. Try `/fdb unlock` and `/fdb cell 2`, move the mouse away, and ensure the entire border is visible. Test in borderless/windowed mode. The reader reports whether there was no finder pattern or whether a candidate failed its palette, border, or checksum checks. If needed, try `/fdb cell 3` or save a diagnostic PNG. The palette is calibrated from the screen, but severe HDR/color filters, blur, or clipped colors can still prevent reading. The decoder supports integer cell sizes of 2–8 desktop pixels; externally scaling or compressing the game image can prevent decoding.
-- **Found but no speech:** launch using `Start-ForeverDubbed.cmd`, check `.runtime/pocket/server-errors.log`, and test with `-speak-test`. Ensure `-mute` is absent and check Windows' default audio output. `-tts sapi` bypasses Pocket TTS for comparison.
-- **“An existing Pocket TTS helper uses different voices”:** the running helper has an older copy of `tts/voices.json`. Close the original launcher with Ctrl+C, then reopen it. If you started `tts/server.py` manually, stop that server too. The launcher checks the full configuration and does not reload an existing helper automatically.
-- **Missing local model/voice:** rerun `Setup-PocketTTS.cmd` while online, then restart the launcher. The helper intentionally cannot download missing files during play.
+- **Found but no speech:** run the companion from a terminal to see native engine errors, and test with `-speak-test`. Ensure `-mute` is absent and check Windows' default audio output. `-tts sapi` bypasses Pocket TTS for comparison.
+- **Native runtime missing:** extract the complete release with ONNX Runtime DLLs beside the executable. Source builds require `go run ./tools/native`, followed by `go run ./tools/build`. Windows may need the Microsoft Visual C++ x64 redistributable for ONNX Runtime.
+- **Missing/checksum-mismatched model or preset:** run `go run ./tools/models` in a checkout. Custom states must exist at their configured paths. Model files from another checkpoint are not interchangeable.
 - **Square disappears:** normal after the transmission timeout; `/fdb test` sends again. `/fdb unlock` keeps it displayed during setup.
 - **Long text takes time:** each page carries 1,124 bytes and lasts 250 ms. A 2 KB message needs two pages, or 0.5 seconds per cycle, plus discovery and TTS startup. Missed pages are recovered on later cycles. Text is spoken only after every page passes validation.
 - **Changing quest screens interrupts narration:** intentional latest-message behavior. Ambient NPC speech can also interrupt; toggle it with `/fdb chat`.
@@ -153,38 +132,26 @@ There is no forward error correction. Per-page and whole-message Adler-32 checks
 
 ## Build and test
 
-The Go executable requires Go 1.22 or newer to build and has no third-party Go dependencies. Lua 5.1 or newer is needed for the optional cross-language/addon smoke tests, not for building the companion or using the addon.
-
-```powershell
-go test ./...
-go vet ./...
-$env:LUA = "C:\path\to\lua.exe"
-go test ./... -count=1
-go build -buildvcs=false -trimpath -o dist/foreverdubbed.exe ./cmd/foreverdubbed
-```
-
-After installing Pocket TTS, run the helper tests separately. They use a mocked model and do not download weights or play audio:
-
-```powershell
-.\.runtime\pocket-env\Scripts\python.exe -m unittest discover -s tts -p "test_*.py"
-```
-
-Build and package from **Windows, macOS, or Linux**, using only Go (no PowerShell or Python required for the build):
+The Go code requires Go 1.22+. Building embedded PocketTTS additionally requires CMake, Git, and C/C++17 compilers. Runtime dependencies are native libraries and data files, not Python. [Native build documentation](native/README.md) describes pinned dependencies, model checksums, and export compatibility.
 
 ```sh
+go test ./...
+go vet ./...
+go run ./tools/native
+go run ./tools/models
 go run ./tools/build
 ```
 
-Run from the repository root with Go configured for the host OS; do not set `GOOS=windows` on this command when building from macOS/Linux. The tool runs tests and vet on the host, then cross-compiles the Windows/amd64 companion and creates `dist/foreverdubbed.exe`, `dist/ForeverDubbed-addon.zip`, and `dist/ForeverDubbed-windows-amd64.zip`. The existing `scripts/build.ps1` delegates to the same tool.
+`tools/build` runs on any host and produces the Windows/amd64 release. Supply `-native-dir <directory>` containing Windows x64 DLLs and the downloaded assets when cross-compiling, and configure `CC`/`CXX` for the target. Prepare matching dependencies in `.runtime/sdk/windows_amd64` first. It rejects missing or wrong-architecture libraries. `scripts/build.ps1` delegates to this Go tool.
 
-Packaging includes only the local voice files referenced by `tts/voices.json`; missing, unfinished, or out-of-directory voice files fail the build. ZIP paths and contents use the same layout on every host. The app's live capture, playback, setup, and launcher remain Windows-only; this change makes the **build host** portable. Python and Pocket TTS are still installed separately by the Windows setup launcher.
-
-Optional checks on a Unix build host:
+Real native speech checks (no game or audio device required):
 
 ```sh
-LUA=/path/to/lua go test -race ./...
-python3 -m unittest discover -s tests -p 'test_*.py'
+go run -tags pocket_native ./tools/voicecheck
+go run -tags pocket_native ./tools/voicecheck -voice undead_male
 ```
+
+Speech commands require `CGO_ENABLED=1`, C/C++ compilers, and ONNX Runtime on the OS library search path (see [native instructions](native/README.md)); live desktop capture/playback are not implemented there. The model-free Go tests run without native libraries. Python export-tool tests are optional: `python -m unittest discover -s tools/voices -p 'test_*.py'`. Lua 5.1+ enables additional addon compatibility tests through `LUA=/path/to/lua`.
 
 The portable decoder can read PNGs on any OS. For a paged message, supply one unmodified screenshot of each distinct page, in any order:
 
@@ -192,6 +159,6 @@ The portable decoder can read PNGs on any OS. For a paged message, supply one un
 go run ./cmd/foreverdubbed -image page1.png,page2.png,page3.png
 ```
 
-Tests cover voice routing and overrides, cancellation, HTTP service identity/config checks, streamed PCM validation and bounded playback, speaker metadata, the Lua/Go byte and palette contract, Unicode spanning pages, out-of-order/duplicate pages, session changes, sequence wraparound, invalid dimensions, corruption, gamma/tint/noise transforms, damaged reference swatches, moved tiles, negative monitor coordinates, missing NPC races, display lookup precedence, model-load timing and stale identities, saved race assignments, settings migration, physical pixel sizing at multiple resolutions/UI scales, and all supported cell sizes. Lua tests use mocked game APIs; they do not substitute for testing the real client. Tests explicitly skip the Lua checks if an interpreter is unavailable.
+Tests cover voice routing and overrides, cancellation, native voice selection and errors, streamed PCM validation and bounded playback, speaker metadata, the Lua/Go byte and palette contract, Unicode spanning pages, out-of-order/duplicate pages, session changes, sequence wraparound, invalid dimensions, corruption, gamma/tint/noise transforms, damaged reference swatches, moved tiles, negative monitor coordinates, missing NPC races, display lookup precedence, model-load timing and stale identities, saved race assignments, settings migration, physical pixel sizing at multiple resolutions/UI scales, and all supported cell sizes. Lua tests use mocked game APIs; they do not substitute for testing the real client. Tests explicitly skip the Lua checks if an interpreter is unavailable.
 
 See [PROTOCOL.md](PROTOCOL.md) for the wire format. API references used: [Forever gossip API source](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_APIDocumentationGenerated/GossipInfoDocumentation.lua), [Forever quest UI source](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_UIPanels_Game/Mainline/QuestFrame.lua), [Windows BitBlt](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-bitblt), and [SpeechSynthesizer.Speak](https://learn.microsoft.com/en-us/dotnet/api/system.speech.synthesis.speechsynthesizer.speak?view=netframework-4.8.1).

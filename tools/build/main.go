@@ -3,8 +3,11 @@ package main
 
 import (
 	"archive/zip"
+	"debug/pe"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"foreverdubbed/internal/pocket"
 	"io"
 	"io/fs"
 	"os"
@@ -21,11 +24,7 @@ import (
 const targetOS, targetArch = "windows", "amd64"
 
 var runtimeFiles = []string{
-	"README.md", "PROTOCOL.md", "CHANGELOG.md",
-	"Start-ForeverDubbed.cmd", "Setup-PocketTTS.cmd",
-	"tts/server.py", "tts/engine.py", "tts/runtime.py", "tts/prepare.py",
-	"tts/check_runtime.py", "tts/clone_voice.py", "tts/requirements.txt", "tts/voices.json",
-	"scripts/start.ps1", "scripts/setup-tts.ps1",
+	"README.md", "PROTOCOL.md", "CHANGELOG.md", "native/README.md", "Start-ForeverDubbed.cmd", "tts/voices.json",
 }
 
 func main() {
@@ -36,8 +35,10 @@ func main() {
 }
 
 func build() error {
-	if len(os.Args) != 1 {
-		return fmt.Errorf("usage: go run ./tools/build")
+	nativeDir := flag.String("native-dir", ".runtime/native", "Windows x64 ONNX Runtime, models, and presets directory")
+	flag.Parse()
+	if flag.NArg() != 0 {
+		return fmt.Errorf("usage: go run ./tools/build [-native-dir path]")
 	}
 	root, err := repositoryRoot()
 	if err != nil {
@@ -45,6 +46,9 @@ func build() error {
 	}
 	bundle, addon, err := packageFiles(root)
 	if err != nil {
+		return err
+	}
+	if err := addNativeFiles(bundle, *nativeDir); err != nil {
 		return err
 	}
 	hostEnv := buildEnv(os.Environ(), runtime.GOOS, runtime.GOARCH)
@@ -58,8 +62,23 @@ func build() error {
 	if err := os.MkdirAll(dist, 0755); err != nil {
 		return err
 	}
+	// Keep the development executable runnable outside the ZIP too.
+	for name, source := range bundle {
+		if filepath.Ext(name) != ".dll" || filepath.Dir(name) != "." {
+			continue
+		}
+		data, err := os.ReadFile(source)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dist, name), data, 0644); err != nil {
+			return err
+		}
+	}
 	binary := filepath.Join(dist, "foreverdubbed.exe")
-	if err := run(root, buildEnv(os.Environ(), targetOS, targetArch), "build", "-buildvcs=false", "-trimpath", "-o", binary, "./cmd/foreverdubbed"); err != nil {
+	nativeEnv := buildEnv(os.Environ(), targetOS, targetArch)
+	nativeEnv[len(nativeEnv)-1] = "CGO_ENABLED=1"
+	if err := run(root, nativeEnv, "build", "-tags", "pocket_native", "-buildvcs=false", "-trimpath", "-o", binary, "./cmd/foreverdubbed"); err != nil {
 		return err
 	}
 	bundle["foreverdubbed.exe"] = binary
@@ -269,4 +288,45 @@ func addFile(archive *zip.Writer, name, source string) error {
 	}
 	_, err = io.Copy(entry, input)
 	return err
+}
+
+func addNativeFiles(bundle map[string]string, dir string) error {
+	for _, name := range []string{"onnxruntime.dll"} {
+		filename := filepath.Join(dir, name)
+		image, err := pe.Open(filename)
+		if err != nil {
+			return fmt.Errorf("need Windows x64 native runtime at %s (build with go run ./tools/native on Windows, or pass -native-dir): %w", dir, err)
+		}
+		machine := image.Machine
+		image.Close()
+		if machine != pe.IMAGE_FILE_MACHINE_AMD64 {
+			return fmt.Errorf("%s is not a Windows x64 library", filename)
+		}
+		bundle[name] = filename
+	}
+	// ONNX Runtime must be beside the executable for Windows loader startup.
+	// Include any supplied compiler runtime DLLs, but ignore the old PocketTTS bridge.
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && !strings.EqualFold(entry.Name(), "foreverdubbed_tts.dll") && strings.EqualFold(filepath.Ext(entry.Name()), ".dll") {
+			bundle[entry.Name()] = filepath.Join(dir, entry.Name())
+		}
+	}
+	for _, asset := range pocket.Assets() {
+		if err := pocket.VerifyAsset(dir, asset); err != nil {
+			return fmt.Errorf("native assets: %w", err)
+		}
+		bundle["native/"+asset.Path] = filepath.Join(dir, filepath.FromSlash(asset.Path))
+	}
+	for _, name := range []string{"PocketTTS.cpp.txt", "ONNX-Runtime.txt", "SentencePiece.txt", "nlohmann-json.txt", "dr_libs.txt"} {
+		source := filepath.Join(dir, "licenses", name)
+		if err := regularFile(source); err != nil {
+			return err
+		}
+		bundle["native/licenses/"+name] = source
+	}
+	return nil
 }
