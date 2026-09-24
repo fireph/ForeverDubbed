@@ -1,6 +1,6 @@
 # macOS companion
 
-The macOS companion targets macOS 14 Sonoma or newer, on Apple Silicon (`arm64`) or Intel (`amd64`). It uses ScreenCaptureKit to capture only the game window for the optical tile and AudioQueue for streamed PocketTTS audio. `-tts system` uses the installed macOS voices through `say`. Windows continues to support PocketTTS and `-tts sapi` (also available as `-tts system`).
+The macOS release targets macOS 14 Sonoma or newer on Apple Silicon (`arm64`). Local source builds also support Intel (`amd64`). It uses ScreenCaptureKit to capture only the game window for the optical tile and AudioQueue for streamed PocketTTS audio. `-tts system` uses the installed macOS voices through `say`. Windows continues to support PocketTTS and `-tts sapi` (also available as `-tts system`).
 
 ## Build macOS releases on Linux
 
@@ -69,9 +69,31 @@ The designated requirement should contain `io.foreverdubbed.companion` and a cer
 
 ## GitHub Actions
 
-[The macOS workflow](../.github/workflows/macos.yml) builds both architectures on `ubuntu-24.04`, runs the portable Go tests/vet, caches the pinned OSXCross toolchain, and uploads the two release ZIPs. It runs for pull requests, pushes to `main`, and manual dispatch. Pushes and manual runs sign with the `FDB_MACOS_SIGNING_PEM` Actions repository secret. Set its value to the entire contents of the existing `.runtime/macos-signing/identity.pem`, including both PEM blocks. The workflow installs only the signer, writes the identity to a restricted temporary file for the build, and removes that file on step exit, including after a build failure. A missing secret fails the signed build instead of silently switching identities. Pull-request builds never receive the secret: they explicitly use `-mac-unsigned` and label their artifacts with `-unsigned`. Those test artifacts are not permission-preserving updates to the signed app. It does not publish releases or run macOS executables on Linux. Native screen/audio behavior must be checked on a Mac.
+[The build and release workflow](../.github/workflows/build.yml) builds the macOS Apple Silicon app and the Windows x64 ZIP in parallel on `ubuntu-24.04`. It runs for pull requests, pushes to `main`, version-tag pushes, and manual dispatch. The macOS build job runs the portable Go tests/vet and GUI tests and caches the pinned OSXCross toolchain. The Windows job uses MinGW-w64 and the existing Go packager, which also runs tests/vet.
 
-The workflow uses Go 1.27.1 and matching LLVM 18 packages. It adds LLVM's `bin` directory to `GITHUB_PATH` before toolchain setup or cache restore, so subsequent steps can find `ld64.lld` and the other LLVM tools. Download the `ForeverDubbed-darwin-arm64` (Apple Silicon) or `ForeverDubbed-darwin-amd64` (Intel) artifact from a push or manual workflow run for its signed release ZIP. Pull-request artifacts have an additional `-unsigned` suffix.
+After the macOS build succeeds, a dependent job on `macos-14` unpacks the app ZIP, verifies the signed app with Apple's `codesign`, and creates and verifies a compressed DMG with `hdiutil`. The disk image includes the app, an Applications shortcut, documentation, and the addon. The macOS ZIP is an intermediate build artifact; the macOS release download is a `.dmg` file.
+
+Pushes and manual runs sign with the `FDB_MACOS_SIGNING_PEM` Actions repository secret. Set its value to the entire contents of the existing `.runtime/macos-signing/identity.pem`, including both PEM blocks. The workflow installs only the signer, writes the identity to a restricted temporary file for the build, and removes that file on step exit, including after a build failure. A missing secret fails the signed build instead of silently switching identities. Pull-request builds never receive the secret: they explicitly use `-mac-unsigned` and label their artifacts with `-unsigned`. Those test artifacts are not permission-preserving updates to the signed app.
+
+Only a pushed version tag in the exact `vMAJOR.MINOR.PATCH` format, such as `v0.5.1`, publishes a GitHub release. Once both platform builds and DMG packaging succeed, the final job validates the tag and all expected downloads, generates SHA-256 checksums, and creates a release for that tag. It uploads the files while the release is a draft, then publishes it as the latest release. Pushes to `main`, pull requests, and manual runs only upload workflow artifacts. No additional release token is needed: only the final job grants `contents: write` to the workflow token.
+
+The release contains:
+
+- `ForeverDubbed-darwin-arm64.dmg` for Apple Silicon.
+- `ForeverDubbed-windows-amd64.zip` for Windows x64.
+- `ForeverDubbed-addon.zip` for the standalone addon.
+- `SHA256SUMS.txt` for download verification.
+
+To publish a version, push its tag after the changes are committed and pushed:
+
+```sh
+git tag v0.5.1
+git push origin v0.5.1
+```
+
+Use an unused version number for each release. The workflow refuses to overwrite an existing release. If uploading or publishing fails after draft creation, inspect and remove the incomplete draft before rerunning the release job.
+
+The workflow uses Go 1.27.1 and matching LLVM 18 packages. It adds LLVM's `bin` directory to `GITHUB_PATH` before toolchain setup or cache restore, so subsequent steps can find `ld64.lld` and the other LLVM tools. Download the `release-darwin-arm64` or `release-windows-amd64` artifact from a push or manual workflow run for builds without a release. Pull-request macOS artifacts have an additional `-unsigned` suffix. Native screen/audio behavior still needs checking on a Mac or Windows PC.
 
 ## Build directly on a Mac
 
@@ -89,7 +111,7 @@ The default architecture matches the Mac. The resulting release ZIP has the same
 
 ## Run and grant capture permission
 
-Extract the ZIP, move **ForeverDubbed.app** to Applications if desired, and double-click it. No terminal or external runtime folder is required. The addon remains beside the app in the ZIP; install it into the game separately.
+Open the release DMG and drag **ForeverDubbed.app** to Applications, then double-click the installed app. For a locally built ZIP, extract it first. No terminal or external runtime folder is required. The addon remains beside the app in the download; install it into the game separately.
 
 On the first capture attempt, allow **Screen Recording** (called **Screen & System Audio Recording** on some versions) for **ForeverDubbed** under **System Settings → Privacy & Security**. Quit using the tray menu and reopen the app after granting access. Keep WoW visible and use `/fdb unlock` to display the tile.
 

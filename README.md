@@ -10,9 +10,9 @@ See [CHANGELOG.md](CHANGELOG.md) for earlier releases and [PROTOCOL.md](PROTOCOL
 
 ## Quick start on macOS
 
-Requires macOS 14+ on Apple Silicon or Intel. Choose `ForeverDubbed-darwin-arm64.zip` for Apple Silicon or `ForeverDubbed-darwin-amd64.zip` for Intel, then extract the ZIP.
+The macOS release requires macOS 14+ on Apple Silicon. Download `ForeverDubbed-darwin-arm64.dmg` and open the disk image.
 
-Drag **ForeverDubbed.app** to Applications (or keep it in the extracted folder) and double-click it. The app includes its speech libraries, models, and voices; no Terminal, Go, or compiler tools are needed. The addon is included separately in the ZIP.
+Drag **ForeverDubbed.app** to Applications and double-click it. The app includes its speech libraries, models, and voices; no Terminal, Go, or compiler tools are needed. The addon is included separately in the disk image and as `ForeverDubbed-addon.zip` on the release.
 
 Grant **Screen Recording** permission under **System Settings → Privacy & Security**, then quit and reopen ForeverDubbed if needed. Capture is limited to the **World of Warcraft Beta.app** game window; it waits when the game is unavailable and never falls back to the desktop.
 
