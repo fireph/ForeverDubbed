@@ -78,17 +78,32 @@ The square remains visible for at least 15 seconds after text arrives, or three 
 
 | Command | Behavior |
 | --- | --- |
+| `/fdb stop` / `/fdb skip` | Interrupt current audio; advance waiting dialogue in queue mode |
 | `/fdb test` | Display and speak a connection test |
 | `/fdb unlock` | Show a test square and allow dragging |
 | `/fdb lock` | Save/use the position with mouse input disabled |
 | `/fdb cell 2` | Set cell size to 2–8 physical pixels; default 2 |
 | `/fdb reset` | Move back near the top-left corner |
 | `/fdb chat` | Toggle ambient NPC/boss dialogue |
-| `/fdb off` / `/fdb on` | Disable/enable transmission |
+| `/fdb off` / `/fdb on` | Disable/enable automatic dialogue transmission |
 | `/fdb status` | Print version, settings, and last transmitted NPC identity/source |
 | `/fdb npc` | Inspect the dialog/target NPC: race, source, gender, NPC ID, display ID, and model file ID |
 | `/fdb race Skyborne` | Save a race override for the dialog/target NPC ID; reopen dialog to resend |
 | `/fdb race clear` | Remove that NPC’s saved race override |
+
+The minimap book button controls the companion: **left-click to Skip**,
+**right-click to Stop**, and **drag** to move it around the minimap. Its position
+is saved with the addon settings. In WoW's **Key Bindings** UI, find
+**ForeverDubbed** and assign **Stop current audio** and **Skip current audio**;
+neither has a default shortcut.
+
+Both commands interrupt the current message. If queue mode has messages waiting,
+the next message plays, matching the desktop controls. The addon cannot read
+playback status, so these controls are always available. The companion must be
+running and able to capture the data square; commands briefly show the square
+even after it has hidden or automatic dialogue has been turned off.
+Update **both** the addon and companion for these controls, then restart WoW
+after installing the new keybindings file.
 
 ## Companion controls
 

@@ -10,4 +10,5 @@ Codec.lua
 Races.lua
 DisplayRaces.lua
 Speakers.lua
+Controls.lua
 ForeverDubbed.lua

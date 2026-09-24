@@ -123,14 +123,22 @@ func TestSpeechQueueAndModeChange(t *testing.T) {
 			} else {
 				complete <- struct{}{}
 				expect("second")
-				state.StopAudio()
+				select {
+				case requests <- protocol.Message{Kind: protocol.KindSkip}:
+				case <-ctx.Done():
+					t.Fatal("skip command blocked")
+				}
 				expect("third")
 			}
 			if v := state.Snapshot(); v.Queued != 0 || v.SpeechError != "" {
 				t.Fatal(v)
 			}
 			// Skipping the last message should leave playback idle.
-			state.StopAudio()
+			select {
+			case requests <- protocol.Message{Kind: protocol.KindStop}:
+			case <-ctx.Done():
+				t.Fatal("stop command blocked")
+			}
 			for state.Snapshot().PlaybackID != 0 {
 				select {
 				case <-ctx.Done():

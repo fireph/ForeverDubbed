@@ -254,7 +254,9 @@ func run() error {
 					log.Printf("Discarding message: %v", assemblyErr)
 				}
 				if m != nil {
-					state.Received(*m)
+					if !m.IsControl() {
+						state.Received(*m)
+					}
 					if !guiMode {
 						if err := output.Encode(m); err != nil {
 							return err
@@ -382,6 +384,12 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 		case message, ok := <-requests:
 			if !ok {
 				requests = nil
+				continue
+			}
+			if message.IsControl() {
+				// Controls bypass queue mode. Cancelling the current utterance
+				// advances any pending dialogue, just like the desktop buttons.
+				stopCurrent()
 				continue
 			}
 			if state.Snapshot().QueueSpeech && finished != nil {

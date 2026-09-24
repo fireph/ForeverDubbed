@@ -43,3 +43,25 @@ For runtime validation, check startup errors, game absent/present, tile found/lo
 ### Quest-dialog styling
 
 The desktop UI uses a parchment reading area, textured dark frame, gold headings, and red beveled controls inspired by the classic WoW quest dialog. The frame and paper are drawn locally and scale with the window; they do not use extracted game textures. The bundled regular, bold, and italic [Caudex fonts](https://github.com/google/fonts/tree/main/ofl/caudex) provide consistent serif typography on both platforms. Their [SIL Open Font License](licenses/Caudex-OFL.txt) ships with the release and inside the macOS app's `Contents/Resources/licenses` directory. Theme and decorative drawing code live in `internal/desktop/quest_theme.go`; state and interaction behavior remain in the existing dashboard and app controller.
+
+
+## Addon playback controls
+
+FDB5 kinds 7 (Stop) and 8 (Skip) carry three empty string fields and no voice
+metadata. They share the dialogue session/sequence counter and assembler
+deduplication, so repeated captures execute a command once. The speech worker
+handles controls before queueing or synthesis; both cancel the current utterance
+and let the existing queue advance, matching the desktop controls. A control
+does not replace the displayed last-dialogue metadata.
+
+Control frames replace older dialogue immediately, cancel unresolved speaker
+lookups, and stay on screen for up to 15 seconds. For the first 1.5 seconds,
+new dialogue is deferred (only the latest is retained). This gives the default
+one-second discovery scan a chance to receive the command. There is no
+acknowledgment channel: obscured tiles, unusually slow scanning, and commands
+overwritten by later commands can still prevent delivery.
+
+WoW loads the addon's root `Bindings.xml` automatically. `Controls.lua` supplies
+the binding labels/functions and minimap button; its saved angle lives in
+`ForeverDubbedDB.minimapAngle`. Tests cover click routing, drag suppression and
+persistence, control priority, late identity callbacks, and duplicate frames.

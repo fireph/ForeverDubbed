@@ -18,6 +18,7 @@ local WAVE_SECONDS = 1 / 15
 local wavePhase, waveElapsed = 0, 0
 local VERSION = "0.5.0"
 local requestID, lastSpeaker = 0, nil
+local controlUntil, deferredDialogue = 0, nil
 local drawnColors, pageValues = {}, {}
 local drawnFrame, drawnPhase
 local colors = {}
@@ -125,6 +126,10 @@ end
 
 local function publishReady(kind, speaker, title, text, info)
     if not ready or not ForeverDubbedDB.enabled then return end
+    if GetTime() < controlUntil then
+        deferredDialogue = {kind, speaker, title, text, info}
+        return
+    end
     speaker, title, text = clean(speaker), clean(title), clean(text)
     if text == "" then return end
     info = info or {}
@@ -140,6 +145,20 @@ local function publishReady(kind, speaker, title, text, info)
     -- Keep sending after a dialog closes so slow captures can finish. New text
     -- replaces old text immediately; this is a latest-dialog transport.
     expires = GetTime() + math.max(15, #pages * PAGE_SECONDS * 3)
+    draw()
+end
+
+-- Commands use the normal checksummed transport and sequence deduplication.
+-- Hold them briefly so a new NPC event cannot overwrite them before capture.
+function NS.Control(action)
+    if not ready or (action ~= "stop" and action ~= "skip") then return end
+    local now = GetTime()
+    requestID = requestID + 1 -- cancel unresolved older NPC identities
+    deferredDialogue = nil
+    sequence = (sequence + 1) % 4294967296
+    pages = Codec.Encode(session, sequence, action == "stop" and 7 or 8, "", "", "")
+    page, elapsed = 1, 0
+    controlUntil, expires = now + 1.5, now + 15
     draw()
 end
 
@@ -178,6 +197,11 @@ frame:SetScript("OnDragStop", function(self)
 end)
 
 frame:SetScript("OnUpdate", function(_, dt)
+    if deferredDialogue and GetTime() >= controlUntil then
+        local dialogue = deferredDialogue
+        deferredDialogue = nil
+        publishReady(unpack(dialogue))
+    end
     if not pages then return end
     if GetTime() > expires and ForeverDubbedDB.locked then frame:Hide(); return end
     elapsed = elapsed + dt
@@ -224,6 +248,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         if db.locked == nil then db.locked = true end
         ready = true
         place()
+        NS.Controls.Init(db)
         for _, e in ipairs({"GOSSIP_SHOW", "QUEST_GREETING", "QUEST_DETAIL", "QUEST_PROGRESS", "QUEST_COMPLETE",
             "ITEM_TEXT_READY", "CHAT_MSG_MONSTER_SAY", "CHAT_MSG_MONSTER_YELL", "CHAT_MSG_MONSTER_WHISPER",
             "CHAT_MSG_MONSTER_EMOTE", "CHAT_MSG_RAID_BOSS_EMOTE", "CHAT_MSG_RAID_BOSS_WHISPER",
@@ -257,7 +282,9 @@ SlashCmdList.FOREVERDUBBED = function(input)
     cmd = cmd:lower()
     local db = ForeverDubbedDB
     if not ready then return end
-    if cmd == "test" or cmd == "unlock" then
+    if cmd == "stop" or cmd == "skip" then
+        NS.Control(cmd)
+    elseif cmd == "test" or cmd == "unlock" then
         if cmd == "unlock" then db.locked = false; place() end
         publish(0, "ForeverDubbed", "Connection test", "Welcome to ForeverDubbed. Quest and NPC dialogue will be read aloud here.")
         if cmd == "unlock" then printStatus("Drag the square, then /fdb lock. Hovering the pointer over it may interrupt capture.") end
@@ -270,7 +297,7 @@ SlashCmdList.FOREVERDUBBED = function(input)
         printStatus("Square is " .. (size * Codec.GRID + 2 * Codec.OUTLINE) .. " × " .. (size * Codec.GRID + 2 * Codec.OUTLINE) .. " physical pixels, " .. Codec.PAYLOAD .. " bytes per page.")
     elseif cmd == "on" or cmd == "off" then
         db.enabled = cmd == "on"
-        if not db.enabled then requestID = requestID + 1; pages = nil; frame:Hide() end
+        if not db.enabled then requestID = requestID + 1; deferredDialogue = nil; pages = nil; frame:Hide() end
         printStatus("Enabled: " .. tostring(db.enabled))
     elseif cmd == "chat" then
         db.chat = not db.chat; printStatus("NPC chat: " .. tostring(db.chat))
@@ -307,6 +334,6 @@ SlashCmdList.FOREVERDUBBED = function(input)
         printStatus("Last NPC: " .. (info.name or "") .. "; race: " .. (info.race or "") .. "; gender: " .. (info.gender or "") .. "; NPC ID: " .. (info.npcID or "")
             .. "; race source: " .. (info.raceSource or "unavailable"))
     else
-        printStatus("/fdb test | unlock | lock | cell 2–8 | chat | on | off | reset | npc | race NAME | status")
+        printStatus("/fdb stop | skip | test | unlock | lock | cell 2–8 | chat | on | off | reset | npc | race NAME | status")
     end
 end

@@ -13,13 +13,16 @@ import (
 )
 
 const (
-	Grid         = 50
-	DataGrid     = 48
-	WaveCells    = 136
-	FrameBytes   = (DataGrid*DataGrid - WaveCells) / 2
-	HeaderBytes  = 24
-	PayloadBytes = FrameBytes - HeaderBytes - 4
-	MaxPages     = 256
+	// Control kinds carry empty text and must never enter the speech queue.
+	KindStop     byte = 7
+	KindSkip     byte = 8
+	Grid              = 50
+	DataGrid          = 48
+	WaveCells         = 136
+	FrameBytes        = (DataGrid*DataGrid - WaveCells) / 2
+	HeaderBytes       = 24
+	PayloadBytes      = FrameBytes - HeaderBytes - 4
+	MaxPages          = 256
 )
 
 // Cosmetic noise for unused payload bytes, shared with the Lua encoder.
@@ -53,6 +56,8 @@ type Message struct {
 	Gender   string `json:"gender,omitempty"`
 	NPCID    string `json:"npc_id,omitempty"`
 }
+
+func (m Message) IsControl() bool { return m.Kind == KindStop || m.Kind == KindSkip }
 
 func (m Message) Speech() string {
 	parts := []string{}

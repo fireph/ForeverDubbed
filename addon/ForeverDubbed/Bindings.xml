@@ -1,0 +1,8 @@
+<Bindings>
+    <Binding name="FOREVERDUBBED_STOP" header="FOREVERDUBBED">
+        ForeverDubbed_StopAudio();
+    </Binding>
+    <Binding name="FOREVERDUBBED_SKIP">
+        ForeverDubbed_SkipAudio();
+    </Binding>
+</Bindings>

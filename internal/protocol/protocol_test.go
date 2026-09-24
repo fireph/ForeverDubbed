@@ -378,3 +378,27 @@ func TestMixedMetadataPagesRejected(t *testing.T) {
 		t.Fatal("accepted mixed field layouts")
 	}
 }
+
+func TestControlMessagesEmitOnce(t *testing.T) {
+	var assembler Assembler
+	for i, kind := range []byte{KindStop, KindSkip, KindSkip} {
+		frames, err := Encode(Message{Session: 12, Sequence: uint32(i + 1), Kind: kind})
+		if err != nil {
+			t.Fatal(err)
+		}
+		packet, err := Parse(frames[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		message, err := assembler.Add(packet, time.Now())
+		if err != nil || message == nil || !message.IsControl() || message.Speech() != "" {
+			t.Fatalf("invalid control: %+v %v", message, err)
+		}
+		for repeat := 0; repeat < 5; repeat++ {
+			duplicate, err := assembler.Add(packet, time.Now())
+			if err != nil || duplicate != nil {
+				t.Fatal("control repeated", duplicate, err)
+			}
+		}
+	}
+}

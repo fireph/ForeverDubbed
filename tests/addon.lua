@@ -27,7 +27,10 @@ function methods:GetEffectiveScale()
     local parent=rawget(self,"parent")
     return (rawget(self,"scale") or 1) * (parent and parent:GetEffectiveScale() or 1)
 end
-function methods:GetHeight() return 768/uiScale end
+function methods:GetHeight() if self == Minimap then return 160 end; return 768/uiScale end
+function methods:GetWidth() return 160 end
+function methods:GetFrameLevel() return 1 end
+function methods:GetCenter() return 100, 100 end
 function methods:GetLeft() return 20 end
 function methods:GetTop() return 900 end
 setmetatable(methods, {__index = function() return function() end end})
@@ -38,6 +41,10 @@ function CreateFrame(_, name, parent)
     return f
 end
 UIParent = CreateFrame("Frame")
+Minimap = CreateFrame("Frame", nil, UIParent)
+GameTooltip = setmetatable({}, {__index=methods})
+local cursorX, cursorY = 200, 100
+function GetCursorPosition() return cursorX, cursorY end
 DEFAULT_CHAT_FRAME = {AddMessage=function(_, text) messages[#messages+1]=text end}
 function time() return 12345 end
 function GetTime() return now end
@@ -60,6 +67,7 @@ assert(loadfile("addon/ForeverDubbed/Codec.lua"))("ForeverDubbed", ns)
 assert(loadfile("addon/ForeverDubbed/Races.lua"))("ForeverDubbed", ns)
 assert(loadfile("addon/ForeverDubbed/DisplayRaces.lua"))("ForeverDubbed", ns)
 assert(loadfile("addon/ForeverDubbed/Speakers.lua"))("ForeverDubbed", ns)
+assert(loadfile("addon/ForeverDubbed/Controls.lua"))("ForeverDubbed", ns)
 local actual, calls = ns.Codec.Encode, {}
 ns.Codec.Encode = function(...)
     calls[#calls+1] = {...}
@@ -244,4 +252,64 @@ assert(ns.Speakers.Chat(cachedGUID).race=="Orc")
 issecretvalue=function(v) return v=="Orc" or v==2 end
 local secret=ns.Speakers.ForUnit("npc")
 assert(secret.race=="" and secret.gender=="")
+-- Minimap and keybindings send control packets even with automatic dialogue off.
+local button = ForeverDubbedMinimapButton
+assert(button.visible and ForeverDubbedDB.minimapAngle == 225)
+assert(BINDING_HEADER_FOREVERDUBBED == "ForeverDubbed")
+SlashCmdList.FOREVERDUBBED("off")
+now = now + 1
+local before = #calls
+button.scripts.OnClick(button, "LeftButton")
+assert(#calls == before+1 and calls[#calls][3] == 8 and calls[#calls][6] == "")
+assert(tile.visible)
+local controlSequence = calls[#calls][2]
+for i=1,5 do tile.scripts.OnUpdate(tile, 0.1) end
+assert(#calls == before+1, "redrawing a control must not issue a fresh command")
+now = now + 1
+button.scripts.OnClick(button, "RightButton")
+assert(calls[#calls][3] == 7 and calls[#calls][2] == controlSequence+1)
+now = now + 1
+ForeverDubbed_SkipAudio()
+assert(calls[#calls][3] == 8)
+now = now + 1
+ForeverDubbed_StopAudio()
+assert(calls[#calls][3] == 7)
+-- Dragging saves the angle and does not dispatch a command on release.
+button.scripts.OnDragStart(button)
+button.scripts.OnUpdate(button)
+local angle = ForeverDubbedDB.minimapAngle
+assert(type(angle) == "number" and angle ~= 225)
+button.scripts.OnDragStop(button)
+before = #calls
+button.scripts.OnClick(button, "LeftButton")
+assert(#calls == before and not button.scripts.OnUpdate)
+ns.Controls.Init(ForeverDubbedDB)
+assert(ForeverDubbedDB.minimapAngle == angle)
+-- Fresh dialogue waits until a control has had a chance to be captured.
+SlashCmdList.FOREVERDUBBED("on")
+now = now + 1
+SlashCmdList.FOREVERDUBBED("skip")
+before = #calls
+events.scripts.OnEvent(events, "QUEST_DETAIL")
+assert(#calls == before and calls[#calls][3] == 8)
+now = now + 1.6
+tile.scripts.OnUpdate(tile, 0.1)
+assert(#calls == before+1 and calls[#calls][3] == 2)
+-- A late identity resolution cannot replace an explicit stop.
+pending = {}
+ns.Speakers.Resolve = function(info, cb) pending[#pending+1] = function() cb(info) end end
+events.scripts.OnEvent(events, "GOSSIP_SHOW")
+now = now + 1
+SlashCmdList.FOREVERDUBBED("stop")
+before = #calls
+pending[1]()
+assert(#calls == before and calls[#calls][3] == 7)
+-- Every invocation has a fresh ID, including identical commands in one tick.
+local sequence = calls[#calls][2]
+ForeverDubbed_StopAudio()
+assert(calls[#calls][2] == sequence+1 and calls[#calls][3] == 7)
+ForeverDubbed_StopAudio()
+assert(calls[#calls][2] == sequence+2 and calls[#calls][3] == 7)
+ForeverDubbed_SkipAudio()
+assert(calls[#calls][2] == sequence+3 and calls[#calls][3] == 8)
 print("Addon smoke tests passed")
