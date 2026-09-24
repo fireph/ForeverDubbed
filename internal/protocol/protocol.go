@@ -46,15 +46,19 @@ type Packet struct {
 }
 
 type Message struct {
-	Session  uint32 `json:"session"`
-	Sequence uint32 `json:"sequence"`
-	Kind     byte   `json:"kind"`
-	Speaker  string `json:"speaker"`
-	Title    string `json:"title"`
-	Text     string `json:"text"`
-	Race     string `json:"race,omitempty"`
-	Gender   string `json:"gender,omitempty"`
-	NPCID    string `json:"npc_id,omitempty"`
+	Session      uint32 `json:"session"`
+	Sequence     uint32 `json:"sequence"`
+	Kind         byte   `json:"kind"`
+	Speaker      string `json:"speaker"`
+	Title        string `json:"title"`
+	Text         string `json:"text"`
+	Race         string `json:"race,omitempty"`
+	Gender       string `json:"gender,omitempty"`
+	NPCID        string `json:"npc_id,omitempty"`
+	DisplayID    string `json:"display_id,omitempty"`
+	ModelID      string `json:"model_id,omitempty"`
+	RaceOverride string `json:"race_override,omitempty"`
+	RaceSource   string `json:"race_source,omitempty"` // Desktop diagnostic; not encoded.
 }
 
 func (m Message) IsControl() bool { return m.Kind == KindStop || m.Kind == KindSkip }
@@ -70,16 +74,20 @@ func (m Message) Speech() string {
 }
 
 func Encode(m Message) ([][]byte, error) {
-	for _, s := range []string{m.Speaker, m.Title, m.Text, m.Race, m.Gender, m.NPCID} {
+	for _, s := range []string{m.Speaker, m.Title, m.Text, m.Race, m.Gender, m.NPCID, m.DisplayID, m.ModelID, m.RaceOverride} {
 		if !utf8.ValidString(s) || strings.ContainsRune(s, 0) {
 			return nil, errors.New("fields must be UTF-8 without NUL")
 		}
 	}
 	body := []byte(m.Speaker + "\x00" + m.Title + "\x00" + m.Text)
 	flags := byte(0)
-	if m.Race != "" || m.Gender != "" || m.NPCID != "" {
+	if m.Race != "" || m.Gender != "" || m.NPCID != "" || m.DisplayID != "" || m.ModelID != "" || m.RaceOverride != "" {
 		body = append(body, []byte("\x00"+m.Race+"\x00"+m.Gender+"\x00"+m.NPCID)...)
 		flags = 1
+	}
+	if m.DisplayID != "" || m.ModelID != "" || m.RaceOverride != "" {
+		body = append(body, []byte("\x00"+m.DisplayID+"\x00"+m.ModelID+"\x00"+m.RaceOverride)...)
+		flags = 2
 	}
 	capacity := PayloadBytes
 	count := (len(body) + capacity - 1) / capacity
@@ -111,7 +119,7 @@ func Encode(m Message) ([][]byte, error) {
 
 func Parse(b []byte) (Packet, error) {
 	p := Packet{}
-	if len(b) != FrameBytes || string(b[:4]) != "FDB5" || b[23] > 1 {
+	if len(b) != FrameBytes || string(b[:4]) != "FDB5" || b[23] > 2 {
 		return p, errors.New("invalid frame header")
 	}
 	checksumAt := len(b) - 4
@@ -193,18 +201,23 @@ func (a *Assembler) Add(p Packet, now time.Time) (*Message, error) {
 	}
 	fields := bytes.Split(body, []byte{0})
 	expected := 3
-	if p.Flags == 1 {
-		expected = 6
+	if p.Flags <= 2 {
+		expected += 3 * int(p.Flags)
 	}
-	if p.Flags > 1 || len(fields) != expected || !utf8.Valid(body) {
+	if p.Flags > 2 || len(fields) != expected || !utf8.Valid(body) {
 		return nil, fmt.Errorf("invalid UTF-8 message fields")
 	}
 	a.done = true
 	m := &Message{Session: p.Session, Sequence: p.Sequence, Kind: p.Kind, Speaker: string(fields[0]), Title: string(fields[1]), Text: string(fields[2])}
-	if p.Flags == 1 {
+	if p.Flags >= 1 {
 		m.Race = string(fields[3])
 		m.Gender = string(fields[4])
 		m.NPCID = string(fields[5])
+	}
+	if p.Flags == 2 {
+		m.DisplayID = string(fields[6])
+		m.ModelID = string(fields[7])
+		m.RaceOverride = string(fields[8])
 	}
 	return m, nil
 }

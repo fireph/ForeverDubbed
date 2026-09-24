@@ -2,7 +2,7 @@
 
 The sole supported format uses 16 dark navy colors and four bits per cell. A tile has a 50 × 50 cell grid including a one-cell calibration ring; its inner 48 × 48 cells reserve 136 cells for an animated sine wave. The remaining 2,168 cells carry 8,672 bits (1,084 bytes). A separate light-blue outline surrounds the calibration ring, exactly **2 physical pixels** thick on every side. Cells are integer 2–8 physical pixels wide, default 2. The total square is `50 × cell size + 4` pixels wide: **104 × 104** by default, or **154 × 154** with 3px cells. Coordinates start at the outer outline's top-left; x increases rightward and y downward.
 
-FDB5 requires companion and addon version 0.5.0 or newer. Update both together: the static FDB4 format and previous optical formats are not accepted. Header fields are unchanged, but the frame magic and payload capacity have changed. Existing tile position, lock state, and FDB3/FDB4 cell-size settings are preserved.
+FDB5 appearance/override metadata requires companion and addon version 0.6.0. Update both together: the static FDB4 format and previous optical formats are not accepted. The 0.6.0 extension keeps FDB5 magic, frame dimensions, and payload capacity unchanged. New companions accept flags 0/1 from older FDB5 addons; old companions reject flags 2. Existing tile position, lock state, and FDB3/FDB4 cell-size settings are preserved.
 
 The addon uses `(768 / physical screen height) / UIParent:GetEffectiveScale()` for its local scale, so cell sizes and outline thickness remain physical pixels regardless of UI scale. Grid origin is two pixels right and down from the outer tile origin.
 
@@ -75,7 +75,7 @@ Interior cells are read row by row, skipping the wave mask. Each palette index e
 | 18 | 2 | Total page count, 1..256 |
 | 20 | 2 | Payload length, 1..1056 |
 | 22 | 1 | Message kind |
-| 23 | 1 | Flags: 0 = text only, 1 = speaker metadata (0.3.0+) |
+| 23 | 1 | Flags: 0 = text only, 1 = legacy speaker metadata, 2 = appearance/override metadata (0.6.0+) |
 | 24 | 1056 | Payload followed by cosmetic noise padding (legacy encoders use zeros) |
 | 1080 | 4 | Adler-32 of bytes 0..1079, including padding |
 
@@ -83,7 +83,39 @@ Adler-32 uses initial a=1, b=0, modulus 65521, result b × 65536 + a. All pages 
 
 Padding is ignored when assembling the message, but remains covered by the frame checksum. Its values may be arbitrary; existing FDB5 decoders accept both zero and noise padding. The encoders use a cached deterministic noise sequence so unused cells have texture without generating fresh noise on animation ticks. Starting with state 1, each padding byte updates state to `(state * 48271) mod 2147483647` and uses `state mod 256`. Each page's padding starts at the beginning of this sequence. No payload bytes, calibration cells, or wave cells are replaced.
 
-With flags 0, the complete message is UTF-8 `speaker + NUL + title + NUL + text`. With flags 1, it is `speaker + NUL + title + NUL + text + NUL + race + NUL + gender + NUL + npcID`. Race is an English race key obtained from the API, an NPC-ID lookup, a model mapping, or a saved user assignment (for example `Orc` or `Skyborne`), gender is `male`, `female`, or empty, and NPC ID is decimal text or empty. Empty metadata fields mean unknown. All other flag values are rejected, and flags must agree across every page. FDB5 readers accept both layouts; older optical formats remain unsupported. Empty speaker/title fields are allowed; embedded NULs in fields are not. Byte chunks may split UTF-8 characters. Decode text only after concatenating and validating every page. WoW formatting escapes are removed before encoding.
+The complete message consists of NUL-separated UTF-8 fields:
+
+| Flags | Fields in order |
+| --- | --- |
+| 0 | `speaker`, `title`, `text` |
+| 1 | Above, then `race`, `gender`, `npcID` |
+| 2 | Above, then `displayID`, `modelID`, `raceOverride` |
+
+The 0.6.0 addon sends public API race/gender, NPC ID, observed appearance IDs,
+and an explicit saved race override. `modelID` is a model **FileDataID**, not the
+`CreatureDisplayInfo.ModelID` database foreign key. IDs are decimal text or empty.
+Gender is `male`, `female`, or empty. Zero/unavailable display IDs are sent empty. Normal dialogue does not probe
+display IDs; only a successful prior explicit inspection for the same GUID can
+supply one.
+Race and override are English race names, for example `Orc` or `Skyborne`.
+Flags 2 is used when any of its three extra fields is nonempty; otherwise the
+encoder uses flags 1 or 0 as appropriate. Legacy flags 1 race may already have
+been inferred by an older addon, so it is treated as an addon-supplied race.
+
+The companion resolves race before voice selection: saved override, confirmed
+custom NPC mapping, addon/API race, unchanged VoiceOver display lookup, then
+model inference. Public gender takes priority over display/model gender; the
+NPC mapping does not fix gender. The desktop adds `race_source` to decoded JSON
+for diagnostics; it is not a wire field. Overrides are sent with each dialogue,
+not retained as a second desktop override database. Reopening dialogue after
+`/fdb race clear` therefore restores normal lookup. Control messages bypass
+identity resolution.
+
+Empty metadata fields mean unknown. All other flag values are rejected, and
+flags must agree across every page. Empty speaker/title fields are allowed;
+embedded NULs in fields are not. Byte chunks may split UTF-8 characters. Decode
+text only after concatenating and validating every page. WoW formatting escapes
+are removed before encoding.
 
 Kinds: 0=test, 1=gossip/greeting, 2=quest offer, 3=quest progress, 4=quest completion, 5=NPC chat, 6=item/book text. Pocket TTS speaks title and text using the metadata-selected voice. The SAPI fallback joins nonempty speaker, title, and text fields. Metadata is never spoken.
 

@@ -16,7 +16,7 @@ local sequence, lastBody, lastAt, ready = 0, nil, -1, false
 local PAGE_SECONDS = 0.25
 local WAVE_SECONDS = 1 / 15
 local wavePhase, waveElapsed = 0, 0
-local VERSION = "0.5.0"
+local VERSION = "0.6.0"
 local requestID, lastSpeaker = 0, nil
 local controlUntil, deferredDialogue = 0, nil
 local drawnColors, pageValues = {}, {}
@@ -134,12 +134,17 @@ local function publishReady(kind, speaker, title, text, info)
     if text == "" then return end
     info = info or {}
     lastSpeaker = info
-    local race, gender, npcID = clean(info.race), clean(info.gender), clean(info.npcID)
-    local key = kind .. speaker .. "\0" .. title .. "\0" .. text .. "\0" .. race .. "\0" .. gender .. "\0" .. npcID
+    local race, gender, npcID = clean(info.apiRace or info.race), clean(info.gender), clean(info.npcID)
+    local displayID = info.displayID and tostring(info.displayID) or ""
+    local modelID = info.modelID and tostring(info.modelID) or ""
+    local raceOverride = clean(info.raceOverride)
+    -- Do not let desktop lookups reconstruct a restricted identity.
+    if info.restricted then race, npcID, displayID, modelID, raceOverride = "", "", "", "", "" end
+    local key = kind .. table.concat({speaker, title, text, race, gender, npcID, displayID, modelID, raceOverride}, "\0")
     if key == lastBody and GetTime() - lastAt < 0.75 then return end
     lastBody, lastAt = key, GetTime()
     sequence = (sequence + 1) % 4294967296
-    local encoded, err = Codec.Encode(session, sequence, kind, speaker, title, text, race, gender, npcID)
+    local encoded, err = Codec.Encode(session, sequence, kind, speaker, title, text, race, gender, npcID, displayID, modelID, raceOverride)
     if not encoded then printStatus(err); return end
     pages, page, elapsed = encoded, 1, 0
     -- Keep sending after a dialog closes so slow captures can finish. New text
@@ -317,6 +322,7 @@ SlashCmdList.FOREVERDUBBED = function(input)
                 printStatus("NPC: " .. resolved.name .. "; ID: " .. resolved.npcID .. "; race: " .. resolved.race
                     .. "; source: " .. (resolved.raceSource or "unavailable") .. "; gender: " .. resolved.gender
                     .. "; display ID: " .. tostring(resolved.displayID or "unavailable")
+                    .. " (" .. (resolved.displayStatus or "not read") .. ")"
                     .. "; model file: " .. tostring(resolved.modelID or "unavailable"))
             end, true)
         end

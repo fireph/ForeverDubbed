@@ -11,13 +11,14 @@ import (
 	"strings"
 	"testing"
 
+	"foreverdubbed/internal/identity"
 	"foreverdubbed/internal/pocket"
 	"foreverdubbed/internal/speech"
 )
 
 func TestMacAppLayoutAndExecutablePermissions(t *testing.T) {
 	root := t.TempDir()
-	names := []string{"foreverdubbed", "native/libonnxruntime.dylib", "native/models/bundle.json", "native/presets/alba.safetensors", "tts/voices.json", "tts/custom/narrator.safetensors", "README.md", "addon/ForeverDubbed/ForeverDubbed.toc"}
+	names := []string{"foreverdubbed", "native/libonnxruntime.dylib", "native/models/bundle.json", "native/presets/alba.safetensors", "tts/voices.json", "tts/custom/narrator.safetensors", "data/custom-races.json", "data/voiceover/VOICEOVER-LICENSE.txt", "README.md", "addon/ForeverDubbed/ForeverDubbed.toc"}
 	files := map[string]string{}
 	for _, name := range names {
 		putFile(t, root, name, name)
@@ -43,7 +44,7 @@ func TestMacAppLayoutAndExecutablePermissions(t *testing.T) {
 		target := name
 		if name == "foreverdubbed" {
 			target = "ForeverDubbed.app/Contents/MacOS/foreverdubbed"
-		} else if strings.HasPrefix(name, "native/") || strings.HasPrefix(name, "tts/") {
+		} else if strings.HasPrefix(name, "native/") || strings.HasPrefix(name, "tts/") || strings.HasPrefix(name, "data/") {
 			target = "ForeverDubbed.app/Contents/Resources/" + name
 		}
 		if manifest[target] == "" {
@@ -89,6 +90,9 @@ func TestMacAppResourceDiscovery(t *testing.T) {
 		if got := speech.DefaultConfigPath(); got != filepath.Join(resources, "tts", "voices.json") {
 			t.Fatalf("voice config: %s", got)
 		}
+		if got := identity.DefaultCustomPath(); got != filepath.Join(resources, "data", "custom-races.json") {
+			t.Fatalf("race config: %s", got)
+		}
 		return
 	}
 	root := t.TempDir()
@@ -102,6 +106,7 @@ func TestMacAppResourceDiscovery(t *testing.T) {
 	}
 	putFile(t, root, "ForeverDubbed.app/Contents/Resources/native/models/bundle.json", "{}")
 	putFile(t, root, "ForeverDubbed.app/Contents/Resources/tts/voices.json", "{}")
+	putFile(t, root, "ForeverDubbed.app/Contents/Resources/data/custom-races.json", "{}")
 	cmd := exec.Command(probe, "-test.run=^TestMacAppResourceDiscovery$")
 	cmd.Env = append(os.Environ(), "FDB_TEST_APP_PROBE=1")
 	cmd.Dir = t.TempDir()

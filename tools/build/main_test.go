@@ -45,6 +45,7 @@ func TestPackageContentsAndLayout(t *testing.T) {
 	for _, name := range []string{"docs/guide.md", "data/races.json", "addon/ForeverDubbed/ForeverDubbed.toc"} {
 		putFile(t, root, name, name)
 	}
+	putFile(t, root, "data/races.go", "package racedata")
 	putFile(t, root, "tts/custom/used.safetensors", "voice")
 	putFile(t, root, "tts/custom/unused.safetensors", "private")
 	putFile(t, root, "tts/custom/draft.pending.safetensors", "unfinished")

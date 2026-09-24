@@ -1,5 +1,6 @@
 """Offline checks for the SQL-to-Lua data importer."""
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 
@@ -31,6 +32,10 @@ class ImportTests(unittest.TestCase):
         self.assertIn('[6] = {race="Dwarf", gender="male"}', output)
         self.assertIn('[3] = {race="Human", gender="female"}', output)
         self.assertEqual(output, importer.render(dict(reversed(list(rows.items())))))
+        self.assertEqual(json.loads(importer.render_json(rows)), {
+            "115": {"race": "Dwarf", "gender": "male"},
+            "176": {"race": "Human", "gender": "female"},
+        })
 
 
 if __name__ == "__main__":

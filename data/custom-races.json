@@ -1,0 +1,325 @@
+{
+  "source": "User-confirmed Forever beta observations, September 2026",
+  "npcs": {
+    "251968": {
+      "race": "Skyborne",
+      "name": "Ayessa Dawnsinger",
+      "observed_gender": "female",
+      "observed_model_id": 7478494,
+      "observed_display_status": "API returned 0"
+    },
+    "252359": {
+      "race": "Skyborne",
+      "name": "Lotheluum Starbreeze",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "252373": {
+      "race": "Skyborne",
+      "name": "Anathamaas Aetherwind",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "252376": {
+      "race": "Skyborne",
+      "name": "Emerii Tallgust",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "252377": {
+      "race": "Skyborne",
+      "name": "Seena Skybreaker",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "252379": {
+      "race": "Skyborne",
+      "name": "Eltheen Nightbreeze",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "252380": {
+      "race": "Skyborne",
+      "name": "Othesia Evengale",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "252382": {
+      "race": "Skyborne",
+      "name": "Sessaria Skystride",
+      "observed_gender": "female",
+      "observed_model_id": 7478494,
+      "observed_display_status": "API returned 0"
+    },
+    "252388": {
+      "race": "Skyborne",
+      "name": "Halavuul Cragwind",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "252389": {
+      "race": "Skyborne",
+      "name": "Quel'ana Quickgale",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "252390": {
+      "race": "Skyborne",
+      "name": "Antelariaa Cloudgaze",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "252392": {
+      "race": "Skyborne",
+      "name": "Orsaan Dalewind",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "252448": {
+      "race": "Skyborne",
+      "name": "Alvarion Windfield",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "252449": {
+      "race": "Skyborne",
+      "name": "Iallion Featherfall",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "252475": {
+      "race": "Skyborne",
+      "name": "Elaadrin Evengale",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "252476": {
+      "race": "Skyborne",
+      "name": "Talaanis Shadowsong",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "252477": {
+      "race": "Skyborne",
+      "name": "Peacekeeper Elite",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "252478": {
+      "race": "Skyborne",
+      "name": "Xy'aaria Streamrunner",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "252479": {
+      "race": "Skyborne",
+      "name": "Daeann Steelwind",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "253004": {
+      "race": "Skyborne",
+      "name": "Iaadaria Bitterwind",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "253204": {
+      "race": "Skyborne",
+      "name": "Dondallion Whisperwind",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "253285": {
+      "race": "Skyborne",
+      "name": "Fillion Flamebreeze",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "253474": {
+      "race": "Skyborne",
+      "name": "Peacekeeper",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "254100": {
+      "race": "Skyborne",
+      "name": "Zephras Citizen",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "254149": {
+      "race": "Skyborne",
+      "name": "Sirocca \"Swimmers\" Starfeather",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "254344": {
+      "race": "Skyborne",
+      "name": "Endaria Mistgaze",
+      "observed_gender": "female",
+      "observed_model_id": 7478494,
+      "observed_display_status": "API returned 0"
+    },
+    "254345": {
+      "race": "Skyborne",
+      "name": "Syriel Nightrain",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "254411": {
+      "race": "Skyborne",
+      "name": "Quel'dora Quickgale",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "255940": {
+      "race": "Skyborne",
+      "name": "Donaal Downbreeze",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "256507": {
+      "race": "Skyborne",
+      "name": "Belann Windwood",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "257003": {
+      "race": "Skyborne",
+      "name": "Ishlee Breezewhisper",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "257004": {
+      "race": "Skyborne",
+      "name": "Eaysaa Brightgust",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "257005": {
+      "race": "Skyborne",
+      "name": "Valiena Swiftgale",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "257006": {
+      "race": "Skyborne",
+      "name": "Nyalah Brightfire",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "257007": {
+      "race": "Skyborne",
+      "name": "Melasa Fairmend",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "257008": {
+      "race": "Skyborne",
+      "name": "Baelann Swiftcurrent",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "257036": {
+      "race": "Skyborne",
+      "name": "Baelann Favorbreeze",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "257037": {
+      "race": "Skyborne",
+      "name": "Zelena Favorbreeze",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "257422": {
+      "race": "Skyborne",
+      "name": "Railee Thriceforged",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "259011": {
+      "race": "Skyborne",
+      "name": "Ban'aethal Refugee",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "259012": {
+      "race": "Skyborne",
+      "name": "Ealaane Nimbuswalker",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "259058": {
+      "race": "Skyborne",
+      "name": "Windshaper Shaman",
+      "observed_gender": "female",
+      "observed_model_id": 7478494,
+      "observed_display_status": "API returned 0"
+    },
+    "259060": {
+      "race": "Skyborne",
+      "name": "High Order Mage",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "260628": {
+      "race": "Skyborne",
+      "name": "Valennia Stormfist",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "263930": {
+      "race": "Skyborne",
+      "name": "Peacekeeper",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "267936": {
+      "race": "Skyborne",
+      "name": "Refugee Child",
+      "observed_gender": "male",
+      "observed_model_id": 7865151
+    },
+    "271465": {
+      "race": "Skyborne",
+      "name": "Falfaan Halfwind",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "271478": {
+      "race": "Skyborne",
+      "name": "Elaria Anvilwind",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "271480": {
+      "race": "Skyborne",
+      "name": "Taliaa Brightsky",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    },
+    "271483": {
+      "race": "Skyborne",
+      "name": "Ergaan Eastwind",
+      "observed_gender": "male",
+      "observed_model_id": 7478487
+    },
+    "274934": {
+      "race": "Skyborne",
+      "name": "Amandriel",
+      "observed_gender": "female",
+      "observed_model_id": 7478494
+    }
+  },
+  "models": {
+    "7478487": {
+      "race": "Skyborne",
+      "gender": "male"
+    },
+    "7478494": {
+      "race": "Skyborne",
+      "gender": "female"
+    }
+  }
+}

@@ -29,147 +29,147 @@ local function npc(id)
     name="NPC " .. id
     race,sex,modelID,fail=nil,2,nil,false
 end
-assert(loadfile("addon/ForeverDubbed/Races.lua"))("ForeverDubbed",ns)
-assert(loadfile("addon/ForeverDubbed/DisplayRaces.lua"))("ForeverDubbed",ns)
 assert(loadfile("addon/ForeverDubbed/Speakers.lua"))("ForeverDubbed",ns)
 local S=ns.Speakers
--- User's exact report: no UnitRace, but public gender and NPC ID 254100.
-npc(254100); name="Zephras Citizen"
-local info=S.Dialog()
-assert(info.race=="Skyborne" and info.gender=="male" and info.npcID=="254100")
 local result
-S.Resolve(info,function(v) result=v end)
-assert(result.race=="Skyborne" and loads==0 and result.raceSource=="NPC ID lookup")
--- Static identity also works for distant chat with only a public GUID.
-local citizenGUID=guid
-guid=""
-assert(S.Chat(citizenGUID).race=="Skyborne")
--- Missing NPC API race, then delayed Goblin model becomes available.
-npc(123)
-result=nil
+-- Addon collects raw metadata; Skyborne/NPC/display/model lookups live on desktop.
+npc(254100);name="Zephras Citizen";modelID=7478494
 S.Resolve(S.Dialog(),function(v) result=v end)
-assert(not result and #queue==1)
+assert(result.race=="" and result.npcID=="254100" and result.modelID==7478494)
+assert(result.gender=="male") -- Public API wins over model appearance.
+local citizenGUID=guid;guid=""
+assert(S.Chat(citizenGUID).modelID==7478494)
+-- Missing model data can load asynchronously.
+npc(123);result=nil
+S.Resolve(S.Dialog(),function(v) result=v end)
+assert(result==nil and #queue==1)
 modelID=119376;tick()
-assert(result.race=="Goblin" and result.modelID==119376 and result.gender=="male")
-assert(result.raceSource=="model appearance")
--- A partial API read must not erase the previously resolved race.
-assert(S.Dialog().race=="Goblin")
--- Explicit NPC assignment wins over shared models and survives later lookups.
+assert(result.race=="" and result.modelID==119376)
+-- Saved race and public API race remain separate for desktop precedence.
+race="Orc"
 S.SetRace(S.Dialog(),"Skyborne")
-assert(S.Dialog().race=="Skyborne")
-S.SetRace(S.Dialog(),nil)
-assert(S.Dialog().race=="")
--- A native API race has priority over an inferred model.
-race="Human";modelID=119376
-S.Resolve(S.Dialog(),function(v) result=v end,true)
-assert(result.race=="Human" and result.raceSource=="UnitRace")
--- Unknown models stay unknown.
-npc(124);modelID=987654321
+local info=S.Dialog()
+assert(info.race=="Skyborne" and info.apiRace=="Orc" and info.raceOverride=="Skyborne")
+S.SetRace(info,nil)
+assert(S.Dialog().race=="Orc" and S.Dialog().raceOverride=="")
+-- A public race must not skip appearance collection.
+modelID=7478487
 S.Resolve(S.Dialog(),function(v) result=v end)
-assert(result.race=="" and result.modelID==987654321)
--- Retiring an old request does not attach its late model to another NPC.
-npc(125);local old, fresh
-S.Resolve(S.Dialog(),function(v) old=v end)
-npc(126);modelID=121287
-S.Resolve(S.Dialog(),function(v) fresh=v end)
-tick()
-assert(old.npcID=="125" and old.race=="")
-assert(fresh.npcID=="126" and fresh.race=="Orc")
--- Same unit token changed occupant while a request was loading.
-npc(127);result=nil
-S.Resolve(S.Dialog(),function(v) result=v end)
-npc(128);modelID=119940;tick()
-assert(result.npcID=="127" and result.race=="")
--- Timeout is bounded even if a model never loads.
-npc(129);result=nil
-S.Resolve(S.Dialog(),function(v) result=v end)
-for i=1,12 do tick() end
-assert(result and result.race=="" and #queue==0)
--- Failed model binds never inspect a stale previous model.
-npc(130);fail=true;modelID=119940
-S.Resolve(S.Dialog(),function(v) result=v end)
-assert(result.race=="")
--- Restricted API values must not be bypassed using model probing/cache.
+assert(result.apiRace=="Orc" and result.modelID==7478487)
+-- Restricted API values cannot trigger appearance probing.
 npc(131);race="secret";modelID=119940
 issecretvalue=function(v) return v=="secret" end
 local before=loads
 S.Resolve(S.Dialog(),function(v) result=v end)
 assert(result.race=="" and loads==before)
 issecretvalue=nil
--- Missing model APIs degrade to unknown instead of breaking dialog.
-npc(132);model.GetModelFileID=nil
+-- Retiring a request never attaches the next unit's model.
+npc(125);local old,fresh
+S.Resolve(S.Dialog(),function(v) old=v end)
+npc(126);modelID=121287
+S.Resolve(S.Dialog(),function(v) fresh=v end)
+tick()
+assert(old.npcID=="125" and old.modelID==nil)
+assert(fresh.npcID=="126" and fresh.modelID==121287)
+-- Same token changed occupant while loading.
+npc(127);result=nil
 S.Resolve(S.Dialog(),function(v) result=v end)
-assert(result.race=="")
--- Pinned database uses display IDs (not NPC IDs or model FileDataIDs), sex 0/1.
-assert(ns.DisplayRaceCount==15444)
-assert(ns.DisplayIdentity(115).race=="Dwarf" and ns.DisplayIdentity(115).gender=="male")
-assert(ns.DisplayIdentity(176).race=="Human" and ns.DisplayIdentity(176).gender=="female")
-assert(ns.DisplayIdentity(6882).race=="Goblin")
-assert(ns.DisplayIdentity(4)==nil and ns.DisplayIdentity(999999999)==nil)
+npc(128);modelID=119940;tick()
+assert(result.npcID=="127" and result.modelID==nil)
+-- Bounded timeout and failed binding.
+npc(129);result=nil
+S.Resolve(S.Dialog(),function(v) result=v end)
+for i=1,12 do tick() end
+assert(result and result.modelID==nil and #queue==0)
+npc(130);fail=true;modelID=119940
+S.Resolve(S.Dialog(),function(v) result=v end)
+assert(result.modelID==nil)
+-- Display and model IDs are observations only, and cached by GUID for chat.
 local displayID
 function model:GetDisplayInfo() return displayID end
--- Display lookup works even without the model-file API.
-npc(140);displayID=176;sex=nil
-S.Resolve(S.Dialog(),function(v) result=v end)
-assert(result.race=="Human" and result.gender=="female" and result.displayID==176)
-assert(result.raceSource=="display lookup (VoiceOver)")
+npc(140);displayID=176;modelID=1100258;sex=nil
+S.Resolve(S.Dialog(),function(v) result=v end,true)
+assert(result.race=="" and result.gender=="" and result.displayID==176)
 local cachedGUID=guid;guid=""
-assert(S.Chat(cachedGUID).displayID==176 and S.Chat(cachedGUID).gender=="female")
-function model:GetModelFileID() return modelID end
--- Display race wins over shared model appearance; public UnitSex still wins.
-npc(141);displayID=115;modelID=119376;sex=3
-S.Resolve(S.Dialog(),function(v) result=v end)
-assert(result.race=="Dwarf" and result.gender=="female" and result.modelID==119376)
--- Native API, custom Skyborne identity, and saved assignments retain priority.
-race="Orc"
-S.Resolve(S.Dialog(),function(v) result=v end,true)
-assert(result.race=="Orc" and result.raceSource=="UnitRace")
-S.SetRace(S.Dialog(),"Skyborne")
-S.Resolve(S.Dialog(),function(v) result=v end,true)
-assert(result.race=="Skyborne" and result.raceSource=="saved NPC override")
-npc(254100)
-S.Resolve(S.Dialog(),function(v) result=v end,true)
-assert(result.race=="Skyborne" and result.raceSource=="NPC ID lookup")
--- Model may arrive first; do not publish its weaker identity prematurely.
+assert(S.Chat(cachedGUID).displayID==176)
+-- Late display IDs are collected without replacing observed race/gender.
 npc(142);modelID=119376;displayID=nil;result=nil
-S.Resolve(S.Dialog(),function(v) result=v end)
+S.Resolve(S.Dialog(),function(v) result=v end,true)
 assert(result==nil)
 displayID=115;tick()
-assert(result.race=="Dwarf")
--- Failed display lookup still falls back, including after the bounded timeout.
-npc(143);modelID=119376;displayID=999999999
+assert(result.displayID==115 and result.modelID==119376 and result.race=="")
+-- Capture evidence on manual marking, including existing assignments.
+npc(254100);displayID=176;modelID=7478494
+S.SetRace(S.Dialog(),"Skyborne")
+local evidence=ForeverDubbedDB.npcRaceEvidence["254100"]
+assert(evidence.name==name and evidence.race=="Skyborne" and evidence.gender=="male")
+assert(evidence.displayID==176 and evidence.modelID==7478494 and evidence.displayStatus=="available")
+-- Other NPCs sharing a display have no inherited manual override.
+npc(151);modelID=7478494
 S.Resolve(S.Dialog(),function(v) result=v end)
-assert(result.race=="Goblin" and result.raceSource=="model appearance")
-npc(144);modelID=119376;displayID=0;result=nil;sex=nil
+assert(result.raceOverride=="" and result.race=="")
+-- Assignment is immediate; evidence can arrive later.
+npc(152);displayID=nil
+S.SetRace(S.Dialog(),"Skyborne")
+assert(ForeverDubbedDB.npcRaces["152"]=="Skyborne")
+displayID=115;modelID=119376;tick()
+assert(ForeverDubbedDB.npcRaceEvidence["152"].displayID==115)
+-- Clearing a pending mark cannot resurrect override or evidence.
+npc(153);displayID=nil
+S.SetRace(S.Dialog(),"Skyborne")
+S.SetRace(S.Dialog(),nil)
+displayID=176;tick()
+assert(ForeverDubbedDB.npcRaces["153"]==nil)
+assert(ForeverDubbedDB.npcRaceEvidence["153"]==nil and S.Dialog().race=="")
+-- Switching target while collecting never saves the new target's appearance.
+npc(154);displayID=nil
+S.SetRace(S.Dialog(),"Skyborne")
+npc(155);displayID=115;modelID=119376;tick()
+assert(ForeverDubbedDB.npcRaceEvidence["154"].displayID==nil)
+assert(ForeverDubbedDB.npcRaceEvidence["154"].modelID==nil)
+-- Failed probes must not reuse previously cached appearance evidence.
+npc(156);displayID=176;modelID=1100258
 S.Resolve(S.Dialog(),function(v) result=v end)
-for i=1,12 do tick() end
-assert(result.race=="Goblin" and result.gender=="male" and #queue==0)
--- A cached model guess can later be upgraded by a display record, including sex.
-displayID=176
+fail=true
+S.SetRace(S.Dialog(),"Skyborne")
+assert(ForeverDubbedDB.npcRaceEvidence["156"].displayID==nil)
+assert(ForeverDubbedDB.npcRaceEvidence["156"].modelID==nil)
+assert(ForeverDubbedDB.npcRaceEvidence["156"].displayStatus=="not read")
+-- Preserve missing-display reasons without storing restricted values.
+for _, case in ipairs({
+    {get=function() return 0 end, status="API returned 0"},
+    {get=function() return nil end, status="API returned nil"},
+    {get=function() error("failed") end, status="API call failed"},
+    {get=function() return "secret" end, status="restricted value"},
+    {status="API unavailable"},
+}) do
+    npc(157);modelID=7478487
+    model.GetDisplayInfo=case.get
+    issecretvalue=function(v) return v=="secret" end
+    S.SetRace(S.Dialog(),"Skyborne")
+    for i=1,12 do tick() end
+    local saved=ForeverDubbedDB.npcRaceEvidence["157"]
+    assert(saved.displayID==nil and saved.displayStatus==case.status)
+    assert(saved.modelID==7478487)
+    issecretvalue=nil
+end
+-- Normal dialogue never calls or waits on the display API.
+local displayReads=0
+model.GetDisplayInfo=function() displayReads=displayReads+1; return 0 end
+npc(160);modelID=7478487;result=nil
 S.Resolve(S.Dialog(),function(v) result=v end)
-assert(result.race=="Human" and result.gender=="female")
--- Secret or throwing display APIs must not break or leak into lookup keys.
-npc(145);modelID=119376;displayID="secret"
-issecretvalue=function(v) return v=="secret" end
+assert(result and result.modelID==7478487 and displayReads==0 and #queue==0)
+-- Explicit inspection can report zero immediately once a model is available.
+S.Resolve(S.Dialog(),function(v) result=v end,true)
+assert(result.displayStatus=="API returned 0" and displayReads==1 and #queue==0)
+-- Display-only and missing-model APIs remain supported.
+model.GetModelFileID=nil
+model.GetDisplayInfo=function() return 176 end
+npc(158)
+S.Resolve(S.Dialog(),function(v) result=v end,true)
+assert(result.displayID==176 and result.modelID==nil)
+model.GetDisplayInfo=nil
+npc(159)
 S.Resolve(S.Dialog(),function(v) result=v end)
-for i=1,12 do tick() end
-assert(result.race=="Goblin" and result.displayID==nil)
-issecretvalue=nil
-function model:GetDisplayInfo() error("unavailable") end
-npc(146);modelID=119376
-S.Resolve(S.Dialog(),function(v) result=v end)
-for i=1,12 do tick() end
-assert(result.race=="Goblin")
-function model:GetDisplayInfo() return displayID end
--- Changed unit and cancelled requests cannot pick up a late display identity.
-npc(147);displayID=nil;local stale
-S.Resolve(S.Dialog(),function(v) stale=v end)
-npc(148);displayID=115;tick()
-assert(stale.npcID=="147" and stale.race=="")
-npc(149);displayID=nil;stale=nil
-S.Resolve(S.Dialog(),function(v) stale=v end)
-npc(150);displayID=176
-S.Resolve(S.Dialog(),function(v) result=v end)
-tick()
-assert(stale.npcID=="149" and stale.race=="" and result.race=="Human")
-print("Speaker race tests passed")
+assert(result.displayID==nil and result.modelID==nil)
+print("Speaker observation tests passed")

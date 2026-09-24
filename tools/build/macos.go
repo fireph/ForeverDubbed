@@ -37,7 +37,7 @@ func macAppSigned(dist string, files map[string]string, sign func(string) error)
 			// Keep redistributable font notices with the standalone app too.
 			result[name] = source
 			target = "Contents/Resources/licenses/" + strings.TrimPrefix(name, "docs/licenses/")
-		case strings.HasPrefix(name, "native/") || strings.HasPrefix(name, "tts/"):
+		case strings.HasPrefix(name, "native/") || strings.HasPrefix(name, "tts/") || strings.HasPrefix(name, "data/"):
 			target = "Contents/Resources/" + name
 		default:
 			result[name] = source
@@ -60,8 +60,8 @@ func macAppSigned(dist string, files map[string]string, sign func(string) error)
 <key>CFBundleName</key><string>ForeverDubbed</string>
 <key>CFBundleDisplayName</key><string>ForeverDubbed</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.5.0</string>
-<key>CFBundleVersion</key><string>0.5.0</string>
+<key>CFBundleShortVersionString</key><string>0.6.0</string>
+<key>CFBundleVersion</key><string>0.6.0</string>
 <key>CFBundleIconFile</key><string>app.icns</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>

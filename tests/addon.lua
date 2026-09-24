@@ -64,8 +64,6 @@ C_GossipInfo = {GetText=function() return "Hello, champion" end}
 SlashCmdList = {}
 local ns = {}
 assert(loadfile("addon/ForeverDubbed/Codec.lua"))("ForeverDubbed", ns)
-assert(loadfile("addon/ForeverDubbed/Races.lua"))("ForeverDubbed", ns)
-assert(loadfile("addon/ForeverDubbed/DisplayRaces.lua"))("ForeverDubbed", ns)
 assert(loadfile("addon/ForeverDubbed/Speakers.lua"))("ForeverDubbed", ns)
 assert(loadfile("addon/ForeverDubbed/Controls.lua"))("ForeverDubbed", ns)
 local actual, calls = ns.Codec.Encode, {}
@@ -238,10 +236,24 @@ pending[1]()
 assert(#calls==count and calls[#calls][4]=="ForeverDubbed")
 ns.Speakers.Resolve=resolve
 -- Manual assignment persists by NPC ID; it does not alter every shared model.
+function methods:SetUnit() return true end
+function methods:GetDisplayInfo() return 176 end
+function methods:GetModelFileID() return 7478487 end
 SlashCmdList.FOREVERDUBBED("race Skyborne")
 assert(ForeverDubbedDB.npcRaces["4949"]=="Skyborne")
+assert(ForeverDubbedDB.npcRaceEvidence["4949"].name=="Thrall")
+assert(ForeverDubbedDB.npcRaceEvidence["4949"].race=="Skyborne")
+now=now+1
+events.scripts.OnEvent(events,"GOSSIP_SHOW")
+local marked=calls[#calls]
+assert(marked[7]=="Orc" and marked[9]=="4949")
+assert(marked[10]=="176" and marked[11]=="7478487" and marked[12]=="Skyborne")
 SlashCmdList.FOREVERDUBBED("race clear")
 assert(ForeverDubbedDB.npcRaces["4949"]==nil)
+assert(ForeverDubbedDB.npcRaceEvidence["4949"]==nil)
+now=now+1
+events.scripts.OnEvent(events,"GOSSIP_SHOW")
+assert(calls[#calls][7]=="Orc" and calls[#calls][12]=="")
 -- GUID identity is required for chat; do not infer race from a shared name.
 assert(ns.Speakers.Chat("Creature-0-1-2-3-9999-54321").race=="")
 assert(ns.Speakers.Chat("").race=="")

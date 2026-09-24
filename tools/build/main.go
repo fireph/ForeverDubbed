@@ -205,6 +205,9 @@ func packageFiles(root string) (map[string]string, map[string]string, error) {
 			if entry.IsDir() {
 				return nil
 			}
+			if dir == "data" && strings.HasSuffix(entry.Name(), ".go") {
+				return nil // Embed declarations are build source, not runtime data.
+			}
 			if err := regularFile(source); err != nil {
 				return err
 			}

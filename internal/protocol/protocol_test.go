@@ -261,6 +261,7 @@ func TestLuaCompatibility(t *testing.T) {
 	lines := strings.Fields(string(out))
 	m := fixture()
 	m.Race, m.Gender, m.NPCID = "Orc", "male", "4949"
+	m.DisplayID, m.ModelID, m.RaceOverride = "115", "7478487", "Skyborne"
 	want := framesFor(t, m)
 	if len(lines) != len(want)*(WavePhases+1)+2 {
 		t.Fatalf("unexpected Lua output: %s", out)
@@ -343,18 +344,21 @@ func BenchmarkFind1080p(b *testing.B) {
 }
 
 func TestSpeakerMetadataRoundTrip(t *testing.T) {
-	for _, metadata := range []bool{false, true} {
+	for _, metadata := range []byte{0, 1, 2} {
 		want := fixture()
-		if metadata {
+		if metadata > 0 {
 			want.Race = "Orc"
 			want.Gender = "male"
 			want.NPCID = "4949"
+		}
+		if metadata == 2 {
+			want.DisplayID, want.ModelID, want.RaceOverride = "176", "7478494", "Skyborne"
 		}
 		var a Assembler
 		frames := framesFor(t, want)
 		for i := len(frames) - 1; i >= 0; i-- {
 			p := packetFor(t, frames[i])
-			if (p.Flags == 1) != metadata {
+			if p.Flags != metadata {
 				t.Fatal("incorrect metadata flag")
 			}
 			got, err := a.Add(p, time.Now())
@@ -376,6 +380,58 @@ func TestMixedMetadataPagesRejected(t *testing.T) {
 	p.Flags = 1
 	if _, err := a.Add(p, time.Now()); err == nil {
 		t.Fatal("accepted mixed field layouts")
+	}
+}
+
+func TestExtendedMetadataValidation(t *testing.T) {
+	for _, m := range []Message{
+		{ModelID: "7478487"}, {DisplayID: "176"}, {RaceOverride: "Skyborne"},
+	} {
+		var a Assembler
+		frames := framesFor(t, m)
+		p := packetFor(t, frames[0])
+		if p.Flags != 2 {
+			t.Fatal("extra-only metadata lost")
+		}
+		got, err := a.Add(p, time.Now())
+		if err != nil || got == nil || *got != m {
+			t.Fatalf("round trip: %+v %v", got, err)
+		}
+	}
+	for _, m := range []Message{
+		{ModelID: "1\x002"}, {DisplayID: "\xff"}, {RaceOverride: "Sky\x00borne"},
+	} {
+		if _, err := Encode(m); err == nil {
+			t.Fatal("accepted invalid extra field")
+		}
+	}
+	// Valid checksum does not make an unsupported or mismatched layout valid.
+	for _, flag := range []byte{2, 3} {
+		frame := framesFor(t, Message{Text: "hello"})[0]
+		frame[23] = flag
+		binary.BigEndian.PutUint32(frame[len(frame)-4:], adler32.Checksum(frame[:len(frame)-4]))
+		p, err := Parse(frame)
+		if flag == 3 {
+			if err == nil {
+				t.Fatal("accepted unsupported flags")
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		var a Assembler
+		if _, err := a.Add(p, time.Now()); err == nil {
+			t.Fatal("accepted missing extra fields")
+		}
+	}
+	var a Assembler
+	frames := framesFor(t, Message{Text: strings.Repeat("x", PayloadBytes*2), ModelID: "7478487"})
+	a.Add(packetFor(t, frames[0]), time.Now())
+	p := packetFor(t, frames[1])
+	p.Flags = 1
+	if _, err := a.Add(p, time.Now()); err == nil {
+		t.Fatal("mixed legacy/extended pages")
 	}
 }
 

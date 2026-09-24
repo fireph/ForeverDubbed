@@ -1,7 +1,7 @@
 """Rebuild the bundled display lookup from a pinned VoiceOver SQL snapshot.
 
 Parses integer fields as data; never executes the downloaded SQL. Uses only the
-Python standard library. Normal addon use requires neither Python nor a download.
+Python standard library. Normal desktop use requires neither Python nor a download.
 """
 import argparse
 from collections import Counter
@@ -95,6 +95,14 @@ def render(rows):
     return "\n".join(lines)
 
 
+def render_json(rows):
+    """Change representation only: preserve every imported race/gender pair."""
+    identities = {str(id): {"race": RACES[rows[id] // 2],
+                            "gender": "male" if rows[id] % 2 == 0 else "female"}
+                  for id in sorted(rows)}
+    return json.dumps(identities, indent=2) + "\n"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-dir", type=Path, help="Read the three pinned source files locally instead of downloading")
@@ -122,8 +130,9 @@ def main():
         "mapped_races": sorted({RACES[code // 2] for code in rows.values()}), "skipped": skipped,
     }
     output = {
-        ROOT / "addon/ForeverDubbed/DisplayRaces.lua": render(rows),
-        ROOT / "addon/ForeverDubbed/VOICEOVER-LICENSE.txt": sources["LICENSE"],
+        ROOT / "data/voiceover/DisplayRaces.lua": render(rows),
+        ROOT / "data/voiceover/VOICEOVER-LICENSE.txt": sources["LICENSE"],
+        ROOT / "data/voiceover-display.json": render_json(rows),
         ROOT / "data/voiceover-display-manifest.json": json.dumps(manifest, indent=2) + "\n",
     }
     for path, contents in output.items():

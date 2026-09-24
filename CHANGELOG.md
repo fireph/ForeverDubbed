@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- Resolve race in the desktop app using the unchanged 15,444-record VoiceOver snapshot, separate custom mappings for 51 confirmed Skyborne NPC IDs, and character-model fallbacks.
+- Keep `/fdb race NAME` overrides in SavedVariables and transmit them explicitly with dialogue; clearing an override restores the desktop lookup on the next dialogue.
+- Send model file IDs alongside API race/gender and NPC ID; normal dialogue never probes or waits for display IDs. Explicitly observed display IDs remain optional metadata. Preserve model/display evidence and missing-display diagnostics when marking NPCs.
+- Add editable `data/custom-races.json` and `-race-config`; restart the companion after file edits. Keep gender independent of NPC race assignments.
+- Extend FDB5 with flags 2 metadata. Update addon and companion together to 0.6.0; the companion still reads flags 0/1 messages. Tile layout and settings are unchanged.
+
 ## 0.5.0
 
 - Animate a crisp, light-blue sine wave with a constant two-cell stroke width at 15 fps leftward through the middle half of the data area, without touching the calibration ring. Shift one hard-coded loop by whole cells to avoid re-rasterization shimmer.

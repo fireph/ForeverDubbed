@@ -16,13 +16,14 @@ import (
 	"time"
 
 	"foreverdubbed/internal/appstate"
+	"foreverdubbed/internal/identity"
 	"foreverdubbed/internal/platform"
 	"foreverdubbed/internal/pocket"
 	"foreverdubbed/internal/protocol"
 	"foreverdubbed/internal/speech"
 )
 
-const version = "0.5.0"
+const version = "0.6.0"
 
 func main() {
 	prepareConsole()
@@ -36,7 +37,7 @@ func main() {
 
 func run() error {
 	var files, voice, snapshot, captureApp string
-	var backend, configPath, testText, testRace, testGender string
+	var backend, configPath, raceConfigPath, testText, testRace, testGender string
 	var mute, list, showVersion, headless bool
 	var rate, threads int
 	var nativeDir, modelsDir string
@@ -54,6 +55,7 @@ func run() error {
 	}
 	flag.StringVar(&backend, "tts", "pocket", "speech backend: pocket (local CPU) or system (OS voices; sapi is a Windows alias)")
 	flag.StringVar(&configPath, "voice-config", speech.DefaultConfigPath(), "local race/voice mapping JSON")
+	flag.StringVar(&raceConfigPath, "race-config", identity.DefaultCustomPath(), "custom NPC/model race JSON (default: bundled data/custom-races.json)")
 	flag.StringVar(&testText, "speak-test", "", "speak this text once without screen capture")
 	flag.StringVar(&testRace, "race", "Human", "race for -speak-test")
 	flag.StringVar(&testGender, "gender", "male", "gender for -speak-test")
@@ -95,6 +97,10 @@ func run() error {
 		return err
 	}
 	var assembler protocol.Assembler
+	identities, err := identity.Load(raceConfigPath)
+	if err != nil {
+		return fmt.Errorf("race config: %w", err)
+	}
 	output := json.NewEncoder(os.Stdout)
 	if files != "" {
 		completed := 0
@@ -117,6 +123,7 @@ func run() error {
 				return err
 			}
 			if m != nil {
+				*m = identities.Resolve(*m)
 				if err := output.Encode(m); err != nil {
 					return err
 				}
@@ -254,6 +261,7 @@ func run() error {
 					log.Printf("Discarding message: %v", assemblyErr)
 				}
 				if m != nil {
+					*m = identities.Resolve(*m)
 					if !m.IsControl() {
 						state.Received(*m)
 					}

@@ -17,9 +17,15 @@ local function read(fn, ...)
     return ok and text(value) or ""
 end
 local function number(fn, ...)
-    if type(fn) ~= "function" then return nil end
+    if type(fn) ~= "function" then return nil, "API unavailable" end
     local ok, value = pcall(fn, ...)
-    if ok and public(value) and type(value) == "number" and value > 0 then return value end
+    if not ok then return nil, "API call failed" end
+    if not public(value) then return nil, "restricted value" end
+    if value == nil then return nil, "API returned nil" end
+    if type(value) ~= "number" then return nil, "API returned non-number" end
+    if value == 0 then return nil, "API returned 0" end
+    if value > 0 then return value, "available" end
+    return nil, "API returned invalid number"
 end
 local function npcID(guid)
     if not guid:match("^Creature%-") and not guid:match("^Vehicle%-") then return "" end
@@ -36,21 +42,20 @@ local function remember(info)
 end
 local function enrich(info)
     if info.restricted then return info end
-    local overrides = ForeverDubbedDB and ForeverDubbedDB.npcRaces or {}
-    local override = text(overrides[info.npcID])
-    if override ~= "" then
-        info.race, info.raceSource = override, "saved NPC override"
-    elseif info.race == "" then
-        local known = NS.NPCRaces and NS.NPCRaces[info.npcID]
-        local old = cache[info.guid]
-        if known then
-            info.race, info.raceSource = known, "NPC ID lookup"
-        elseif old then
-            info.race, info.raceSource = old.race, old.raceSource
-            info.modelID = old.modelID
-            info.displayID = old.displayID
-            if info.gender == "" then info.gender, info.genderSource = old.gender, old.genderSource end
+    local old = cache[info.guid]
+    if old then
+        info.modelID, info.displayID, info.displayStatus = old.modelID, old.displayID, old.displayStatus
+        if info.race == "" then
+            info.race = old.apiRace or ""
+            if info.race ~= "" then info.raceSource = "cached UnitRace" end
         end
+        if info.gender == "" then info.gender, info.genderSource = old.gender, old.genderSource end
+    end
+    info.apiRace = info.race
+    local overrides = ForeverDubbedDB and ForeverDubbedDB.npcRaces or {}
+    info.raceOverride = text(overrides[info.npcID])
+    if info.raceOverride ~= "" then
+        info.race, info.raceSource = info.raceOverride, "saved NPC override"
     end
     return info
 end
@@ -104,8 +109,9 @@ end
 -- New requests retire the previous probe; callers discard superseded dialogue.
 function Speakers.Resolve(info, callback, inspect)
     if activeStop then activeStop() end
-    if info.restricted or info.guid == "" or not info.unit or
-        (info.race ~= "" and info.raceSource ~= "model appearance" and not inspect) then callback(info); return end
+    if info.restricted or info.guid == "" or not info.unit then callback(info); return end
+    info.modelID = nil
+    if inspect then info.displayID, info.displayStatus = nil, nil end
     if not probe then
         local ok, frame = pcall(CreateFrame, "PlayerModel", nil, UIParent)
         if not ok then callback(info); return end
@@ -116,7 +122,9 @@ function Speakers.Resolve(info, callback, inspect)
         probe:EnableMouse(false)
         probe:Hide()
     end
-    local hasDisplay = type(probe.GetDisplayInfo) == "function"
+    -- The beta returns zero after SetUnit. Normal dialogue must not probe or
+    -- wait for this optional API; explicit inspection/marking can still try it.
+    local hasDisplay = inspect and type(probe.GetDisplayInfo) == "function"
     if type(probe.SetUnit) ~= "function" or
         (not hasDisplay and type(probe.GetModelFileID) ~= "function") then callback(info); return end
     local done, attempts = false, 0
@@ -138,26 +146,15 @@ function Speakers.Resolve(info, callback, inspect)
         if done then return end
         -- Never attribute a model to a new occupant of target/npc/nameplate tokens.
         if read(UnitGUID, info.unit) ~= info.guid then finish(); return end
-        local displayID = number(probe.GetDisplayInfo, probe)
+        local displayID, displayStatus = info.displayID, info.displayStatus or "not requested"
+        if inspect then displayID, displayStatus = number(probe.GetDisplayInfo, probe) end
         local modelID = number(probe.GetModelFileID, probe)
         info.displayID, info.modelID = displayID, modelID
-        local identity = displayID and NS.DisplayIdentity and NS.DisplayIdentity(displayID)
-        local source = "display lookup (VoiceOver)"
-        -- Give the display time to load before settling for a shared model.
+        info.displayStatus = displayStatus
+        -- Only collect observations here; all database lookups run on desktop.
         local canWait = attempts < 12 and C_Timer and type(C_Timer.After) == "function"
-        if not identity and (displayID or not hasDisplay or not canWait) then
-            identity = modelID and NS.ModelRaces and NS.ModelRaces[modelID]
-            source = "model appearance"
-        end
-        if identity then
-            if info.race == "" or info.raceSource == "model appearance" then
-                info.race, info.raceSource = identity.race, source
-            end
-            if info.gender == "" or info.genderSource == "model appearance" then
-                info.gender, info.genderSource = identity.gender, source
-            end
-            finish()
-        elseif modelID and (displayID or not hasDisplay) then
+        if (displayID and (modelID or type(probe.GetModelFileID) ~= "function")) or
+            (modelID and (not hasDisplay or displayStatus == "API returned 0")) then
             finish()
         elseif canWait then
             attempts = attempts + 1
@@ -171,8 +168,12 @@ end
 
 function Speakers.SetRace(info, race)
     if info.npcID == "" then return false end
+    -- Finish any old probe before invalidating its cached identity.
+    if activeStop then activeStop() end
     ForeverDubbedDB.npcRaces = ForeverDubbedDB.npcRaces or {}
     ForeverDubbedDB.npcRaces[info.npcID] = race
+    ForeverDubbedDB.npcRaceEvidence = ForeverDubbedDB.npcRaceEvidence or {}
+    ForeverDubbedDB.npcRaceEvidence[info.npcID] = nil
     for guid, old in pairs(cache) do
         if old.npcID == info.npcID then cache[guid] = nil end
     end
@@ -180,5 +181,21 @@ function Speakers.SetRace(info, race)
     local kept = {}
     for _, guid in ipairs(order) do if cache[guid] then kept[#kept+1] = guid end end
     order = kept
+    if race then
+        local evidence = {name=info.name, race=race, gender=info.gender}
+        ForeverDubbedDB.npcRaceEvidence[info.npcID] = evidence
+        local observed = {}
+        for k, v in pairs(info) do observed[k] = v end
+        observed.race, observed.raceSource = race, "saved NPC override"
+        -- Cached appearance is not evidence of this particular observation.
+        observed.displayID, observed.modelID = nil, nil
+        observed.displayStatus = nil
+        Speakers.Resolve(observed, function(resolved)
+            if ForeverDubbedDB.npcRaceEvidence[info.npcID] ~= evidence then return end
+            evidence.gender = resolved.gender
+            evidence.displayID, evidence.modelID = resolved.displayID, resolved.modelID
+            evidence.displayStatus = resolved.displayStatus or "not read"
+        end, true)
+    end
     return true
 end
