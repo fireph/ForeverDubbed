@@ -82,10 +82,10 @@
       "voice": "custom/orc_female.safetensors"
     },
     "dwarf_male": {
-      "voice": "george"
+      "voice": "custom/dwarf_male.safetensors"
     },
     "dwarf_female": {
-      "voice": "anna"
+      "voice": "custom/dwarf_female.safetensors"
     },
     "nightelf_male": {
       "voice": "custom/nightelf_male.safetensors"
@@ -102,16 +102,17 @@
       "decode_steps": 4
     },
     "tauren_male": {
-      "voice": "jean"
+      "voice": "custom/tauren_male.safetensors"
     },
     "tauren_female": {
-      "voice": "mary"
+      "voice": "custom/tauren_female.safetensors"
     },
     "gnome_male": {
-      "voice": "michael"
+      "voice": "custom/gnome_male.safetensors"
     },
     "gnome_female": {
-      "voice": "azelma"
+      "voice": "custom/gnome_female.safetensors",
+      "decode_steps": 4
     },
     "troll_male": {
       "voice": "custom/troll_male.safetensors"
