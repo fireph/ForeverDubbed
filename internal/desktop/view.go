@@ -45,17 +45,18 @@ func (c *statusCard) set(value, detail string, active bool) {
 }
 
 type dashboard struct {
-	queue               *widget.Check
-	root                fyne.CanvasObject
-	headline            *canvas.Text
-	hint                *widget.Label
-	window, tile, audio *statusCard
-	stop                *widget.Button
-	skip                *widget.Button
-	skipControl         fyne.CanvasObject
+	queue                            *widget.Check
+	quests, conversations, npcSpeech *widget.Check
+	root                             fyne.CanvasObject
+	headline                         *canvas.Text
+	hint                             *widget.Label
+	window, tile, audio              *statusCard
+	stop                             *widget.Button
+	skip                             *widget.Button
+	skipControl                      fyne.CanvasObject
 }
 
-func newDashboard(version string, hide, quit, stop func(), queue func(bool)) *dashboard {
+func newDashboard(version string, hide, quit, stop func(), queue func(bool), filters func(appstate.SpeechFilters)) *dashboard {
 	d := &dashboard{window: newStatusCard("Game window"), tile: newStatusCard("Dialogue tile"), audio: newStatusCard("Audio")}
 	title := canvas.NewText("ForeverDubbed", gold)
 	title.TextSize = 27
@@ -77,8 +78,18 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool)) *da
 	d.skipControl = questButtonWidget(d.skip)
 	d.skipControl.Hide()
 	d.queue = widget.NewCheck("Queue new dialogue", queue)
+	updateFilters := func(bool) {
+		filters(appstate.SpeechFilters{Quests: d.quests.Checked, Conversations: d.conversations.Checked, NPCSpeech: d.npcSpeech.Checked})
+	}
+	d.quests = widget.NewCheck("Quest dialogue", updateFilters)
+	d.conversations = widget.NewCheck("NPC conversations", updateFilters)
+	d.npcSpeech = widget.NewCheck("NPC speech", updateFilters)
+	categories := container.NewVBox(
+		widget.NewLabelWithStyle("Read aloud", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		container.NewGridWithColumns(3, d.quests, d.conversations, d.npcSpeech))
+
 	audioCard := container.NewVBox(d.audio.root, inset(3, container.NewHBox(questButtonWidget(d.stop), d.skipControl)))
-	header := container.NewVBox(d.headline, d.hint, questRule(), container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), d.queue)
+	header := container.NewVBox(d.headline, d.hint, questRule(), container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), questRule(), categories, d.queue)
 	paper := parchment(container.NewVScroll(header))
 	privacy := canvas.NewText("Only your game window is captured. Speech stays on this computer.", gold)
 	privacy.TextSize = 12
@@ -91,7 +102,15 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool)) *da
 	return d
 }
 func (d *dashboard) render(s appstate.Snapshot) {
-	// Reflect the saved preference without firing the user's change callback.
+	// Reflect saved preferences without firing the user's change callbacks.
+	for check, enabled := range map[*widget.Check]bool{
+		d.quests: s.Filters.Quests, d.conversations: s.Filters.Conversations, d.npcSpeech: s.Filters.NPCSpeech,
+	} {
+		if check.Checked != enabled {
+			check.Checked = enabled
+			check.Refresh()
+		}
+	}
 	if d.queue.Checked != s.QueueSpeech {
 		d.queue.Checked = s.QueueSpeech
 		d.queue.Refresh()

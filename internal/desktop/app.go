@@ -22,7 +22,7 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 	a.SetIcon(Icon)
 	a.Settings().SetTheme(companionTheme{theme.DefaultTheme()})
 	w := a.NewWindow("ForeverDubbed")
-	w.Resize(fyne.NewSize(760, 600))
+	w.Resize(fyne.NewSize(760, 640))
 	w.CenterOnScreen()
 	quit := func() { stop() }
 	show := func() { restoreMinimized(w); w.Show(); w.RequestFocus() }
@@ -33,9 +33,13 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 		}
 	}
 	state.SetQueueSpeech(a.Preferences().Bool("queueSpeech"))
+	state.SetSpeechFilters(loadSpeechFilters(a.Preferences()))
 	d := newDashboard(version, hide, quit, state.StopAudio, func(enabled bool) {
 		state.SetQueueSpeech(enabled)
 		a.Preferences().SetBool("queueSpeech", enabled)
+	}, func(filters appstate.SpeechFilters) {
+		state.SetSpeechFilters(filters)
+		saveSpeechFilters(a.Preferences(), filters)
 	})
 	w.SetContent(d.root)
 	d.render(state.Snapshot())

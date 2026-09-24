@@ -153,3 +153,74 @@ func TestSpeechQueueAndModeChange(t *testing.T) {
 		})
 	}
 }
+
+func TestSpeechFiltersCancelAndPruneQueue(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	state := appstate.New("game", "pocket", false)
+	state.SetQueueSpeech(true)
+	requests := make(chan protocol.Message)
+	started := make(chan byte, 8)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		speakLoop(ctx, requests, func(ctx context.Context, m protocol.Message) error {
+			started <- m.Kind
+			<-ctx.Done()
+			return ctx.Err()
+		}, state)
+	}()
+	defer func() { cancel(); <-done }()
+	send := func(kind byte) {
+		t.Helper()
+		select {
+		case requests <- protocol.Message{Kind: kind, Text: "dialogue"}:
+		case <-ctx.Done():
+			t.Fatal("send blocked")
+		}
+	}
+	expect := func(kind byte) {
+		t.Helper()
+		select {
+		case got := <-started:
+			if got != kind {
+				t.Fatalf("spoke %d, want %d", got, kind)
+			}
+		case <-ctx.Done():
+			t.Fatal("no speech")
+		}
+	}
+	wait := func(check func(appstate.Snapshot) bool) {
+		t.Helper()
+		for !check(state.Snapshot()) {
+			select {
+			case <-ctx.Done():
+				t.Fatal("state did not update")
+			case <-time.After(time.Millisecond):
+			}
+		}
+	}
+	send(2)
+	expect(2)
+	send(3)
+	send(5)
+	wait(func(s appstate.Snapshot) bool { return s.Queued == 2 })
+	state.SetSpeechFilters(appstate.SpeechFilters{Conversations: true, NPCSpeech: true})
+	expect(5) // Stops the active quest and discards its queued progress message.
+	wait(func(s appstate.Snapshot) bool { return s.Queued == 0 })
+	send(4) // Filtered incoming quests must neither queue nor interrupt.
+	send(1)
+	wait(func(s appstate.Snapshot) bool { return s.Queued == 1 })
+	select {
+	case got := <-started:
+		t.Fatalf("filtered message interrupted speech: %d", got)
+	default:
+	}
+	state.SetSpeechFilters(appstate.SpeechFilters{Conversations: true})
+	expect(1)
+	state.SetSpeechFilters(appstate.SpeechFilters{})
+	wait(func(s appstate.Snapshot) bool { return s.PlaybackID == 0 })
+	send(protocol.KindSkip) // Controls remain usable with all categories disabled.
+	send(0)                 // Connection tests remain audible.
+	expect(0)
+}

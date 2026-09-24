@@ -8,7 +8,26 @@ import (
 	"foreverdubbed/internal/protocol"
 )
 
+// SpeechFilters maps the addon's wire kinds to user-facing dialogue categories.
+type SpeechFilters struct {
+	Quests, Conversations, NPCSpeech bool
+}
+
+func (f SpeechFilters) Allows(kind byte) bool {
+	switch kind {
+	case 1:
+		return f.Conversations // Gossip and quest-giver greeting windows.
+	case 2, 3, 4:
+		return f.Quests // Quest offer, progress, and completion.
+	case 5:
+		return f.NPCSpeech // Ambient NPC/boss chat and emotes.
+	default:
+		return true // Connection tests, books, and playback controls.
+	}
+}
+
 type Snapshot struct {
+	Filters                               SpeechFilters
 	Target, Backend                       string
 	Ready, Stopped                        bool
 	Window, Tile                          bool
@@ -26,10 +45,10 @@ type Snapshot struct {
 }
 
 type State struct {
-	mu           sync.RWMutex
-	value        Snapshot
-	stopAudio    chan uint64
-	queueChanges chan struct{}
+	mu            sync.RWMutex
+	value         Snapshot
+	stopAudio     chan uint64
+	speechChanges chan struct{}
 }
 
 func New(target, backend string, muted bool) *State {
@@ -37,7 +56,7 @@ func New(target, backend string, muted bool) *State {
 	if muted {
 		audio = "Muted"
 	}
-	return &State{stopAudio: make(chan uint64, 1), queueChanges: make(chan struct{}, 1), value: Snapshot{Target: target, Backend: backend, Audio: audio}}
+	return &State{stopAudio: make(chan uint64, 1), speechChanges: make(chan struct{}, 1), value: Snapshot{Target: target, Backend: backend, Audio: audio, Filters: SpeechFilters{true, true, true}}}
 }
 func (s *State) Snapshot() Snapshot {
 	s.mu.RLock()
@@ -103,8 +122,17 @@ func (s *State) ResetPlayback() {
 func (s *State) SetQueueSpeech(enabled bool) {
 	s.Update(func(v *Snapshot) { v.QueueSpeech = enabled })
 	select {
-	case s.queueChanges <- struct{}{}:
+	case s.speechChanges <- struct{}{}:
 	default:
 	}
 }
-func (s *State) QueueChanges() <-chan struct{} { return s.queueChanges }
+func (s *State) SpeechChanges() <-chan struct{} { return s.speechChanges }
+
+// SetSpeechFilters applies immediately to active and queued speech.
+func (s *State) SetSpeechFilters(filters SpeechFilters) {
+	s.Update(func(v *Snapshot) { v.Filters = filters })
+	select {
+	case s.speechChanges <- struct{}{}:
+	default:
+	}
+}

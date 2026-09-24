@@ -327,6 +327,7 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 	var cancel context.CancelFunc
 	var finished chan error
 	var nextID uint64
+	var activeKind byte
 	var pending []protocol.Message
 	updateQueue := func() { state.Update(func(v *appstate.Snapshot) { v.Queued = len(pending) }) }
 	stopCurrent := func() {
@@ -340,6 +341,7 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 	}
 	defer func() { stopCurrent(); pending = nil; updateQueue() }()
 	start := func(message protocol.Message) {
+		activeKind = message.Kind
 		nextID++
 		state.Update(func(v *appstate.Snapshot) {
 			v.Audio = "Preparing speech"
@@ -356,6 +358,22 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 	for {
 		if ctx.Err() != nil {
 			return
+		}
+		// Remove disabled categories before starting any queued message.
+		filters := state.Snapshot().Filters
+		kept := pending[:0]
+		for _, message := range pending {
+			if filters.Allows(message.Kind) {
+				kept = append(kept, message)
+			}
+		}
+		clear(pending[len(kept):])
+		if len(kept) != len(pending) {
+			pending = kept
+			updateQueue()
+		}
+		if finished != nil && !filters.Allows(activeKind) {
+			stopCurrent()
 		}
 		// Switching back to interrupt mode keeps only the newest waiting message.
 		if !state.Snapshot().QueueSpeech && len(pending) > 0 {
@@ -375,8 +393,8 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 		select {
 		case <-ctx.Done():
 			return
-		case <-state.QueueChanges():
-			// Apply the new policy at the top of the loop.
+		case <-state.SpeechChanges():
+			// Apply queue mode and category changes at the top of the loop.
 		case id := <-state.AudioStops():
 			if id == state.Snapshot().PlaybackID {
 				stopCurrent()
@@ -390,6 +408,9 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 				// Controls bypass queue mode. Cancelling the current utterance
 				// advances any pending dialogue, just like the desktop buttons.
 				stopCurrent()
+				continue
+			}
+			if !state.Snapshot().Filters.Allows(message.Kind) {
 				continue
 			}
 			if state.Snapshot().QueueSpeech && finished != nil {

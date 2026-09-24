@@ -30,6 +30,17 @@ For source builds on Windows or Linux/WSL, see the [Windows build guide](native/
 
 The Fyne interface is styled like a classic WoW quest dialog, with parchment, a dark frame, serif text, and red-and-gold buttons. It shows whether the game window is available, whether the addon tile is connected, and whether speech is preparing, playing, idle, or muted. The **Stop** button beneath Audio interrupts the current speech without stopping game detection. It is enabled only while audio is playing.
 
+Under **Read aloud**, choose which dialogue receives speech:
+
+- **Quest dialogue:** quest offers, objectives, progress, and completion.
+- **NPC conversations:** non-quest NPC dialogue windows and quest-giver greetings.
+- **NPC speech:** ambient NPC/boss say, yell, whisper, and emote text.
+
+All three default to enabled and are saved across launches on Windows and macOS.
+Unchecking a category stops its current speech and removes its waiting messages.
+Connection tests, books/item text, and Stop/Skip commands remain available.
+The addon must also have NPC chat enabled (`/fdb chat`) to transmit ambient speech.
+
 Enable **Queue new dialogue** to play incoming messages in order. Leave it unchecked
 (the default) to interrupt speech and play the newest message. The app remembers
 this setting. Unchecking it with messages waiting interrupts the current speech

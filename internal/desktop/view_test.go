@@ -20,11 +20,12 @@ func TestDashboardLiveStates(t *testing.T) {
 	a.Settings().SetTheme(companionTheme{theme.DefaultTheme()})
 	stops := 0
 	queued := false
-	d := newDashboard("0.5.0", func() {}, func() {}, func() { stops++ }, func(enabled bool) { queued = enabled })
+	var filters appstate.SpeechFilters
+	d := newDashboard("0.5.0", func() {}, func() {}, func() { stops++ }, func(enabled bool) { queued = enabled }, func(f appstate.SpeechFilters) { filters = f })
 	w := a.NewWindow("ForeverDubbed")
 	defer w.Close()
 	w.SetContent(d.root)
-	w.Resize(fyne.NewSize(760, 600))
+	w.Resize(fyne.NewSize(760, 640))
 	state := appstate.New("World of Warcraft Beta.app", "pocket", false)
 	d.render(state.Snapshot())
 	if d.skipControl.Visible() || !d.skip.Disabled() {
@@ -33,6 +34,19 @@ func TestDashboardLiveStates(t *testing.T) {
 	if d.headline.Text != "Starting your companion" {
 		t.Fatal(d.headline.Text)
 	}
+	if !d.quests.Checked || !d.conversations.Checked || !d.npcSpeech.Checked {
+		t.Fatal("filters should default on")
+	}
+	test.Tap(d.quests)
+	if filters.Quests || !filters.Conversations || !filters.NPCSpeech {
+		t.Fatal("quest checkbox changed wrong filters", filters)
+	}
+	test.Tap(d.conversations)
+	test.Tap(d.npcSpeech)
+	if filters != (appstate.SpeechFilters{}) {
+		t.Fatal("filters not independently selectable", filters)
+	}
+	d.render(state.Snapshot())
 	state.Update(func(v *appstate.Snapshot) { v.Ready = true })
 	state.Capture(true, false, nil)
 	d.render(state.Snapshot())

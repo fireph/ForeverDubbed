@@ -45,3 +45,33 @@ func TestConcurrentStatusKeepsLastDialogue(t *testing.T) {
 		t.Fatal(v)
 	}
 }
+
+func TestSpeechCategoryMapping(t *testing.T) {
+	for _, tc := range []struct {
+		filters SpeechFilters
+		allowed []byte
+	}{
+		{SpeechFilters{}, []byte{0, 6, protocol.KindStop, protocol.KindSkip}},
+		{SpeechFilters{Quests: true}, []byte{0, 2, 3, 4, 6, 7, 8}},
+		{SpeechFilters{Conversations: true}, []byte{0, 1, 6, 7, 8}},
+		{SpeechFilters{NPCSpeech: true}, []byte{0, 5, 6, 7, 8}},
+	} {
+		for kind := byte(0); kind <= 8; kind++ {
+			want := false
+			for _, k := range tc.allowed {
+				if k == kind {
+					want = true
+				}
+			}
+			if tc.filters.Allows(kind) != want {
+				t.Fatalf("filters=%+v kind=%d", tc.filters, kind)
+			}
+		}
+	}
+	defaults := New("game", "pocket", false).Snapshot().Filters
+	for kind := byte(0); kind <= 8; kind++ {
+		if !defaults.Allows(kind) {
+			t.Fatalf("default muted kind %d", kind)
+		}
+	}
+}
