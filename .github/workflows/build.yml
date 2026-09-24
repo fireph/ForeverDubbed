@@ -130,8 +130,30 @@ jobs:
         env:
           TARGET_ARCH: arm64
         run: |
-          hdiutil create -volname ForeverDubbed -srcfolder staging -fs HFS+ -format UDZO "dist/ForeverDubbed-darwin-$TARGET_ARCH.dmg"
-          hdiutil verify "dist/ForeverDubbed-darwin-$TARGET_ARCH.dmg"
+          # hdiutil can fail transiently with EBUSY even on an isolated runner.
+          # Fresh paths prevent a partial image from poisoning the next attempt.
+          export LC_ALL=C
+          dmg_work=$(mktemp -d "$RUNNER_TEMP/foreverdubbed-dmg.XXXXXX")
+          trap 'rm -rf "$dmg_work"' EXIT
+          for attempt in 1 2 3 4 5; do
+            image="$dmg_work/attempt-$attempt.dmg"
+            log="$dmg_work/create.log"
+            if hdiutil create -volname ForeverDubbed -srcfolder staging -fs HFS+ -format UDZO "$image" >"$log" 2>&1; then
+              cat "$log"
+              hdiutil verify "$image"
+              mv "$image" "dist/ForeverDubbed-darwin-$TARGET_ARCH.dmg"
+              exit 0
+            else
+              status=$?
+            fi
+            cat "$log" >&2
+            if ! grep -Fqi 'Resource busy' "$log" || [ "$attempt" -eq 5 ]; then
+              exit "$status"
+            fi
+            delay=$((attempt * 5))
+            echo "DMG creation is busy (attempt $attempt/5); retrying in $delay seconds." >&2
+            sleep "$delay"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: release-darwin-arm64${{ github.event_name == 'pull_request' && '-unsigned' || '' }}
