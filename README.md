@@ -178,7 +178,7 @@ For a diagnostic screenshot, explicitly run `.\foreverdubbed.exe -snapshot captu
 - **Long text takes time:** each page carries 1,056 bytes and lasts 250 ms. A 2 KB message needs two pages, or 0.5 seconds per cycle, plus discovery and TTS startup. Missed pages are recovered on later cycles. Text is spoken only after every page passes validation.
 - **Changing quest screens interrupts narration:** intentional latest-message behavior. Ambient NPC speech can also interrupt; toggle it with `/fdb chat`.
 
-The border includes a reference swatch for every palette color. The decoder measures these on every captured page and compares data cells to the observed colors, adapting to uniform gamma and color changes without assuming exact screen RGB values. Ambiguous or insufficiently separated colors are rejected. This improves tolerance; it does not make the transport immune to all display processing.
+The tile uses the Chromaglyph OKLab palette centered at h 264, L 0.25, C 0.05, with minimum RGB distance √38 (about 6.16). The border includes a reference swatch for every palette color. The decoder measures these on every captured page and compares data cells to the observed colors, adapting to uniform gamma and color changes without assuming exact screen RGB values. Ambiguous or insufficiently separated colors are rejected. This improves tolerance; it does not make the transport immune to all display processing.
 
 There is no forward error correction. Per-page and whole-message Adler-32 checksums reject most accidental damage, and repeated pages provide retries. Checksums are for accidental corruption, not authentication. The companion accepts a valid tile anywhere within the selected game window.
 

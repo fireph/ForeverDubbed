@@ -2,27 +2,27 @@ local _, NS = ...
 local Codec = {}
 NS.Codec = Codec
 Codec.GRID, Codec.PAYLOAD = 50, 1056
--- Chromaglyph OKLab pack: h 264, L 0.22, C 0.045; minimum RGB distance sqrt(37).
+-- Chromaglyph OKLab pack: h 264, L 0.25, C 0.05; minimum RGB distance sqrt(38).
 -- Palette order is part of the wire format; all sixteen references are sent.
 Codec.OUTLINE = 2 -- physical pixels, independent of cell size
 Codec.FINDER = {128, 192, 240} -- light blue #80c0f0
 Codec.PALETTE = {
-    {16,26,47},
-    {0,28,49},
-    {30,25,46},
-    {14,27,59},
-    {18,24,35},
-    {5,26,38},
-    {24,27,57},
-    {5,28,58},
-    {8,27,48},
-    {26,24,38},
-    {23,26,47},
-    {19,19,45},
-    {15,33,50},
-    {9,20,46},
-    {15,27,53},
-    {17,25,41},
+    {21,33,58},
+    {0,36,61},
+    {36,29,53},
+    {13,31,71},
+    {23,35,46},
+    {10,37,50},
+    {24,29,69},
+    {11,34,61},
+    {33,28,62},
+    {5,33,69},
+    {28,32,54},
+    {3,37,54},
+    {30,33,46},
+    {18,32,64},
+    {22,34,52},
+    {27,31,60},
 }
 
 -- One hard-coded loop with a two-cell perpendicular stroke width.

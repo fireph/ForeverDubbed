@@ -44,7 +44,7 @@ func TestPaletteCapacityAndSeparation(t *testing.T) {
 	}
 	for i, a := range colors {
 		for j, b := range colors {
-			if i != j && distance([3]int{int(a.R), int(a.G), int(a.B)}, [3]int{int(b.R), int(b.G), int(b.B)}) < 37 {
+			if i != j && distance([3]int{int(a.R), int(a.G), int(a.B)}, [3]int{int(b.R), int(b.G), int(b.B)}) < 38 {
 				t.Fatal("palette colors too close")
 			}
 		}
@@ -96,7 +96,7 @@ func TestDamagedCalibrationAndAmbiguousData(t *testing.T) {
 			im.SetRGBA(Outline+19, Outline+99, colors[9])
 			im.SetRGBA(Outline+21, Outline+99, colors[8])
 		}, // swapped references
-		func(im *image.RGBA) { im.SetRGBA(Outline+3, Outline+3, color.RGBA{16, 26, 50, 255}) }, // ambiguous between references 0 and E
+		func(im *image.RGBA) { im.SetRGBA(Outline+3, Outline+3, color.RGBA{22, 34, 55, 255}) }, // ambiguous between references 0 and E
 	} {
 		im, _ := Render(b, 2)
 		damage(im)
