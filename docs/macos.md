@@ -99,7 +99,9 @@ Enable **Queue new dialogue** to play incoming messages in order. Leave it unche
 (the default) to interrupt speech and play the newest message. The app remembers
 this setting. Unchecking it with messages waiting interrupts the current speech
 and plays only the newest queued message. **Stop** skips the current speech;
-in queue mode, the next waiting message then plays.
+in queue mode, the next waiting message then plays. Queue mode also shows a
+**Skip** button: it advances to the next message, or stops if nothing else is
+queued. Skip is enabled only during playback.
 
 Local release builds are signed with a persistent self-signed certificate. They are not Developer ID signed or notarized. If macOS blocks a downloaded build, review its source and use [**System Settings → Privacy & Security → Open Anyway**](https://support.apple.com/en-gb/102445) for that app. Public notarized distribution requires a separate signing/notarization step.
 

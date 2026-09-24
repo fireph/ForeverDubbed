@@ -27,6 +27,9 @@ func TestDashboardLiveStates(t *testing.T) {
 	w.Resize(fyne.NewSize(760, 600))
 	state := appstate.New("World of Warcraft Beta.app", "pocket", false)
 	d.render(state.Snapshot())
+	if d.skipControl.Visible() || !d.skip.Disabled() {
+		t.Fatal("skip available without queue mode")
+	}
 	if d.headline.Text != "Starting your companion" {
 		t.Fatal(d.headline.Text)
 	}
@@ -70,6 +73,20 @@ func TestDashboardLiveStates(t *testing.T) {
 	if stops != 1 {
 		t.Fatal("stop callback missing")
 	}
+	if !d.skipControl.Visible() || d.skip.Disabled() {
+		t.Fatal("skip unavailable during queued playback")
+	}
+	test.Tap(d.skip)
+	if stops != 2 {
+		t.Fatal("skip did not interrupt current speech")
+	}
+	state.SetQueueSpeech(false)
+	d.render(state.Snapshot())
+	if d.skipControl.Visible() || !d.skip.Disabled() {
+		t.Fatal("skip available after queue disabled")
+	}
+	state.SetQueueSpeech(true)
+	d.render(state.Snapshot())
 	if os.Getenv("FDB_UI_SCREENSHOT_IDLE") != "" {
 		state.ResetPlayback()
 		d.render(state.Snapshot())
@@ -87,12 +104,13 @@ func TestDashboardLiveStates(t *testing.T) {
 	for _, phase := range []string{"Preparing speech", "Idle", "Muted", "Starting", "Stopped"} {
 		state.Audio(phase)
 		d.render(state.Snapshot())
-		if !d.stop.Disabled() {
+		if !d.stop.Disabled() || !d.skip.Disabled() {
 			t.Fatalf("stop enabled during %s", phase)
 		}
 		test.Tap(d.stop)
+		test.Tap(d.skip)
 	}
-	if stops != 1 {
+	if stops != 2 {
 		t.Fatal("disabled stop invoked callback")
 	}
 	state.Update(func(v *appstate.Snapshot) { v.PlaybackID = 2 })

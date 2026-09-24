@@ -34,7 +34,9 @@ Enable **Queue new dialogue** to play incoming messages in order. Leave it unche
 (the default) to interrupt speech and play the newest message. The app remembers
 this setting. Unchecking it with messages waiting interrupts the current speech
 and plays only the newest queued message. **Stop** skips the current speech;
-in queue mode, the next waiting message then plays.
+in queue mode, the next waiting message then plays. Queue mode also shows a
+**Skip** button: it advances to the next message, or stops if nothing else is
+queued. Skip is enabled only during playback.
 
 Close or minimize the window, or click **Minimize to tray**, to keep the companion running in the Windows system tray or macOS menu bar. Choose **Show ForeverDubbed** from its tray icon to reopen it. Choose **Quit** to stop capture and audio and exit.
 

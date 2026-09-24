@@ -51,6 +51,8 @@ type dashboard struct {
 	hint, diagnostics   *widget.Label
 	window, tile, audio *statusCard
 	stop                *widget.Button
+	skip                *widget.Button
+	skipControl         fyne.CanvasObject
 }
 
 func newDashboard(version string, hide, quit, stop func(), queue func(bool)) *dashboard {
@@ -68,8 +70,14 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool)) *da
 	d.hint.Wrapping = fyne.TextWrapWord
 	d.stop = widget.NewButton("Stop", stop)
 	d.stop.Disable()
+	// The speech worker already advances the queue after cancelling the current
+	// utterance, and becomes idle when there is no next message.
+	d.skip = widget.NewButton("Skip", stop)
+	d.skip.Disable()
+	d.skipControl = questButtonWidget(d.skip)
+	d.skipControl.Hide()
 	d.queue = widget.NewCheck("Queue new dialogue", queue)
-	audioCard := container.NewVBox(d.audio.root, inset(3, container.NewHBox(questButtonWidget(d.stop))))
+	audioCard := container.NewVBox(d.audio.root, inset(3, container.NewHBox(questButtonWidget(d.stop), d.skipControl)))
 	d.diagnostics = widget.NewLabel("")
 	d.diagnostics.Wrapping = fyne.TextWrapWord
 	detailScroll := container.NewVScroll(d.diagnostics)
@@ -150,6 +158,16 @@ func (d *dashboard) render(s appstate.Snapshot) {
 		d.stop.Enable()
 	} else {
 		d.stop.Disable()
+	}
+	if s.QueueSpeech {
+		d.skipControl.Show()
+	} else {
+		d.skipControl.Hide()
+	}
+	if s.QueueSpeech && playing && s.PlaybackID != 0 {
+		d.skip.Enable()
+	} else {
+		d.skip.Disable()
 	}
 	details := fmt.Sprintf("Capture target: %s\nSpeech engine: %s", s.Target, s.Backend)
 	if s.CaptureError != "" {

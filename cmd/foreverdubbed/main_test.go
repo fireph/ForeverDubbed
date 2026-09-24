@@ -129,6 +129,19 @@ func TestSpeechQueueAndModeChange(t *testing.T) {
 			if v := state.Snapshot(); v.Queued != 0 || v.SpeechError != "" {
 				t.Fatal(v)
 			}
+			// Skipping the last message should leave playback idle.
+			state.StopAudio()
+			for state.Snapshot().PlaybackID != 0 {
+				select {
+				case <-ctx.Done():
+					t.Fatal("last message did not stop")
+				case <-time.After(time.Millisecond):
+				}
+			}
+			if v := state.Snapshot(); v.Audio != "Idle" || v.SpeechError != "" {
+				t.Fatal(v)
+			}
+
 		})
 	}
 }
