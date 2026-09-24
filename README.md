@@ -28,7 +28,7 @@ For source builds on Windows or Linux/WSL, see the [Windows build guide](native/
 
 ## Desktop companion
 
-The Fyne interface is styled like a classic WoW quest dialog, with parchment, a dark frame, serif text, and red-and-gold buttons. It shows whether the game window is available, whether the addon tile is connected, and whether speech is preparing, playing, idle, or muted. The **Stop** button beneath Audio interrupts the current speech without stopping game detection. It is enabled only while audio is playing. Expand **Details & troubleshooting** for capture or speech errors.
+The Fyne interface is styled like a classic WoW quest dialog, with parchment, a dark frame, serif text, and red-and-gold buttons. It shows whether the game window is available, whether the addon tile is connected, and whether speech is preparing, playing, idle, or muted. The **Stop** button beneath Audio interrupts the current speech without stopping game detection. It is enabled only while audio is playing.
 
 Enable **Queue new dialogue** to play incoming messages in order. Leave it unchecked
 (the default) to interrupt speech and play the newest message. The app remembers

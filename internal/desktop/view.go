@@ -48,7 +48,7 @@ type dashboard struct {
 	queue               *widget.Check
 	root                fyne.CanvasObject
 	headline            *canvas.Text
-	hint, diagnostics   *widget.Label
+	hint                *widget.Label
 	window, tile, audio *statusCard
 	stop                *widget.Button
 	skip                *widget.Button
@@ -78,19 +78,15 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool)) *da
 	d.skipControl.Hide()
 	d.queue = widget.NewCheck("Queue new dialogue", queue)
 	audioCard := container.NewVBox(d.audio.root, inset(3, container.NewHBox(questButtonWidget(d.stop), d.skipControl)))
-	d.diagnostics = widget.NewLabel("")
-	d.diagnostics.Wrapping = fyne.TextWrapWord
-	detailScroll := container.NewVScroll(d.diagnostics)
-	detailScroll.SetMinSize(fyne.NewSize(0, 110))
-	diagnostics := widget.NewAccordion(widget.NewAccordionItem("Details & troubleshooting", detailScroll))
-	header := container.NewVBox(d.headline, d.hint, questRule(), container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), d.queue, questRule())
-	paper := parchment(container.NewBorder(header, nil, nil, nil, container.NewVScroll(container.NewVBox(diagnostics))))
+	header := container.NewVBox(d.headline, d.hint, questRule(), container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), d.queue)
+	paper := parchment(container.NewVScroll(header))
 	privacy := canvas.NewText("Only your game window is captured. Speech stays on this computer.", gold)
 	privacy.TextSize = 12
 	privacy.TextStyle.Italic = true
 	versionLabel := canvas.NewText("v"+version, gold)
 	versionLabel.TextSize = 13
-	footer := container.NewVBox(container.NewCenter(privacy), container.NewHBox(container.NewCenter(versionLabel), layout.NewSpacer(), questButton("Minimize to tray", hide), questButton("Quit", quit)))
+	privacyNote := container.New(layout.NewCustomPaddedLayout(0, 10, 0, 0), container.NewCenter(privacy))
+	footer := container.NewVBox(privacyNote, container.NewHBox(container.NewCenter(versionLabel), layout.NewSpacer(), questButton("Minimize to tray", hide), questButton("Quit", quit)))
 	d.root = questFrame(container.NewBorder(inset(5, banner), inset(5, footer), nil, nil, paper))
 	return d
 }
@@ -131,7 +127,7 @@ func (d *dashboard) render(s appstate.Snapshot) {
 		headline, hint = "Unable to start", s.FatalError
 	}
 	if s.SpeechError != "" {
-		hint = "Speech failed. See Details & troubleshooting below."
+		hint = "Speech failed: " + s.SpeechError
 	}
 	d.headline.Text = headline
 	d.headline.Refresh()
@@ -142,17 +138,14 @@ func (d *dashboard) render(s appstate.Snapshot) {
 	if audio == "Speaking (system voice)" {
 		audio = "Speaking"
 	}
-	audioDetail := "Pocket TTS · on your CPU"
-	if s.Backend == "system" {
-		audioDetail = "System voice"
-	}
-	if s.Voice != "" {
-		audioDetail = s.Voice
-	}
-	if s.Queued > 0 {
-		audioDetail += fmt.Sprintf(" · %d queued", s.Queued)
-	}
 	playing := !s.Stopped && (s.Audio == "Playing audio" || s.Audio == "Speaking (system voice)")
+	audioDetail := ""
+	if playing && s.Voice != "" {
+		audioDetail = s.Voice
+		if s.Queued > 0 {
+			audioDetail += fmt.Sprintf(" · %d queued", s.Queued)
+		}
+	}
 	d.audio.set(audio, audioDetail, playing)
 	if playing && s.PlaybackID != 0 {
 		d.stop.Enable()
@@ -169,17 +162,6 @@ func (d *dashboard) render(s appstate.Snapshot) {
 	} else {
 		d.skip.Disable()
 	}
-	details := fmt.Sprintf("Capture target: %s\nSpeech engine: %s", s.Target, s.Backend)
-	if s.CaptureError != "" {
-		details += "\n\nCapture: " + s.CaptureError
-	}
-	if s.SpeechError != "" {
-		details += "\n\nSpeech: " + s.SpeechError
-	}
-	if s.FatalError != "" {
-		details += "\n\nStartup: " + s.FatalError
-	}
-	d.diagnostics.SetText(details)
 	// Wrapped status text can change child minimum sizes.
 	d.root.Refresh()
 }
