@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1
+
+- Request borderless Windows game capture through the supported Windows permission API, removing the yellow capture outline when permitted. Keep capture working while permission is pending or unavailable, and preserve the setting across game-window changes.
+- Compatible with the 0.6.0 addon; no addon update is required.
+
 ## 0.6.0
 
 - Resolve race in the desktop app using the unchanged 15,444-record VoiceOver snapshot, separate custom mappings for 51 confirmed Skyborne NPC IDs, and character-model fallbacks.

@@ -107,17 +107,51 @@ struct fdb_wgc {
     ComPtr<FdbCaptureItem> item;
     ComPtr<FdbFramePool> pool;
     ComPtr<FdbSession> session;
+    ComPtr<FdbSession3> borderSession;
+    ComPtr<FdbAccessOperation> borderAccess;
+    ComPtr<IAsyncInfo> borderAccessInfo;
+    bool borderRequested = false, borderAllowed = false;
     ComPtr<ID3D11Texture2D> latest, staging;
     HWND window = nullptr;
     DWORD pid = 0;
     FdbSize content{};
-    ~fdb_wgc() { fdb_wgc_reset(this); }
+    ~fdb_wgc() {
+        fdb_wgc_reset(this);
+        if (borderAccessInfo.p) { borderAccessInfo->Cancel(); borderAccessInfo->Close(); }
+    }
 };
 void fdb_wgc_reset(fdb_wgc *c) {
+    c->borderSession.reset();
     closeObject(c->session.p); c->session.reset();
     closeObject(c->pool.p); c->pool.reset();
     c->item.reset(); c->latest.reset(); c->staging.reset();
     c->window = nullptr; c->pid = 0; c->content = {};
+}
+// Border suppression is optional. Never block frame acquisition on a consent
+// dialog, or fail capture on older Windows versions / denied permission.
+static void updateCaptureBorder(fdb_wgc *c) {
+    if (!c->borderSession.p) return;
+    if (!c->borderRequested) {
+        c->borderRequested = true; // One request per reader, including window resets.
+        ComPtr<FdbCaptureAccessStatics> access;
+        HRESULT hr = factory(L"Windows.Graphics.Capture.GraphicsCaptureAccess", iidCaptureAccess, reinterpret_cast<void **>(access.put()));
+        if (SUCCEEDED(hr)) hr = access->RequestAccessAsync(fdbAccessBorderless, c->borderAccess.put());
+        if (SUCCEEDED(hr)) hr = c->borderAccess->QueryInterface(iidAsyncInfo, reinterpret_cast<void **>(c->borderAccessInfo.put()));
+        if (FAILED(hr)) { c->borderAccess.reset(); c->borderAccessInfo.reset(); }
+    }
+    if (c->borderAccessInfo.p) {
+        AsyncStatus status = Started;
+        HRESULT hr = c->borderAccessInfo->get_Status(&status);
+        if (SUCCEEDED(hr) && status == Started) return;
+        INT32 result = 0;
+        c->borderAllowed = SUCCEEDED(hr) && status == Completed &&
+            SUCCEEDED(c->borderAccess->GetResults(&result)) && result == fdbAccessAllowed;
+        if (FAILED(hr)) c->borderAccessInfo->Cancel();
+        c->borderAccessInfo->Close();
+        c->borderAccessInfo.reset(); c->borderAccess.reset();
+    }
+    if (c->borderAllowed) c->borderSession->SetBorderRequired(false);
+    c->borderSession.reset(); // Apply once per session; a resize creates a new one.
 }
 fdb_wgc *fdb_wgc_open(char *error, size_t size) {
     HRESULT hr = RoInitialize(RO_INIT_MULTITHREADED);
@@ -162,6 +196,8 @@ int fdb_wgc_select(fdb_wgc *c, uintptr_t id, uint32_t pid, int *width, int *heig
     if (SUCCEEDED(hr)) {
         ComPtr<FdbSession2> cursor;
         if (SUCCEEDED(c->session->QueryInterface(iidSession2, reinterpret_cast<void **>(cursor.put())))) cursor->SetCursorEnabled(false);
+        c->session->QueryInterface(iidSession3, reinterpret_cast<void **>(c->borderSession.put()));
+        updateCaptureBorder(c);
         hr = c->session->StartCapture();
     }
     if (FAILED(hr)) { fdb_wgc_reset(c); return fail(error, size, "Start game window capture", hr); }
@@ -199,6 +235,7 @@ int fdb_wgc_capture(fdb_wgc *c, int x, int y, int width, int height, void *rgba,
     DWORD owner = 0;
     if (!c->window || !eligible(c->window, &owner) || owner != c->pid) { fdb_wgc_reset(c); return fail(error, size, "Game window is closed, minimized, or unavailable"); }
     if (x < 0 || y < 0 || width <= 0 || height <= 0 || int64_t(x)+width > c->content.width || int64_t(y)+height > c->content.height) return fail(error, size, "Capture rectangle is outside the game window");
+    updateCaptureBorder(c);
     ULONGLONG deadline = GetTickCount64()+1000;
     int received = 0;
     do {

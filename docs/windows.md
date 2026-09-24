@@ -16,7 +16,11 @@ The executable filename is matched case-insensitively against the owning process
 .\foreverdubbed.exe -capture-app "C:\Games\World of Warcraft\_classic_beta_\WoWB.exe"
 ```
 
-When the game is closed or minimized, the reader waits. It reacquires the window after it reopens or changes size. If two matching processes are running, specify the exact executable path or close the other instance. Window coordinates and snapshots are relative to the captured game window, not the desktop. Windows may draw a capture indicator around the game.
+When the game is closed or minimized, the reader waits. It reacquires the window after it reopens or changes size. If two matching processes are running, specify the exact executable path or close the other instance. Window coordinates and snapshots are relative to the captured game window, not the desktop.
+
+The yellow outline is Windows' capture indicator. ForeverDubbed requests permission to hide it using the supported borderless-capture API (Windows build 20348 or newer, including Windows 11). Allow the Windows permission prompt if one appears. Capture continues while permission is pending; the outline disappears once access is granted. The request is made once per reader, and the setting is reapplied when the game window is reacquired. Restart ForeverDubbed after changing capture permissions in Windows.
+
+Older Windows versions, denied permission, or another application capturing the same window with its border enabled can leave the outline visible. These conditions do not prevent ForeverDubbed from reading the game. See Microsoft's [capture-border documentation](https://learn.microsoft.com/en-us/uwp/api/windows.graphics.capture.graphicscapturesession.isborderrequired).
 
 Use windowed or borderless mode. Exclusive fullscreen, a minimized game, or a game that disables capture may not produce frames; the reader reports that condition without capturing the desktop instead. If the game is elevated and cannot be discovered, run the companion at the same privilege level. HDR or color filters can affect the optical palette; use SDR when diagnosing decoding failures.
 
