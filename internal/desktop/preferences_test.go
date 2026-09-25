@@ -15,7 +15,7 @@ func TestSpeechFilterPreferences(t *testing.T) {
 	if got := loadSpeechFilters(p); got != (appstate.SpeechFilters{Quests: true, Conversations: true, NPCSpeech: true}) {
 		t.Fatal("missing preferences must enable all categories", got)
 	}
-	want := appstate.SpeechFilters{Conversations: true}
+	want := appstate.SpeechFilters{Conversations: true, QuestObjectives: true, QuestTitle: true}
 	saveSpeechFilters(p, want)
 	if got := loadSpeechFilters(p); got != want {
 		t.Fatalf("saved=%+v loaded=%+v", want, got)
@@ -24,5 +24,10 @@ func TestSpeechFilterPreferences(t *testing.T) {
 	p.RemoveValue("speakNPCSpeech")
 	if got := loadSpeechFilters(p); !got.NPCSpeech || got.Quests {
 		t.Fatal("incorrect preference migration", got)
+	}
+	p.RemoveValue("speakQuestObjectives")
+	p.RemoveValue("speakQuestTitle")
+	if got := loadSpeechFilters(p); got.QuestObjectives || got.QuestTitle {
+		t.Fatal("quest extras must default off for older installs")
 	}
 }

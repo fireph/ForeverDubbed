@@ -17,6 +17,28 @@ func (e fakeEngine) Stream(c context.Context, t, v string, s int, f func([]byte)
 	return e.generate(c, t, v, s, f)
 }
 func (fakeEngine) Close() error { return nil }
+
+func TestQuestSynthesisOmitsTitle(t *testing.T) {
+	c, err := Load("../../tts/voices.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got string
+	local := Local{Config: c, Engine: fakeEngine{func(_ context.Context, text, _ string, _ int, emit func([]byte) error) error {
+		got += text
+		return emit([]byte{0, 0})
+	}}, Play: func(_ context.Context, _ int, chunks <-chan []byte) error {
+		for range chunks {
+		}
+		return nil
+	}}
+	if err := local.Speak(context.Background(), protocol.Message{Kind: 2, Speaker: "Thrall", Title: "Quest title", Text: "Main dialogue.", Objectives: "Collect supplies."}); err != nil {
+		t.Fatal(err)
+	}
+	if got != "Main dialogue." {
+		t.Fatalf("synthesized %q", got)
+	}
+}
 func TestNativeStreamingAndVoiceOptions(t *testing.T) {
 	c, err := Load("../../tts/voices.json")
 	if err != nil {

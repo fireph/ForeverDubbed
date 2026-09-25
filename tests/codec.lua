@@ -1,7 +1,7 @@
 local ns = {}
 assert(loadfile("addon/ForeverDubbed/Codec.lua"))("ForeverDubbed", ns)
 local frames = assert(ns.Codec.Encode(123456789, 42, 2, "Thrall", "A new beginning",
-    "Hello, champion! " .. string.rep("Café — 世界. ", 90), "Orc", "male", "4949", "115", "7478487", "Skyborne"))
+    "Hello, champion! " .. string.rep("Café — 世界. ", 90), "Orc", "male", "4949", "115", "7478487", "Skyborne", "Bring supplies.\nReturn to Thrall."))
 local palette = {}
 for _, rgb in ipairs(ns.Codec.PALETTE) do
     palette[#palette+1] = string.format("%02x%02x%02x", rgb[1], rgb[2], rgb[3])

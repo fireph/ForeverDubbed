@@ -47,6 +47,8 @@ func (c *statusCard) set(value, detail string, active bool) {
 type dashboard struct {
 	queue                            *widget.Check
 	quests, conversations, npcSpeech *widget.Check
+	questObjectives                  *widget.Check
+	questTitle                       *widget.Check
 	root                             fyne.CanvasObject
 	headline                         *canvas.Text
 	hint                             *widget.Label
@@ -79,14 +81,17 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool), fil
 	d.skipControl.Hide()
 	d.queue = widget.NewCheck("Queue new dialogue", queue)
 	updateFilters := func(bool) {
-		filters(appstate.SpeechFilters{Quests: d.quests.Checked, Conversations: d.conversations.Checked, NPCSpeech: d.npcSpeech.Checked})
+		filters(appstate.SpeechFilters{Quests: d.quests.Checked, Conversations: d.conversations.Checked, NPCSpeech: d.npcSpeech.Checked, QuestObjectives: d.questObjectives.Checked, QuestTitle: d.questTitle.Checked})
 	}
 	d.quests = widget.NewCheck("Quest dialogue", updateFilters)
 	d.conversations = widget.NewCheck("NPC conversations", updateFilters)
 	d.npcSpeech = widget.NewCheck("NPC speech", updateFilters)
+	d.questObjectives = widget.NewCheck("Quest objectives", updateFilters)
+	d.questTitle = widget.NewCheck("Quest title", updateFilters)
 	categories := container.NewVBox(
 		widget.NewLabelWithStyle("Read aloud", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		container.NewGridWithColumns(3, d.quests, d.conversations, d.npcSpeech))
+		container.NewGridWithColumns(3, d.quests, d.conversations, d.npcSpeech),
+		container.NewGridWithColumns(3, d.questTitle, d.questObjectives, layout.NewSpacer()))
 
 	audioCard := container.NewVBox(d.audio.root, inset(3, container.NewHBox(questButtonWidget(d.stop), d.skipControl)))
 	header := container.NewVBox(d.headline, d.hint, questRule(), container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), questRule(), categories, d.queue)
@@ -105,6 +110,8 @@ func (d *dashboard) render(s appstate.Snapshot) {
 	// Reflect saved preferences without firing the user's change callbacks.
 	for check, enabled := range map[*widget.Check]bool{
 		d.quests: s.Filters.Quests, d.conversations: s.Filters.Conversations, d.npcSpeech: s.Filters.NPCSpeech,
+		d.questObjectives: s.Filters.QuestObjectives,
+		d.questTitle:      s.Filters.QuestTitle,
 	} {
 		if check.Checked != enabled {
 			check.Checked = enabled

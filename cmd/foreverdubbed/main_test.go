@@ -8,6 +8,74 @@ import (
 	"time"
 )
 
+func TestQueuedQuestContentUsesCurrentPreference(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	state := appstate.New("game", "pocket", false)
+	state.SetQueueSpeech(true)
+	requests := make(chan protocol.Message)
+	started := make(chan protocol.Message, 4)
+	release := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		speakLoop(ctx, requests, func(ctx context.Context, m protocol.Message) error {
+			started <- m
+			select {
+			case <-release:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}, state)
+	}()
+	defer func() { cancel(); <-done }()
+	receive := func(want string) {
+		t.Helper()
+		select {
+		case m := <-started:
+			if m.Speech() != want || m.DialogueText(false, false) != want {
+				t.Fatalf("spoken text: %+v; want %q", m, want)
+			}
+		case <-ctx.Done():
+			t.Fatal("speech worker stalled")
+		}
+	}
+	quest := protocol.Message{Kind: 2, Speaker: "Thrall", Title: "Quest title", Text: "Main dialogue.", Objectives: "Bring supplies."}
+	state.Received(quest)
+	requests <- quest
+	receive("Main dialogue.")
+	requests <- protocol.Message{Kind: 2, Title: "Empty quest", Objectives: "Objectives only."}
+	requests <- quest
+	filters := state.Snapshot().Filters
+	filters.QuestObjectives = true
+	state.SetSpeechFilters(filters)
+	release <- struct{}{}
+	receive("Objectives only.")
+	filters.QuestObjectives = false
+	state.SetSpeechFilters(filters)
+	// Empty bodies are skipped with objectives off, including within the queue.
+	requests <- protocol.Message{Kind: 2, Title: "Empty quest", Objectives: "Skip this."}
+	requests <- quest
+	release <- struct{}{}
+	receive("Main dialogue.")
+	release <- struct{}{}
+	receive("Main dialogue.")
+	requests <- quest
+	filters.QuestTitle = true
+	state.SetSpeechFilters(filters)
+	release <- struct{}{}
+	receive("Quest title.\n\nMain dialogue.")
+	requests <- quest
+	filters.QuestObjectives = true
+	state.SetSpeechFilters(filters)
+	release <- struct{}{}
+	receive("Quest title.\n\nMain dialogue.\n\nBring supplies.")
+	if state.Snapshot().Message != quest {
+		t.Fatal("speech preferences modified received data")
+	}
+}
+
 func TestSpeechReplacementAndQuitWaitForCleanup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

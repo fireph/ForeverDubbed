@@ -11,6 +11,8 @@ import (
 // SpeechFilters maps the addon's wire kinds to user-facing dialogue categories.
 type SpeechFilters struct {
 	Quests, Conversations, NPCSpeech bool
+	QuestObjectives                  bool
+	QuestTitle                       bool
 }
 
 func (f SpeechFilters) Allows(kind byte) bool {
@@ -56,7 +58,7 @@ func New(target, backend string, muted bool) *State {
 	if muted {
 		audio = "Muted"
 	}
-	return &State{stopAudio: make(chan uint64, 1), speechChanges: make(chan struct{}, 1), value: Snapshot{Target: target, Backend: backend, Audio: audio, Filters: SpeechFilters{true, true, true}}}
+	return &State{stopAudio: make(chan uint64, 1), speechChanges: make(chan struct{}, 1), value: Snapshot{Target: target, Backend: backend, Audio: audio, Filters: SpeechFilters{Quests: true, Conversations: true, NPCSpeech: true}}}
 }
 func (s *State) Snapshot() Snapshot {
 	s.mu.RLock()

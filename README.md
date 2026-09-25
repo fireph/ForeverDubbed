@@ -32,11 +32,15 @@ The Fyne interface is styled like a classic WoW quest dialog, with parchment, a 
 
 Under **Read aloud**, choose which dialogue receives speech:
 
-- **Quest dialogue:** quest offers, objectives, progress, and completion.
+- **Quest dialogue:** main text of quest offers, progress, and completion.
 - **NPC conversations:** non-quest NPC dialogue windows and quest-giver greetings.
 - **NPC speech:** ambient NPC/boss say, yell, whisper, and emote text.
 
 All three default to enabled and are saved across launches on Windows and macOS.
+**Quest title** optionally reads the title before the main text, and **Quest objectives**
+reads objectives after it. Both default to off and are saved across launches. Changes apply
+when each quest starts speaking. Update both addon and desktop to 0.6.5, then
+`/reload` WoW: the addon now sends the title, dialogue, and objectives separately.
 Unchecking a category stops its current speech and removes its waiting messages.
 Connection tests, books/item text, and Stop/Skip commands remain available.
 The addon must also have NPC chat enabled (`/fdb chat`) to transmit ambient speech.
@@ -151,7 +155,7 @@ Use `/fdb npc` to inspect raw observations and display availability. `/fdb race 
 
 Edit the companion's `data/custom-races.json` and restart it to update the custom dataset without updating the addon, or select another file with `-race-config PATH`. The companion embeds a default copy when the external file is absent. Custom data does not modify the VoiceOver snapshot. See [race data and attribution](docs/RACE_DATA.md) for the schema, provenance, and reproducible import.
 
-Pocket speech reads the quest title and text without announcing the speaker's name. Long passages are split into short chunks, with synthesis ahead of playback. New dialogue immediately cancels playback and discards stale audio. Native generation checks cancellation between chunks and joins its workers before the next request.
+Quest speech reads the main text without announcing the speaker's name. Titles and objectives are included only when their desktop options are enabled; both default off. Long passages are split into short chunks, with synthesis ahead of playback. New dialogue immediately cancels playback and discards stale audio. Native generation checks cancellation between chunks and joins its workers before the next request.
 
 ### Local runtime and custom voices
 

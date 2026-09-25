@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.5
+
+- Read only the main quest dialogue by default in both Pocket TTS and system speech. Add separate saved desktop options for Quest title and Quest objectives, both off by default, applied when each quest starts playback.
+- Keep titles, main dialogue, and objectives as separate transmitted fields. Add FDB5 flags 3 for objectives; update both addon and desktop app. The desktop still accepts flags 0/1/2, but older addons combine objectives with dialogue and cannot support the new preference.
+
 ## 0.6.1
 
 - Request borderless Windows game capture through the supported Windows permission API, removing the yellow capture outline when permitted. Keep capture working while permission is pending or unavailable, and preserve the setting across game-window changes.

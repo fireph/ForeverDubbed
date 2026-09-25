@@ -16,7 +16,7 @@ local sequence, lastBody, lastAt, ready = 0, nil, -1, false
 local PAGE_SECONDS = 0.25
 local WAVE_SECONDS = 1 / 15
 local wavePhase, waveElapsed = 0, 0
-local VERSION = "0.6.0"
+local VERSION = "0.6.5"
 local requestID, lastSpeaker = 0, nil
 local controlUntil, deferredDialogue = 0, nil
 local drawnColors, pageValues = {}, {}
@@ -124,14 +124,15 @@ local function draw()
     frame:Show()
 end
 
-local function publishReady(kind, speaker, title, text, info)
+local function publishReady(kind, speaker, title, text, info, objectives)
     if not ready or not ForeverDubbedDB.enabled then return end
     if GetTime() < controlUntil then
-        deferredDialogue = {kind, speaker, title, text, info}
+        deferredDialogue = {kind, speaker, title, text, info, objectives}
         return
     end
     speaker, title, text = clean(speaker), clean(title), clean(text)
-    if text == "" then return end
+    objectives = clean(objectives)
+    if text == "" and objectives == "" then return end
     info = info or {}
     lastSpeaker = info
     local race, gender, npcID = clean(info.apiRace or info.race), clean(info.gender), clean(info.npcID)
@@ -140,11 +141,11 @@ local function publishReady(kind, speaker, title, text, info)
     local raceOverride = clean(info.raceOverride)
     -- Do not let desktop lookups reconstruct a restricted identity.
     if info.restricted then race, npcID, displayID, modelID, raceOverride = "", "", "", "", "" end
-    local key = kind .. table.concat({speaker, title, text, race, gender, npcID, displayID, modelID, raceOverride}, "\0")
+    local key = kind .. table.concat({speaker, title, text, race, gender, npcID, displayID, modelID, raceOverride, objectives}, "\0")
     if key == lastBody and GetTime() - lastAt < 0.75 then return end
     lastBody, lastAt = key, GetTime()
     sequence = (sequence + 1) % 4294967296
-    local encoded, err = Codec.Encode(session, sequence, kind, speaker, title, text, race, gender, npcID, displayID, modelID, raceOverride)
+    local encoded, err = Codec.Encode(session, sequence, kind, speaker, title, text, race, gender, npcID, displayID, modelID, raceOverride, objectives)
     if not encoded then printStatus(err); return end
     pages, page, elapsed = encoded, 1, 0
     -- Keep sending after a dialog closes so slow captures can finish. New text
@@ -167,29 +168,24 @@ function NS.Control(action)
     draw()
 end
 
-local function publish(kind, speaker, title, text, info)
+local function publish(kind, speaker, title, text, info, objectives)
     requestID = requestID + 1
     local id = requestID
     if info then
         NS.Speakers.Resolve(info, function(resolved)
-            if id == requestID then publishReady(kind, speaker, title, text, resolved) end
+            if id == requestID then publishReady(kind, speaker, title, text, resolved, objectives) end
         end)
     else
-        publishReady(kind, speaker, title, text)
+        publishReady(kind, speaker, title, text, nil, objectives)
     end
 end
 
-local function publishNPC(kind, title, text)
+local function publishNPC(kind, title, text, objectives)
     local info = NS.Speakers.Dialog()
-    publish(kind, info.name, title, text, info)
+    publish(kind, info.name, title, text, info, objectives)
 end
 local function quest(kind, getter, objectives)
-    local text = read(getter)
-    if objectives then
-        local extra = read(GetObjectiveText)
-        if extra ~= "" then text = text .. "\n\n" .. extra end
-    end
-    publishNPC(kind, read(GetTitleText), text)
+    publishNPC(kind, read(GetTitleText), read(getter), objectives and read(GetObjectiveText) or "")
 end
 
 frame:SetScript("OnDragStart", function(self) self:StartMoving() end)
@@ -205,7 +201,7 @@ frame:SetScript("OnUpdate", function(_, dt)
     if deferredDialogue and GetTime() >= controlUntil then
         local dialogue = deferredDialogue
         deferredDialogue = nil
-        publishReady(unpack(dialogue))
+        publishReady(unpack(dialogue, 1, 6))
     end
     if not pages then return end
     if GetTime() > expires and ForeverDubbedDB.locked then frame:Hide(); return end

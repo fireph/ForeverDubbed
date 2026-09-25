@@ -60,8 +60,8 @@ func macAppSigned(dist string, files map[string]string, sign func(string) error)
 <key>CFBundleName</key><string>ForeverDubbed</string>
 <key>CFBundleDisplayName</key><string>ForeverDubbed</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.6.1</string>
-<key>CFBundleVersion</key><string>0.6.1</string>
+<key>CFBundleShortVersionString</key><string>0.6.5</string>
+<key>CFBundleVersion</key><string>0.6.5</string>
 <key>CFBundleIconFile</key><string>app.icns</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>

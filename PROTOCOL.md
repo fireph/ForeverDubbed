@@ -2,7 +2,7 @@
 
 The sole supported format uses 16 dark navy colors and four bits per cell. A tile has a 50 × 50 cell grid including a one-cell calibration ring; its inner 48 × 48 cells reserve 136 cells for an animated sine wave. The remaining 2,168 cells carry 8,672 bits (1,084 bytes). A separate light-blue outline surrounds the calibration ring, exactly **2 physical pixels** thick on every side. Cells are integer 2–8 physical pixels wide, default 2. The total square is `50 × cell size + 4` pixels wide: **104 × 104** by default, or **154 × 154** with 3px cells. Coordinates start at the outer outline's top-left; x increases rightward and y downward.
 
-FDB5 appearance/override metadata requires companion and addon version 0.6.0. Update both together: the static FDB4 format and previous optical formats are not accepted. The 0.6.0 extension keeps FDB5 magic, frame dimensions, and payload capacity unchanged. New companions accept flags 0/1 from older FDB5 addons; old companions reject flags 2. Existing tile position, lock state, and FDB3/FDB4 cell-size settings are preserved.
+FDB5 appearance/override metadata requires companion and addon version 0.6.0; separate quest objectives require 0.6.5. Update both together: the static FDB4 format and previous optical formats are not accepted. These extensions keep FDB5 magic, frame dimensions, and payload capacity unchanged. The 0.6.5 companion accepts flags 0/1/2 from older FDB5 addons; older companions reject flags 3. Older addons merge objectives into dialogue and must be updated to support optional objective speech. Existing tile position, lock state, and FDB3/FDB4 cell-size settings are preserved.
 
 The addon uses `(768 / physical screen height) / UIParent:GetEffectiveScale()` for its local scale, so cell sizes and outline thickness remain physical pixels regardless of UI scale. Grid origin is two pixels right and down from the outer tile origin.
 
@@ -75,7 +75,7 @@ Interior cells are read row by row, skipping the wave mask. Each palette index e
 | 18 | 2 | Total page count, 1..256 |
 | 20 | 2 | Payload length, 1..1056 |
 | 22 | 1 | Message kind |
-| 23 | 1 | Flags: 0 = text only, 1 = legacy speaker metadata, 2 = appearance/override metadata (0.6.0+) |
+| 23 | 1 | Flags: 0 = text only, 1 = legacy speaker metadata, 2 = appearance/override metadata (0.6.0+), 3 = separate objectives (0.6.5+) |
 | 24 | 1056 | Payload followed by cosmetic noise padding (legacy encoders use zeros) |
 | 1080 | 4 | Adler-32 of bytes 0..1079, including padding |
 
@@ -90,6 +90,14 @@ The complete message consists of NUL-separated UTF-8 fields:
 | 0 | `speaker`, `title`, `text` |
 | 1 | Above, then `race`, `gender`, `npcID` |
 | 2 | Above, then `displayID`, `modelID`, `raceOverride` |
+| 3 | Above, then `objectives` |
+
+Quest offers send the full title in `title`, the main dialogue in `text`, and
+objective text in `objectives`. The desktop keeps all fields and includes titles
+and objectives in quest speech only when their separate saved options are enabled
+(both off by default). Flags 3 is used when objectives are nonempty, including empty
+placeholders for missing identity fields. Quest progress/completion do not reuse
+objectives from previous offers.
 
 The 0.6.0 addon sends public API race/gender, NPC ID, observed appearance IDs,
 and an explicit saved race override. `modelID` is a model **FileDataID**, not the
@@ -98,7 +106,7 @@ Gender is `male`, `female`, or empty. Zero/unavailable display IDs are sent empt
 display IDs; only a successful prior explicit inspection for the same GUID can
 supply one.
 Race and override are English race names, for example `Orc` or `Skyborne`.
-Flags 2 is used when any of its three extra fields is nonempty; otherwise the
+When objectives are empty, flags 2 is used when any of its three extra fields is nonempty; otherwise the
 encoder uses flags 1 or 0 as appropriate. Legacy flags 1 race may already have
 been inferred by an older addon, so it is treated as an addon-supplied race.
 

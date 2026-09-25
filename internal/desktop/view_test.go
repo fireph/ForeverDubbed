@@ -37,6 +37,19 @@ func TestDashboardLiveStates(t *testing.T) {
 	if !d.quests.Checked || !d.conversations.Checked || !d.npcSpeech.Checked {
 		t.Fatal("filters should default on")
 	}
+	if d.questObjectives.Checked || d.questTitle.Checked {
+		t.Fatal("quest extras should default off")
+	}
+	test.Tap(d.questObjectives)
+	if !filters.QuestObjectives || filters.QuestTitle || !filters.Quests || !filters.Conversations || !filters.NPCSpeech {
+		t.Fatal("objective checkbox changed wrong filters", filters)
+	}
+	test.Tap(d.questObjectives)
+	test.Tap(d.questTitle)
+	if !filters.QuestTitle || filters.QuestObjectives || !filters.Quests || !filters.Conversations || !filters.NPCSpeech {
+		t.Fatal("title checkbox changed wrong filters", filters)
+	}
+	test.Tap(d.questTitle)
 	test.Tap(d.quests)
 	if filters.Quests || !filters.Conversations || !filters.NPCSpeech {
 		t.Fatal("quest checkbox changed wrong filters", filters)

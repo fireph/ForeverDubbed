@@ -52,6 +52,7 @@ type Message struct {
 	Speaker      string `json:"speaker"`
 	Title        string `json:"title"`
 	Text         string `json:"text"`
+	Objectives   string `json:"objectives,omitempty"`
 	Race         string `json:"race,omitempty"`
 	Gender       string `json:"gender,omitempty"`
 	NPCID        string `json:"npc_id,omitempty"`
@@ -63,7 +64,34 @@ type Message struct {
 
 func (m Message) IsControl() bool { return m.Kind == KindStop || m.Kind == KindSkip }
 
+func (m Message) IsQuest() bool { return m.Kind >= 2 && m.Kind <= 4 }
+
+// DialogueText includes quest titles and objectives only when requested.
+// The original fields remain available for display and diagnostics.
+func (m Message) DialogueText(includeTitle, includeObjectives bool) string {
+	if m.IsQuest() {
+		text := strings.TrimSpace(m.Text)
+		if title := strings.TrimSpace(m.Title); includeTitle && title != "" {
+			if !strings.ContainsAny(title[len(title)-1:], ".!?") {
+				title += "."
+			}
+			text = strings.TrimSpace(title + "\n\n" + text)
+		}
+		if includeObjectives && strings.TrimSpace(m.Objectives) != "" {
+			text = strings.TrimSpace(text + "\n\n" + m.Objectives)
+		}
+		return text
+	}
+	if m.Title == "" {
+		return m.Text
+	}
+	return strings.TrimSpace(m.Title + ". " + m.Text)
+}
+
 func (m Message) Speech() string {
+	if m.IsQuest() {
+		return m.DialogueText(false, false)
+	}
 	parts := []string{}
 	for _, s := range []string{m.Speaker, m.Title, m.Text} {
 		if strings.TrimSpace(s) != "" {
@@ -74,20 +102,24 @@ func (m Message) Speech() string {
 }
 
 func Encode(m Message) ([][]byte, error) {
-	for _, s := range []string{m.Speaker, m.Title, m.Text, m.Race, m.Gender, m.NPCID, m.DisplayID, m.ModelID, m.RaceOverride} {
+	for _, s := range []string{m.Speaker, m.Title, m.Text, m.Race, m.Gender, m.NPCID, m.DisplayID, m.ModelID, m.RaceOverride, m.Objectives} {
 		if !utf8.ValidString(s) || strings.ContainsRune(s, 0) {
 			return nil, errors.New("fields must be UTF-8 without NUL")
 		}
 	}
 	body := []byte(m.Speaker + "\x00" + m.Title + "\x00" + m.Text)
 	flags := byte(0)
-	if m.Race != "" || m.Gender != "" || m.NPCID != "" || m.DisplayID != "" || m.ModelID != "" || m.RaceOverride != "" {
+	if m.Race != "" || m.Gender != "" || m.NPCID != "" || m.DisplayID != "" || m.ModelID != "" || m.RaceOverride != "" || m.Objectives != "" {
 		body = append(body, []byte("\x00"+m.Race+"\x00"+m.Gender+"\x00"+m.NPCID)...)
 		flags = 1
 	}
-	if m.DisplayID != "" || m.ModelID != "" || m.RaceOverride != "" {
+	if m.DisplayID != "" || m.ModelID != "" || m.RaceOverride != "" || m.Objectives != "" {
 		body = append(body, []byte("\x00"+m.DisplayID+"\x00"+m.ModelID+"\x00"+m.RaceOverride)...)
 		flags = 2
+	}
+	if m.Objectives != "" {
+		body = append(body, []byte("\x00"+m.Objectives)...)
+		flags = 3
 	}
 	capacity := PayloadBytes
 	count := (len(body) + capacity - 1) / capacity
@@ -119,7 +151,7 @@ func Encode(m Message) ([][]byte, error) {
 
 func Parse(b []byte) (Packet, error) {
 	p := Packet{}
-	if len(b) != FrameBytes || string(b[:4]) != "FDB5" || b[23] > 2 {
+	if len(b) != FrameBytes || string(b[:4]) != "FDB5" || b[23] > 3 {
 		return p, errors.New("invalid frame header")
 	}
 	checksumAt := len(b) - 4
@@ -201,10 +233,11 @@ func (a *Assembler) Add(p Packet, now time.Time) (*Message, error) {
 	}
 	fields := bytes.Split(body, []byte{0})
 	expected := 3
-	if p.Flags <= 2 {
-		expected += 3 * int(p.Flags)
+	expected += 3 * int(min(p.Flags, 2))
+	if p.Flags == 3 {
+		expected++
 	}
-	if p.Flags > 2 || len(fields) != expected || !utf8.Valid(body) {
+	if p.Flags > 3 || len(fields) != expected || !utf8.Valid(body) {
 		return nil, fmt.Errorf("invalid UTF-8 message fields")
 	}
 	a.done = true
@@ -214,10 +247,13 @@ func (a *Assembler) Add(p Packet, now time.Time) (*Message, error) {
 		m.Gender = string(fields[4])
 		m.NPCID = string(fields[5])
 	}
-	if p.Flags == 2 {
+	if p.Flags >= 2 {
 		m.DisplayID = string(fields[6])
 		m.ModelID = string(fields[7])
 		m.RaceOverride = string(fields[8])
+	}
+	if p.Flags == 3 {
+		m.Objectives = string(fields[9])
 	}
 	return m, nil
 }

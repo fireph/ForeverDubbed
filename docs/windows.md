@@ -10,6 +10,10 @@ Run the prepared release to open the status dashboard:
 
 Close or minimize the dashboard to keep it running in the system tray. Use **Show ForeverDubbed** to restore it or **Quit** to stop capture and audio. Use `-headless` for terminal-only capture and JSON output.
 
+Quest speech reads the main dialogue by default. **Quest title** adds the title before the dialogue; **Quest objectives** adds objectives after it. Both default to off and are saved independently between launches. Changes apply when the next quest starts speaking, including quests already queued. Both Pocket TTS and system voices follow these settings. Headless mode uses the default of dialogue only.
+
+Install the 0.6.5 addon as well as the desktop app for this feature, then `/reload` WoW. The addon sends the title, dialogue, and objectives separately; the desktop retains them all and chooses which text to speak. Older addons merge objectives into the dialogue, so the desktop cannot reliably exclude them until the addon is updated.
+
 The executable filename is matched case-insensitively against the owning process's full image path. A window title alone cannot match, and `WoW.exe` is not selected. To target a particular installation, use its full executable path:
 
 ```powershell

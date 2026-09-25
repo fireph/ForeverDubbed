@@ -262,6 +262,7 @@ func TestLuaCompatibility(t *testing.T) {
 	m := fixture()
 	m.Race, m.Gender, m.NPCID = "Orc", "male", "4949"
 	m.DisplayID, m.ModelID, m.RaceOverride = "115", "7478487", "Skyborne"
+	m.Objectives = "Bring supplies.\nReturn to Thrall."
 	want := framesFor(t, m)
 	if len(lines) != len(want)*(WavePhases+1)+2 {
 		t.Fatalf("unexpected Lua output: %s", out)
@@ -344,15 +345,18 @@ func BenchmarkFind1080p(b *testing.B) {
 }
 
 func TestSpeakerMetadataRoundTrip(t *testing.T) {
-	for _, metadata := range []byte{0, 1, 2} {
+	for _, metadata := range []byte{0, 1, 2, 3} {
 		want := fixture()
 		if metadata > 0 {
 			want.Race = "Orc"
 			want.Gender = "male"
 			want.NPCID = "4949"
 		}
-		if metadata == 2 {
+		if metadata >= 2 {
 			want.DisplayID, want.ModelID, want.RaceOverride = "176", "7478494", "Skyborne"
+		}
+		if metadata == 3 {
+			want.Objectives = "Bring supplies.\nReturn to Thrall."
 		}
 		var a Assembler
 		frames := framesFor(t, want)
@@ -400,18 +404,19 @@ func TestExtendedMetadataValidation(t *testing.T) {
 	}
 	for _, m := range []Message{
 		{ModelID: "1\x002"}, {DisplayID: "\xff"}, {RaceOverride: "Sky\x00borne"},
+		{Objectives: "bad\x00text"}, {Objectives: "\xff"},
 	} {
 		if _, err := Encode(m); err == nil {
 			t.Fatal("accepted invalid extra field")
 		}
 	}
 	// Valid checksum does not make an unsupported or mismatched layout valid.
-	for _, flag := range []byte{2, 3} {
+	for _, flag := range []byte{2, 3, 4} {
 		frame := framesFor(t, Message{Text: "hello"})[0]
 		frame[23] = flag
 		binary.BigEndian.PutUint32(frame[len(frame)-4:], adler32.Checksum(frame[:len(frame)-4]))
 		p, err := Parse(frame)
-		if flag == 3 {
+		if flag == 4 {
 			if err == nil {
 				t.Fatal("accepted unsupported flags")
 			}

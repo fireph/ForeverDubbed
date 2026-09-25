@@ -94,10 +94,7 @@ func (l *Local) Speak(parent context.Context, m protocol.Message) error {
 	go func() {
 		defer close(done)
 		defer close(chunks)
-		text := strings.TrimSpace(m.Title + ". " + m.Text)
-		if m.Title == "" {
-			text = m.Text
-		}
+		text := m.DialogueText(false, false)
 		for _, text := range Chunks(text, 180) {
 			streamErr = l.Engine.Stream(ctx, text, voice, steps, func(pcm []byte) error {
 				pcm = amplifyPCM(pcm, gain)

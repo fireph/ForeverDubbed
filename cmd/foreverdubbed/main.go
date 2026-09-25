@@ -23,7 +23,7 @@ import (
 	"foreverdubbed/internal/speech"
 )
 
-const version = "0.6.1"
+const version = "0.6.5"
 
 func main() {
 	prepareConsole()
@@ -349,6 +349,15 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 	}
 	defer func() { stopCurrent(); pending = nil; updateQueue() }()
 	start := func(message protocol.Message) {
+		// Select quest content when playback starts, so queued quests use the
+		// latest preference. Keep the original received message in app state.
+		if message.IsQuest() {
+			filters := state.Snapshot().Filters
+			message.Text = message.DialogueText(filters.QuestTitle, filters.QuestObjectives)
+			if message.Text == "" {
+				return
+			}
+		}
 		activeKind = message.Kind
 		nextID++
 		state.Update(func(v *appstate.Snapshot) {
@@ -397,6 +406,9 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 			pending = pending[1:]
 			updateQueue()
 			start(next)
+		}
+		if finished == nil && len(pending) > 0 {
+			continue // An empty quest body must not stall the remaining queue.
 		}
 		select {
 		case <-ctx.Done():

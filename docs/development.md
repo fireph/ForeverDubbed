@@ -47,6 +47,15 @@ The desktop UI uses a parchment reading area, textured dark frame, gold headings
 
 ## Addon playback controls
 
+FDB5 flags describe NUL-separated UTF-8 fields: flags 0 has speaker/title/text;
+flags 1 adds race/gender/NPC ID; flags 2 adds display ID/model ID/race override;
+flags 3 adds quest objectives as a tenth field. Objectives are never appended
+to the main text by the addon. Empty optional metadata fields still occupy their
+positions when a later field is present. Flags 0/1/2 remain readable, but an old
+addon that embeds objectives in text must be updated for dialogue-only speech.
+The desktop keeps received fields intact and chooses spoken quest content when
+playback starts. Separate title and objectives options both default off.
+
 FDB5 kinds 7 (Stop) and 8 (Skip) carry three empty string fields and no voice
 metadata. They share the dialogue session/sequence counter and assembler
 deduplication, so repeated captures execute a command once. The speech worker

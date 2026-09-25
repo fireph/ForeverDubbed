@@ -85,6 +85,13 @@ for _, event in ipairs({"GOSSIP_SHOW","QUEST_GREETING","QUEST_DETAIL","QUEST_PRO
     now = now + 1
     events.scripts.OnEvent(events,event)
     assert(tile.visible)
+    local sent = calls[#calls]
+    if event == "QUEST_DETAIL" then
+        assert(sent[5] == "Quest" and sent[6] == "Quest body" and sent[13] == "Quest objectives",
+            "quest title, dialogue and objectives must remain separate")
+    elseif event == "QUEST_PROGRESS" or event == "QUEST_COMPLETE" then
+        assert(sent[5] == "Quest" and sent[13] == "", "stale objectives in follow-up quest dialogue")
+    end
 end
 -- The rendered cells use the exact ordered palette, after the four outline strips.
 local expected = ns.Codec.Cells(actual(unpack(calls[#calls]))[1])
@@ -124,7 +131,7 @@ local beforeWrites = colorWrites
 tile.scripts.OnUpdate(tile, ns.Codec.WAVE_PHASES / 15)
 assert(colorWrites==beforeWrites, "redrew an identical page and wave phase")
 assert(calls[3][7]=="Orc" and calls[3][8]=="male" and calls[3][9]=="4949")
-assert(calls[3][6] == "Quest body\n\nQuest objectives")
+assert(calls[3][6] == "Quest body" and calls[3][13] == "Quest objectives")
 events.scripts.OnEvent(events,"CHAT_MSG_MONSTER_SAY","|cffffffffHello|r |Hitem:1|hfriend|h |Ticon:16|t","NPC")
 assert(calls[#calls][6] == "Hello friend")
 SlashCmdList.FOREVERDUBBED("cell 2")
@@ -298,6 +305,7 @@ assert(#calls == before and not button.scripts.OnUpdate)
 ns.Controls.Init(ForeverDubbedDB)
 assert(ForeverDubbedDB.minimapAngle == angle)
 -- Fresh dialogue waits until a control has had a chance to be captured.
+GetQuestText = function() return "Deferred quest body" end
 SlashCmdList.FOREVERDUBBED("on")
 now = now + 1
 SlashCmdList.FOREVERDUBBED("skip")
@@ -307,6 +315,12 @@ assert(#calls == before and calls[#calls][3] == 8)
 now = now + 1.6
 tile.scripts.OnUpdate(tile, 0.1)
 assert(#calls == before+1 and calls[#calls][3] == 2)
+assert(calls[#calls][5] == "Quest" and calls[#calls][6] == "Deferred quest body" and calls[#calls][13] == "Quest objectives",
+    "deferred quest lost separate fields")
+before = #calls
+GetObjectiveText = function() return "Updated objectives" end
+events.scripts.OnEvent(events, "QUEST_DETAIL")
+assert(#calls == before+1 and calls[#calls][13] == "Updated objectives", "objective-only update was deduplicated")
 -- A late identity resolution cannot replace an explicit stop.
 pending = {}
 ns.Speakers.Resolve = function(info, cb) pending[#pending+1] = function() cb(info) end end
