@@ -117,10 +117,14 @@
       "decode_steps": 4
     },
     "troll_male": {
-      "voice": "custom/troll_male.safetensors"
+      "voice": "custom/troll_male.safetensors",
+      "decode_steps": 2,
+      "gain_db": 2
     },
     "troll_female": {
-      "voice": "custom/troll_female.safetensors"
+      "voice": "custom/troll_female.safetensors",
+      "decode_steps": 2,
+      "gain_db": 2
     },
     "skyborne_male": {
       "voice": "custom/skyborne_male.safetensors"
