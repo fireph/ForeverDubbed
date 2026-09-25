@@ -49,6 +49,7 @@ type dashboard struct {
 	quests, conversations, npcSpeech *widget.Check
 	questObjectives                  *widget.Check
 	questTitle                       *widget.Check
+	questOptions                     *fyne.Container
 	root                             fyne.CanvasObject
 	headline                         *canvas.Text
 	hint                             *widget.Label
@@ -81,6 +82,7 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool), fil
 	d.skipControl.Hide()
 	d.queue = widget.NewCheck("Queue new dialogue", queue)
 	updateFilters := func(bool) {
+		d.showQuestOptions()
 		filters(appstate.SpeechFilters{Quests: d.quests.Checked, Conversations: d.conversations.Checked, NPCSpeech: d.npcSpeech.Checked, QuestObjectives: d.questObjectives.Checked, QuestTitle: d.questTitle.Checked})
 	}
 	d.quests = widget.NewCheck("Quest dialogue", updateFilters)
@@ -88,10 +90,15 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool), fil
 	d.npcSpeech = widget.NewCheck("NPC speech", updateFilters)
 	d.questObjectives = widget.NewCheck("Quest objectives", updateFilters)
 	d.questTitle = widget.NewCheck("Quest title", updateFilters)
+	d.questOptions = container.New(layout.NewCustomPaddedLayout(0, 0, 18, 0),
+		container.NewVBox(d.questTitle, d.questObjectives))
+	d.showQuestOptions()
 	categories := container.NewVBox(
 		widget.NewLabelWithStyle("Read aloud", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		container.NewGridWithColumns(3, d.quests, d.conversations, d.npcSpeech),
-		container.NewGridWithColumns(3, d.questTitle, d.questObjectives, layout.NewSpacer()))
+		container.NewGridWithColumns(3,
+			container.NewVBox(d.quests, d.questOptions),
+			container.NewVBox(d.conversations),
+			container.NewVBox(d.npcSpeech)))
 
 	audioCard := container.NewVBox(d.audio.root, inset(3, container.NewHBox(questButtonWidget(d.stop), d.skipControl)))
 	header := container.NewVBox(d.headline, d.hint, questRule(), container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), questRule(), categories, d.queue)
@@ -106,6 +113,15 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool), fil
 	d.root = questFrame(container.NewBorder(inset(5, banner), inset(5, footer), nil, nil, paper))
 	return d
 }
+
+func (d *dashboard) showQuestOptions() {
+	if d.quests.Checked {
+		d.questOptions.Show()
+	} else {
+		d.questOptions.Hide()
+	}
+}
+
 func (d *dashboard) render(s appstate.Snapshot) {
 	// Reflect saved preferences without firing the user's change callbacks.
 	for check, enabled := range map[*widget.Check]bool{
@@ -118,6 +134,7 @@ func (d *dashboard) render(s appstate.Snapshot) {
 			check.Refresh()
 		}
 	}
+	d.showQuestOptions()
 	if d.queue.Checked != s.QueueSpeech {
 		d.queue.Checked = s.QueueSpeech
 		d.queue.Refresh()

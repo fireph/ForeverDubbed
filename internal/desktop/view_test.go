@@ -25,7 +25,7 @@ func TestDashboardLiveStates(t *testing.T) {
 	w := a.NewWindow("ForeverDubbed")
 	defer w.Close()
 	w.SetContent(d.root)
-	w.Resize(fyne.NewSize(760, 640))
+	w.Resize(fyne.NewSize(760, 740))
 	state := appstate.New("World of Warcraft Beta.app", "pocket", false)
 	d.render(state.Snapshot())
 	if d.skipControl.Visible() || !d.skip.Disabled() {
@@ -40,6 +40,9 @@ func TestDashboardLiveStates(t *testing.T) {
 	if d.questObjectives.Checked || d.questTitle.Checked {
 		t.Fatal("quest extras should default off")
 	}
+	if !d.questOptions.Visible() {
+		t.Fatal("quest options hidden while quest dialogue is enabled")
+	}
 	test.Tap(d.questObjectives)
 	if !filters.QuestObjectives || filters.QuestTitle || !filters.Quests || !filters.Conversations || !filters.NPCSpeech {
 		t.Fatal("objective checkbox changed wrong filters", filters)
@@ -48,6 +51,14 @@ func TestDashboardLiveStates(t *testing.T) {
 	test.Tap(d.questTitle)
 	if !filters.QuestTitle || filters.QuestObjectives || !filters.Quests || !filters.Conversations || !filters.NPCSpeech {
 		t.Fatal("title checkbox changed wrong filters", filters)
+	}
+	test.Tap(d.quests)
+	if d.questOptions.Visible() || !d.questTitle.Checked || !filters.QuestTitle {
+		t.Fatal("disabling quests must hide options and retain their selections")
+	}
+	test.Tap(d.quests)
+	if !d.questOptions.Visible() || !d.questTitle.Checked {
+		t.Fatal("enabling quests must restore selected options")
 	}
 	test.Tap(d.questTitle)
 	test.Tap(d.quests)
@@ -59,6 +70,12 @@ func TestDashboardLiveStates(t *testing.T) {
 	if filters != (appstate.SpeechFilters{}) {
 		t.Fatal("filters not independently selectable", filters)
 	}
+	state.SetSpeechFilters(filters)
+	d.render(state.Snapshot())
+	if d.questOptions.Visible() {
+		t.Fatal("render ignored saved quest dialogue setting")
+	}
+	state.SetSpeechFilters(appstate.SpeechFilters{Quests: true, Conversations: true, NPCSpeech: true})
 	d.render(state.Snapshot())
 	state.Update(func(v *appstate.Snapshot) { v.Ready = true })
 	state.Capture(true, false, nil)

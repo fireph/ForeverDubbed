@@ -22,7 +22,7 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 	a.SetIcon(Icon)
 	a.Settings().SetTheme(companionTheme{theme.DefaultTheme()})
 	w := a.NewWindow("ForeverDubbed")
-	w.Resize(fyne.NewSize(760, 640))
+	w.Resize(fyne.NewSize(760, 740))
 	w.CenterOnScreen()
 	quit := func() { stop() }
 	show := func() { restoreMinimized(w); w.Show(); w.RequestFocus() }
