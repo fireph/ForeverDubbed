@@ -76,3 +76,13 @@ WoW loads the addon's root `Bindings.xml` automatically. `Controls.lua` supplies
 the binding labels/functions and minimap button; its saved angle lives in
 `ForeverDubbedDB.minimapAngle`. Tests cover click routing, drag suppression and
 persistence, control priority, late identity callbacks, and duplicate frames.
+
+## Automatic updates
+
+`internal/update` uses the public `fireph/ForeverDubbed` latest-release API with a 15-second startup-check deadline. It only offers newer stable semantic versions, selects the exact OS/architecture asset, and requires `SHA256SUMS.txt`. Only the current names (`ForeverDubbed-windows-<arch>-portable.zip` and `ForeverDubbed-mac-<arch>.zip`) are accepted. Windows uses the portable payload for both installed and portable updates; it does not change installer registration or shortcuts. macOS verifies the new bundle against the installed bundle's designated code-signing requirement.
+
+The builder includes a standalone GUI updater without PocketTTS dependencies and `release-manifest.json`. The desktop downloads/verifies/extracts before changing any installed files. It copies the existing updater into a private staging folder, waits for readiness, then shuts down normally. The updater waits for the parent process to exit before moving locked files, reports installation progress, rolls back on replacement errors, and relaunches with the original arguments and working directory. Unrelated files and Fyne preferences are untouched; bundled voice/config files are replaced. Successful jobs are cleaned after the helper exits; failures retain logs and backups. Updates require sufficient space for the download, staged payload, and previous files. Manual release installation remains available.
+
+Tagged GitHub builds stamp the tag version into the executable, app metadata, and manifest, so checking the next release cannot repeatedly offer the same version. Local/main builds use `internal/buildinfo.Version`. Publish both the macOS ZIP and DMG and include the ZIP in release checksums. A machine running an older release without an updater must install this feature manually once.
+
+Tests use fake HTTP transports and temporary installations to cover version/asset selection, download verification and cancellation, archive traversal/link rejection, file replacement, rollback, and confirmation/progress UI. Run `go test ./internal/update ./tools/build` and `go test -tags "gui ci" ./internal/desktop`. Real macOS signature checks and full native GUI update/restart need validation on their respective OSes.

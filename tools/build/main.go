@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"foreverdubbed/internal/buildinfo"
 	"foreverdubbed/internal/buildtool"
 	"foreverdubbed/internal/pocket"
 	"io"
@@ -42,6 +43,11 @@ func build() error {
 	if flag.NArg() != 0 {
 		return fmt.Errorf("usage: go run ./tools/build [-target windows|darwin] [-arch amd64|arm64] [-native-dir path] [-windows-installer]")
 	}
+	release, err := releaseVersion()
+	if err != nil {
+		return err
+	}
+	buildinfo.Version = release
 	root, err := repositoryRoot()
 	if err != nil {
 		return err
@@ -123,20 +129,35 @@ func build() error {
 	nativeEnv := buildEnv(os.Environ(), targetOS, targetArch)
 	nativeEnv[len(nativeEnv)-1] = "CGO_ENABLED=1"
 	nativeEnv = append(nativeEnv, "CC="+cc, "CXX="+cxx)
+	helperName := "foreverdubbed-updater"
+	helperFlags := "-s -w"
+	if targetOS == "windows" {
+		helperName += ".exe"
+		helperFlags += " -H=windowsgui"
+	}
+	helperPath := filepath.Join(dist, helperName)
+	if err := run(root, nativeEnv, "build", "-tags", "gui", "-buildvcs=false", "-trimpath", "-ldflags", helperFlags, "-o", helperPath, "./cmd/foreverdubbed-updater"); err != nil {
+		return err
+	}
+	bundle[helperName] = helperPath
+	versionFlag := "-X foreverdubbed/internal/buildinfo.Version=" + release
 	buildArgs := []string{"build", "-tags", "pocket_native,gui", "-buildvcs=false", "-trimpath"}
 	if targetOS == "darwin" {
 		// cgo source directives reject @-prefixed rpaths. Pass these deliberate
 		// release loader paths through the Go external linker instead.
-		buildArgs = append(buildArgs, "-ldflags", "-s -w -extldflags=-Wl,-rpath,@executable_path/../Resources/native,-rpath,@executable_path/native,-rpath,@executable_path/../.runtime/native")
+		buildArgs = append(buildArgs, "-ldflags", versionFlag+" -s -w -extldflags=-Wl,-rpath,@executable_path/../Resources/native,-rpath,@executable_path/native,-rpath,@executable_path/../.runtime/native")
 	}
 	if targetOS == "windows" {
-		buildArgs = append(buildArgs, "-ldflags", "-H=windowsgui")
+		buildArgs = append(buildArgs, "-ldflags", versionFlag+" -H=windowsgui")
 	}
 	buildArgs = append(buildArgs, "-o", binary, "./cmd/foreverdubbed")
 	if err := run(root, nativeEnv, buildArgs...); err != nil {
 		return err
 	}
 	bundle[binaryName] = binary
+	if err := addReleaseManifest(dist, bundle); err != nil {
+		return err
+	}
 	if targetOS == "darwin" {
 		bundle, err = macAppSigned(dist, bundle, signMac)
 		if err != nil {

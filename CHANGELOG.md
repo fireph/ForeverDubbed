@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.7
+
+- Check GitHub releases at desktop startup on Windows and macOS. Confirm updates with OK, show download and installation progress, then restart automatically. Verify release checksums, reject unsafe archives, preserve macOS signing identity, and roll back failed file replacements.
+- Include an independent updater and release manifest in app packages. Publish the macOS ZIP alongside the DMG for updates; stamp tagged builds with their release version.
+- Replace bundled voice configuration and states during updates; keep desktop preferences. The WoW addon still installs separately.
+
 ## 0.6.6
 
 - Add per-voice `fade_in_ms` and `fade_out_ms` settings for generated sentence boundaries. Enable 50 ms in and 100 ms out only for Undead male/female to soften abrupt reverb endings. Preserve audio length, decoding steps, and existing extra frames after EOS.

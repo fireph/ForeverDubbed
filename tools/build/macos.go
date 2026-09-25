@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"foreverdubbed/internal/appicon"
+	"foreverdubbed/internal/buildinfo"
+	"foreverdubbed/internal/update"
 )
 
 // macApp stages a standalone Finder-launchable app before replacing the previous
@@ -31,8 +33,10 @@ func macAppSigned(dist string, files map[string]string, sign func(string) error)
 	for name, source := range files {
 		var target string
 		switch {
-		case name == "foreverdubbed":
-			target = "Contents/MacOS/foreverdubbed"
+		case name == "foreverdubbed" || name == "foreverdubbed-updater":
+			target = "Contents/MacOS/" + name
+		case name == update.ManifestName:
+			target = "Contents/Resources/" + name
 		case strings.HasPrefix(name, "docs/licenses/"):
 			// Keep redistributable font notices with the standalone app too.
 			result[name] = source
@@ -52,7 +56,7 @@ func macAppSigned(dist string, files map[string]string, sign func(string) error)
 	if _, ok := appFiles["Contents/MacOS/foreverdubbed"]; !ok {
 		return nil, fmt.Errorf("macOS app is missing its executable")
 	}
-	const plist = `<?xml version="1.0" encoding="UTF-8"?>
+	plist := `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>foreverdubbed</string>
@@ -60,8 +64,8 @@ func macAppSigned(dist string, files map[string]string, sign func(string) error)
 <key>CFBundleName</key><string>ForeverDubbed</string>
 <key>CFBundleDisplayName</key><string>ForeverDubbed</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.6.6</string>
-<key>CFBundleVersion</key><string>0.6.6</string>
+<key>CFBundleShortVersionString</key><string>` + buildinfo.Version + `</string>
+<key>CFBundleVersion</key><string>` + buildinfo.Version + `</string>
 <key>CFBundleIconFile</key><string>app.icns</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>

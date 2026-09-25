@@ -124,6 +124,7 @@ jobs:
           ditto -x -k "incoming/ForeverDubbed-mac-$TARGET_ARCH.zip" staging
           test -x staging/ForeverDubbed.app/Contents/MacOS/foreverdubbed
           ln -s /Applications staging/Applications
+          cp "incoming/ForeverDubbed-mac-$TARGET_ARCH.zip" dist/
       - name: Verify signed app with Apple's tools
         if: github.event_name != 'pull_request'
         run: codesign --verify --deep --strict --verbose=2 staging/ForeverDubbed.app
@@ -158,7 +159,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: release-mac-arm64${{ github.event_name == 'pull_request' && '-unsigned' || '' }}
-          path: dist/ForeverDubbed-mac-arm64.dmg
+          path: |
+            dist/ForeverDubbed-mac-arm64.dmg
+            dist/ForeverDubbed-mac-arm64.zip
           if-no-files-found: error
           compression-level: 0
 
@@ -188,6 +191,7 @@ jobs:
         run: |
           files=(
             ForeverDubbed-mac-arm64.dmg
+            ForeverDubbed-mac-arm64.zip
             ForeverDubbed-windows-amd64-setup.exe
             ForeverDubbed-windows-amd64-portable.zip
             ForeverDubbed-addon.zip
@@ -206,6 +210,7 @@ jobs:
         run: |
           gh release create "$RELEASE_TAG" \
             ForeverDubbed-mac-arm64.dmg \
+            ForeverDubbed-mac-arm64.zip \
             ForeverDubbed-windows-amd64-setup.exe \
             ForeverDubbed-windows-amd64-portable.zip \
             ForeverDubbed-addon.zip \

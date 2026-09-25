@@ -71,7 +71,7 @@ The designated requirement should contain `io.foreverdubbed.companion` and a cer
 
 [The build and release workflow](../.github/workflows/build.yml) builds the macOS Apple Silicon app and the Windows x64 installer and portable ZIP in parallel on `ubuntu-24.04`. It runs for pull requests, pushes to `main`, version-tag pushes, and manual dispatch. The macOS build job runs the portable Go tests/vet and GUI tests and caches the pinned OSXCross toolchain. The Windows job uses MinGW-w64, NSIS, and the Go packager, which also runs tests/vet. The installer and portable ZIP share the same runtime, model, voice, documentation, and addon file manifest.
 
-After the macOS build succeeds, a dependent job on `macos-14` unpacks the app ZIP, verifies the signed app with Apple's `codesign`, and creates and verifies a compressed DMG with `hdiutil`. The disk image includes the app, an Applications shortcut, documentation, and the addon. The macOS ZIP is an intermediate build artifact; the macOS release download is a `.dmg` file. DMG creation retries transient `Resource busy` errors up to five total attempts, with increasing delays and a fresh temporary image on each attempt. Other creation errors and verification failures stop packaging; only a verified image is uploaded.
+After the macOS build succeeds, a dependent job on `macos-14` unpacks the app ZIP, verifies the signed app with Apple's `codesign`, and creates and verifies a compressed DMG with `hdiutil`. The disk image includes the app, an Applications shortcut, documentation, and the addon. The release publishes both the `.dmg` for manual installation and the signed `.zip` used by automatic updates. DMG creation retries transient `Resource busy` errors up to five total attempts, with increasing delays and a fresh temporary image on each attempt. Other creation errors and verification failures stop packaging; only a verified image is uploaded.
 
 Pushes and manual runs sign with the `FDB_MACOS_SIGNING_PEM` Actions repository secret. Set its value to the entire contents of the existing `.runtime/macos-signing/identity.pem`, including both PEM blocks. The workflow installs only the signer, writes the identity to a restricted temporary file for the build, and removes that file on step exit, including after a build failure. A missing secret fails the signed build instead of silently switching identities. Pull-request builds never receive the secret: they explicitly use `-mac-unsigned` and label their artifacts with `-unsigned`. Those test artifacts are not permission-preserving updates to the signed app.
 
@@ -79,7 +79,8 @@ Only a pushed version tag in the exact `vMAJOR.MINOR.PATCH` format, such as `v0.
 
 The release contains:
 
-- `ForeverDubbed-mac-arm64.dmg` for Apple Silicon.
+- `ForeverDubbed-mac-arm64.dmg` for Apple Silicon manual installation.
+- `ForeverDubbed-mac-arm64.zip` for automatic updates.
 - `ForeverDubbed-windows-amd64-setup.exe` for installing on Windows x64.
 - `ForeverDubbed-windows-amd64-portable.zip` for portable Windows x64 use.
 - `ForeverDubbed-addon.zip` for the standalone addon.

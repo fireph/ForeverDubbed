@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"foreverdubbed/internal/appstate"
+	"foreverdubbed/internal/buildinfo"
 	"foreverdubbed/internal/identity"
 	"foreverdubbed/internal/platform"
 	"foreverdubbed/internal/pocket"
@@ -23,7 +24,7 @@ import (
 	"foreverdubbed/internal/speech"
 )
 
-const version = "0.6.6"
+var version = buildinfo.Version
 
 func main() {
 	prepareConsole()

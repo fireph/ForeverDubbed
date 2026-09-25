@@ -28,6 +28,14 @@ For a portable installation, download `ForeverDubbed-windows-amd64-portable.zip`
 
 For source builds on Windows or Linux/WSL, see the [Windows build guide](native/README.md#build).
 
+## Automatic updates
+
+Installed macOS apps and installed or extracted Windows releases check [GitHub releases](https://github.com/fireph/ForeverDubbed/releases) in the background each time the desktop app starts. A newer stable version shows **OK** and **Later**. **OK** downloads the update with progress, verifies its SHA-256 checksum, then closes the app, installs the update, and restarts it. You can cancel during download/preparation. Offline or failed checks leave the app running normally; headless and source-checkout runs do not check for updates.
+
+Updates replace bundled files, including `tts/voices.json` and voice states. Desktop preferences remain in your user settings. Windows updates preserve the installation location; macOS updates replace the app bundle and require the same signing identity. The app must be in a writable location (copy it out of the macOS disk image first). The separate updater keeps showing progress while the main app is closed and restores replaced files if installation fails. Failed jobs keep recovery files and `updater.log` in a `.foreverdubbed-update-*` folder in the Windows installation folder or beside the macOS app.
+
+The WoW addon is included in release downloads, but updating the desktop does not install it into WoW. Continue copying addon updates into `Interface/AddOns` separately. Existing versions without the updater need one manual upgrade to an update-capable release.
+
 ## Desktop companion
 
 The Fyne interface is styled like a classic WoW quest dialog, with parchment, a dark frame, serif text, and red-and-gold buttons. It shows whether the game window is available, whether the addon tile is connected, and whether speech is preparing, playing, idle, or muted. The **Stop** button beneath Audio interrupts the current speech without stopping game detection. It is enabled only while audio is playing.
@@ -161,7 +169,7 @@ Quest speech reads the main text without announcing the speaker's name. Titles a
 
 ### Local runtime and custom voices
 
-PocketTTS.cpp and ONNX Runtime run inside the Go process. The app performs no network requests during synthesis. It loads and verifies the pinned April English models and restores existing voice states directly. `-native-dir` selects the model/preset folder; `-models-dir` optionally overrides its `models/` subfolder. `-cpu-threads` sets the native inference budget (default 1).
+PocketTTS.cpp and ONNX Runtime run inside the Go process. Speech synthesis makes no network requests. The desktop separately contacts GitHub at startup to check for updates; update files download only after confirmation. It loads and verifies the pinned April English models and restores existing voice states directly. `-native-dir` selects the model/preset folder; `-models-dir` optionally overrides its `models/` subfolder. `-cpu-threads` sets the native inference budget (default 1).
 
 Python remains under `tools/voices/` only for optional custom-voice export. See [the voice export guide](docs/VOICE_CLONING.md). Profiles use presets or `.safetensors` paths; raw recordings must be exported before use. Base models, recordings, previews, and developer environments remain Git-ignored. Only configured custom voice states are packaged.
 

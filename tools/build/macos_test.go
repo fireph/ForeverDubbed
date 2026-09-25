@@ -18,14 +18,16 @@ import (
 
 func TestMacAppLayoutAndExecutablePermissions(t *testing.T) {
 	root := t.TempDir()
-	names := []string{"foreverdubbed", "native/libonnxruntime.dylib", "native/models/bundle.json", "native/presets/alba.safetensors", "tts/voices.json", "tts/custom/narrator.safetensors", "data/custom-races.json", "data/voiceover/VOICEOVER-LICENSE.txt", "README.md", "addon/ForeverDubbed/ForeverDubbed.toc"}
+	names := []string{"foreverdubbed", "foreverdubbed-updater", "release-manifest.json", "native/libonnxruntime.dylib", "native/models/bundle.json", "native/presets/alba.safetensors", "tts/voices.json", "tts/custom/narrator.safetensors", "data/custom-races.json", "data/voiceover/VOICEOVER-LICENSE.txt", "README.md", "addon/ForeverDubbed/ForeverDubbed.toc"}
 	files := map[string]string{}
 	for _, name := range names {
 		putFile(t, root, name, name)
 		files[name] = filepath.Join(root, filepath.FromSlash(name))
 	}
-	if err := os.Chmod(files["foreverdubbed"], 0755); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"foreverdubbed", "foreverdubbed-updater"} {
+		if err := os.Chmod(files[name], 0755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	dist := filepath.Join(root, "dist")
 	if err := os.MkdirAll(dist, 0755); err != nil {
@@ -42,8 +44,10 @@ func TestMacAppLayoutAndExecutablePermissions(t *testing.T) {
 	}
 	for _, name := range names {
 		target := name
-		if name == "foreverdubbed" {
-			target = "ForeverDubbed.app/Contents/MacOS/foreverdubbed"
+		if name == "foreverdubbed" || name == "foreverdubbed-updater" {
+			target = "ForeverDubbed.app/Contents/MacOS/" + name
+		} else if name == "release-manifest.json" {
+			target = "ForeverDubbed.app/Contents/Resources/" + name
 		} else if strings.HasPrefix(name, "native/") || strings.HasPrefix(name, "tts/") || strings.HasPrefix(name, "data/") {
 			target = "ForeverDubbed.app/Contents/Resources/" + name
 		}
@@ -69,7 +73,7 @@ func TestMacAppLayoutAndExecutablePermissions(t *testing.T) {
 	}
 	defer archive.Close()
 	for _, f := range archive.File {
-		if f.Name == "ForeverDubbed.app/Contents/MacOS/foreverdubbed" && f.Mode().Perm()&0111 == 0 {
+		if strings.HasPrefix(f.Name, "ForeverDubbed.app/Contents/MacOS/") && f.Mode().Perm()&0111 == 0 {
 			t.Fatal("ZIP lost executable permission")
 		}
 	}

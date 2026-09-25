@@ -91,6 +91,7 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 			}
 		}
 	}()
+	checkForUpdates(ctx, version, w, stop)
 	w.ShowAndRun()
 	stop()
 	<-done
