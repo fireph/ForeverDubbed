@@ -102,7 +102,9 @@
       "decode_steps": 4
     },
     "tauren_male": {
-      "voice": "custom/tauren_male.safetensors"
+      "voice": "custom/tauren_male.safetensors",
+      "decode_steps": 4,
+      "gain_db": 6
     },
     "tauren_female": {
       "voice": "custom/tauren_female.safetensors"

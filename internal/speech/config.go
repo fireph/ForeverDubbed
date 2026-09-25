@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"foreverdubbed/internal/protocol"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,8 +12,9 @@ import (
 )
 
 type Profile struct {
-	Voice       string `json:"voice"`
-	DecodeSteps int    `json:"decode_steps"`
+	Voice       string  `json:"voice"`
+	DecodeSteps int     `json:"decode_steps"`
+	GainDB      float64 `json:"gain_db,omitempty"`
 }
 
 type Config struct {
@@ -51,6 +53,9 @@ func Load(path string) (*Config, error) {
 	}
 	c.BaseDir = filepath.Dir(abs)
 	for id, profile := range c.Profiles {
+		if math.IsNaN(profile.GainDB) || math.IsInf(profile.GainDB, 0) || profile.GainDB < -24 || profile.GainDB > 12 {
+			return nil, fmt.Errorf("profile %q gain_db must be between -24 and 12", id)
+		}
 		if profile.DecodeSteps < 0 || profile.DecodeSteps > 64 {
 			return nil, fmt.Errorf("profile %q decode_steps must be 1..64", id)
 		}

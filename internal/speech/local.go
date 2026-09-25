@@ -2,11 +2,13 @@ package speech
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"foreverdubbed/internal/platform"
 	"foreverdubbed/internal/pocket"
 	"foreverdubbed/internal/protocol"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,6 +85,7 @@ func (l *Local) Speak(parent context.Context, m protocol.Message) error {
 	if err != nil {
 		return err
 	}
+	gain := math.Pow(10, l.Config.Profiles[name].GainDB/20)
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	chunks := make(chan []byte, platform.PCMQueueDepth)
@@ -97,6 +100,7 @@ func (l *Local) Speak(parent context.Context, m protocol.Message) error {
 		}
 		for _, text := range Chunks(text, 180) {
 			streamErr = l.Engine.Stream(ctx, text, voice, steps, func(pcm []byte) error {
+				pcm = amplifyPCM(pcm, gain)
 				select {
 				case chunks <- pcm:
 					return nil
@@ -127,4 +131,20 @@ func (l *Local) Speak(parent context.Context, m protocol.Message) error {
 		return streamErr
 	}
 	return err
+}
+
+// amplifyPCM scales signed 16-bit little-endian audio without changing timing.
+// Saturate peaks to avoid integer wraparound; leave the engine's buffer intact.
+func amplifyPCM(pcm []byte, gain float64) []byte {
+	if gain == 1 {
+		return pcm
+	}
+	out := make([]byte, len(pcm))
+	copy(out, pcm)
+	for i := 0; i+1 < len(out); i += 2 {
+		sample := float64(int16(binary.LittleEndian.Uint16(pcm[i:]))) * gain
+		sample = math.Max(-32768, math.Min(32767, math.Round(sample)))
+		binary.LittleEndian.PutUint16(out[i:], uint16(int16(sample)))
+	}
+	return out
 }
