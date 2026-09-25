@@ -95,7 +95,7 @@
     },
     "undead_male": {
       "voice": "custom/undead_male.safetensors",
-      "decode_steps": 4
+      "decode_steps": 2
     },
     "undead_female": {
       "voice": "custom/undead_female.safetensors",
