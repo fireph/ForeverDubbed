@@ -171,7 +171,7 @@ Quest speech reads the main text without announcing the speaker's name. Titles a
 
 PocketTTS.cpp and ONNX Runtime run inside the Go process. Speech synthesis makes no network requests. The desktop separately contacts GitHub at startup to check for updates; update files download only after confirmation. It loads and verifies the pinned April English models and restores existing voice states directly. `-native-dir` selects the model/preset folder; `-models-dir` optionally overrides its `models/` subfolder. `-cpu-threads` sets the native inference budget (default 1).
 
-Python remains under `tools/voices/` only for optional custom-voice export. See [the voice export guide](docs/VOICE_CLONING.md). Profiles use presets or `.safetensors` paths; raw recordings must be exported before use. Base models, recordings, previews, and developer environments remain Git-ignored. Only configured custom voice states are packaged.
+Python remains under `tools/voices/` only for optional custom-voice export. Start with `uv sync --project tools/voices --locked`; see [tool setup](tools/voices/README.md) and [the voice export guide](docs/VOICE_CLONING.md). Profiles use presets or `.safetensors` paths; raw recordings must be exported before use. Base models, recordings, previews, and developer environments remain Git-ignored. Only configured custom voice states are packaged.
 
 In headless mode, decoded messages are printed as one JSON object per line on stdout. Discovery and speech diagnostics go to stderr. To save text without speech:
 

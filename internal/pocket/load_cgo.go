@@ -3,7 +3,7 @@
 package pocket
 
 /*
-#cgo CXXFLAGS: -std=c++17 -O2 -DPTT_SHARED_LIB
+#cgo CXXFLAGS: -std=c++17 -O2
 // ONNX Runtime uses _stdcall, which MinGW omits in strict C++17 mode.
 #cgo windows CXXFLAGS: -D_stdcall=__stdcall
 #cgo windows,amd64 CXXFLAGS: -I${SRCDIR}/../../.runtime/sdk/windows_amd64/include
@@ -17,7 +17,7 @@ package pocket
 #cgo darwin,arm64 CXXFLAGS: -I${SRCDIR}/../../.runtime/sdk/darwin_arm64/include
 #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/../../.runtime/sdk/darwin_arm64/lib
 #cgo LDFLAGS: -lsentencepiece -lonnxruntime
-#cgo windows LDFLAGS: -static -lstdc++ -lws2_32
+#cgo windows LDFLAGS: -static -lstdc++
 #cgo linux LDFLAGS: -lstdc++ -lm -lpthread -Wl,-rpath,$ORIGIN/native -Wl,-rpath,$ORIGIN/../.runtime/native
 #cgo darwin LDFLAGS: -lc++
 #include <stdlib.h>
@@ -60,7 +60,6 @@ func (l linkedLibrary) read(h unsafe.Pointer, out []int16) (int, error) {
 }
 func (linkedLibrary) stop(h unsafe.Pointer)    { C.fdb_stop(h) }
 func (linkedLibrary) destroy(h unsafe.Pointer) { C.fdb_destroy(h) }
-func (linkedLibrary) close()                   {}
 func (linkedLibrary) message(h unsafe.Pointer) error {
 	var message [2048]C.char
 	C.fdb_error(h, &message[0], 2048)

@@ -7,6 +7,7 @@
 /.runtime/
 __pycache__/
 *.pyc
+.venv/
 
 # Local recordings and model weights.
 /audio_clips/

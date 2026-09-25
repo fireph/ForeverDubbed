@@ -5,13 +5,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"foreverdubbed/internal/platform"
-	"foreverdubbed/internal/pocket"
-	"foreverdubbed/internal/protocol"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"foreverdubbed/internal/platform"
+	"foreverdubbed/internal/pocket"
+	"foreverdubbed/internal/protocol"
 )
 
 type Synthesizer interface {
@@ -40,7 +41,7 @@ func OpenLocal(config *Config, override, nativeDir, modelsDir string, threads in
 	if modelsDir == "" {
 		modelsDir = filepath.Join(nativeDir, "models")
 	}
-	engine, err := pocket.Open(nativeDir, modelsDir, threads)
+	engine, err := pocket.Open(modelsDir, threads)
 	if err != nil {
 		return nil, err
 	}

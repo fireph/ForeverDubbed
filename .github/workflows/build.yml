@@ -20,7 +20,7 @@ jobs:
       - name: Linux compiler prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-18 llvm-18 lld-18 cmake build-essential curl git xz-utils bzip2 cpio
+          sudo apt-get install -y clang-18 llvm-18 lld-18 cmake build-essential curl git xz-utils bzip2 cpio lua5.1
           llvm-config-18 --bindir >> "$GITHUB_PATH"
       - name: Cache OSXCross
         id: cross

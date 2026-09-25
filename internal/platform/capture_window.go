@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// captureWindow describes a candidate game window.
 // Window titles are intentionally not used for identity: unrelated apps can
 // show a page or document named "World of Warcraft".
 type captureWindow struct {
@@ -90,16 +91,18 @@ func chooseCaptureWindow(windows []captureWindow, app string, previous captureWi
 	return best, nil
 }
 
+// windowCaptureDriver captures pixels only from an explicitly selected window.
+// Implementations may also provide Reset() and Close() methods.
 type windowCaptureDriver interface {
 	Windows() ([]captureWindow, error)
 	Select(captureWindow) (image.Rectangle, error)
 	Capture(image.Rectangle) (*image.RGBA, error)
 }
 
-// There is deliberately no desktop/display capture method in this driver.
-// Enumeration reads window metadata; pixel capture starts only after selection.
+// windowCapture serializes window selection and capture, invalidating stale geometry.
+// Enumeration reads metadata; pixel capture starts only after selection.
 type windowCapture struct {
-	sync.Mutex
+	mu        sync.Mutex
 	driver    windowCaptureDriver
 	app       string
 	selected  captureWindow
@@ -108,7 +111,37 @@ type windowCapture struct {
 	err       error
 }
 
+// init configures the surface and releases any previous native driver.
+func (c *windowCapture) init(app string, driver windowCaptureDriver) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closeDriver()
+	c.driver, c.app = driver, app
+	c.selected, c.bounds = captureWindow{}, image.Rectangle{}
+	c.checkedAt, c.err = time.Time{}, nil
+}
+
+// Close releases native resources and prevents further pixel capture until reinitialized.
+func (c *windowCapture) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closeDriver()
+	c.driver = nil
+	c.selected, c.bounds = captureWindow{}, image.Rectangle{}
+	c.err = fmt.Errorf("window capture is closed")
+}
+
+func (c *windowCapture) closeDriver() {
+	if driver, ok := c.driver.(interface{ Close() }); ok {
+		driver.Close()
+	}
+}
+
 func (c *windowCapture) refresh() {
+	if c.driver == nil {
+		c.err = fmt.Errorf("window capture is not initialized")
+		return
+	}
 	c.checkedAt = time.Now()
 	windows, err := c.driver.Windows()
 	var selected captureWindow
@@ -135,15 +168,15 @@ func (c *windowCapture) refresh() {
 }
 
 func (c *windowCapture) Bounds() image.Rectangle {
-	c.Lock()
-	defer c.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.refresh()
 	return c.bounds
 }
 
 func (c *windowCapture) Capture(rect image.Rectangle) (*image.RGBA, error) {
-	c.Lock()
-	defer c.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if time.Since(c.checkedAt) >= time.Second {
 		previous, bounds := c.selected, c.bounds
 		c.refresh()

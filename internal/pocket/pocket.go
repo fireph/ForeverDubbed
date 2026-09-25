@@ -27,7 +27,6 @@ type library interface {
 	read(unsafe.Pointer, []int16) (int, error)
 	stop(unsafe.Pointer)
 	destroy(unsafe.Pointer)
-	close()
 }
 
 type Engine struct {
@@ -46,7 +45,7 @@ func DefaultDir() string {
 	}
 	return filepath.Join(filepath.Dir(exe), "native")
 }
-func Open(dir, models string, threads int) (*Engine, error) {
+func Open(models string, threads int) (*Engine, error) {
 	if threads < 1 || threads > 256 {
 		return nil, fmt.Errorf("CPU threads must be 1..256")
 	}
@@ -59,7 +58,6 @@ func Open(dir, models string, threads int) (*Engine, error) {
 	}
 	handle, err := lib.create(models, threads)
 	if err != nil {
-		lib.close()
 		return nil, err
 	}
 	return &Engine{lib: lib, handle: handle}, nil
@@ -69,7 +67,6 @@ func (e *Engine) Close() error {
 	defer e.mu.Unlock()
 	if e.handle != nil {
 		e.lib.destroy(e.handle)
-		e.lib.close()
 		e.handle = nil
 	}
 	return nil

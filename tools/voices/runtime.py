@@ -54,8 +54,8 @@ def synthesis_options(profile):
 
 @contextmanager
 def synthesis_settings(model, profile):
-    # The service holds its synthesis lock throughout this context. Restore all
-    # changes even after errors so one voice never affects another's settings.
+    # Previews run sequentially. Restore settings even after errors so one
+    # exported voice never affects the next preview.
     options = synthesis_options(profile)
     if not options:
         yield

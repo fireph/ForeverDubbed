@@ -62,7 +62,7 @@ func TestChooseWindowKeepsCurrentWithinProcess(t *testing.T) {
 }
 
 type fakeWindowDriver struct {
-	resets                   int
+	resets, closes           int
 	windows                  []captureWindow
 	bounds                   image.Rectangle
 	discoveryErr, captureErr error
@@ -71,6 +71,7 @@ type fakeWindowDriver struct {
 }
 
 func (d *fakeWindowDriver) Reset() { d.resets++ }
+func (d *fakeWindowDriver) Close() { d.closes++ }
 
 func (d *fakeWindowDriver) Windows() ([]captureWindow, error) { return d.windows, d.discoveryErr }
 func (d *fakeWindowDriver) Select(w captureWindow) (image.Rectangle, error) {
@@ -222,5 +223,36 @@ func TestWindowsExecutableSelection(t *testing.T) {
 	got, err := chooseCaptureWindow([]captureWindow{second, game}, game.Executable, captureWindow{})
 	if err != nil || got.ID != game.ID {
 		t.Fatalf("full executable path did not disambiguate: %+v, %v", got, err)
+	}
+}
+
+func TestWindowCaptureLifecycle(t *testing.T) {
+	var surface windowCapture
+	if _, err := surface.Capture(image.Rect(0, 0, 10, 10)); err == nil {
+		t.Fatal("uninitialized surface captured pixels")
+	}
+	first := &fakeWindowDriver{windows: []captureWindow{gameWindow(1, 42)}, bounds: image.Rect(0, 0, 1280, 720)}
+	surface.init("World of Warcraft", first)
+	if _, err := surface.Capture(surface.Bounds()); err != nil {
+		t.Fatal(err)
+	}
+	second := &fakeWindowDriver{windows: []captureWindow{gameWindow(2, 43)}, bounds: image.Rect(0, 0, 1920, 1080)}
+	surface.init("World of Warcraft", second)
+	if first.closes != 1 {
+		t.Fatal("reinitialization leaked the previous driver")
+	}
+	if bounds := surface.Bounds(); bounds != second.bounds {
+		t.Fatalf("reused old geometry: %v", bounds)
+	}
+	surface.Close()
+	surface.Close()
+	if second.closes != 1 {
+		t.Fatalf("closed native driver %d times", second.closes)
+	}
+	if bounds := surface.Bounds(); !bounds.Empty() {
+		t.Fatal("closed surface retained window geometry")
+	}
+	if _, err := surface.Capture(second.bounds); err == nil || len(second.captures) != 0 {
+		t.Fatal("captured pixels after closing the driver")
 	}
 }

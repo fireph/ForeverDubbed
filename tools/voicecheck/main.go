@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"foreverdubbed/internal/pocket"
 	"math"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
+
+	"foreverdubbed/internal/pocket"
 )
 
 func main() {
@@ -43,7 +44,7 @@ func run() error {
 	if err = json.Unmarshal(data, &cfg); err != nil {
 		return err
 	}
-	engine, err := pocket.Open(*dir, filepath.Join(*dir, "models"), 2)
+	engine, err := pocket.Open(filepath.Join(*dir, "models"), 2)
 	if err != nil {
 		return err
 	}

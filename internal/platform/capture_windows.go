@@ -19,7 +19,7 @@ import (
 	"unsafe"
 )
 
-var windowsScreen = windowCapture{driver: &winWindowDriver{}}
+var windowsScreen windowCapture
 
 type winCaptureRequest struct {
 	run    func(*C.fdb_wgc) error
@@ -76,8 +76,7 @@ func Init(app string) error {
 	if err := <-started; err != nil {
 		return err
 	}
-	windowsScreen.driver = driver
-	windowsScreen.app = app
+	windowsScreen.init(app, driver)
 	return nil
 }
 
@@ -95,10 +94,9 @@ func (d *winWindowDriver) call(run func(*C.fdb_wgc) error) error {
 	}
 	return <-result
 }
-func CloseCapture() {
-	windowsScreen.Lock()
-	defer windowsScreen.Unlock()
-	d := windowsScreen.driver.(*winWindowDriver)
+func CloseCapture() { windowsScreen.Close() }
+
+func (d *winWindowDriver) Close() {
 	if d.requests != nil {
 		d.closeOnce.Do(func() { close(d.stop); <-d.done })
 	}

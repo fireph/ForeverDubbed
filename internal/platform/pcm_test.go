@@ -14,6 +14,7 @@ type testPCMDevice struct {
 	finished atomic.Bool
 	closed   bool
 	fail     error
+	closeErr error
 }
 
 func (d *testPCMDevice) Queue(p []byte) error { d.pending++; d.queued <- p; return d.fail }
@@ -23,7 +24,7 @@ func (d *testPCMDevice) Pending() (int, error) {
 	}
 	return d.pending, nil
 }
-func (d *testPCMDevice) Close() error { d.closed = true; return nil }
+func (d *testPCMDevice) Close() error { d.closed = true; return d.closeErr }
 
 func TestPCMQueueBoundAndCancellation(t *testing.T) {
 	chunks := make(chan []byte, 8)
@@ -206,5 +207,39 @@ func TestPlaybackProgressCountsCompletedBuffers(t *testing.T) {
 	}
 	if !known || played != 150*time.Millisecond || total != played {
 		t.Fatalf("played=%v total=%v known=%v", played, total, known)
+	}
+}
+
+func TestPCMRejectsInvalidBuffersAndClosesDevice(t *testing.T) {
+	for _, size := range []int{0, 1, 3, MaxPCMBufferBytes + 2} {
+		chunks := make(chan []byte, 1)
+		chunks <- make([]byte, size)
+		close(chunks)
+		device := &testPCMDevice{queued: make(chan []byte, 1)}
+		if err := playPCM(context.Background(), 24000, chunks, device); err == nil {
+			t.Fatalf("accepted buffer of %d bytes", size)
+		}
+		if !device.closed || len(device.queued) != 0 {
+			t.Fatalf("invalid buffer reached the device or leaked it: %d bytes", size)
+		}
+	}
+}
+
+func TestPCMCloseErrorDoesNotHidePlaybackFailure(t *testing.T) {
+	closeErr := errors.New("device close failed")
+	queueErr := errors.New("device queue failed")
+	for _, fail := range []error{nil, queueErr} {
+		chunks := make(chan []byte, 1)
+		chunks <- []byte{1, 0}
+		close(chunks)
+		device := &testPCMDevice{queued: make(chan []byte, 1), fail: fail, closeErr: closeErr}
+		device.finished.Store(true)
+		want := closeErr
+		if fail != nil {
+			want = fail
+		}
+		if err := playPCM(context.Background(), 24000, chunks, device); !errors.Is(err, want) {
+			t.Fatalf("got %v, want %v", err, want)
+		}
 	}
 }

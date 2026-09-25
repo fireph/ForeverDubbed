@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"foreverdubbed/internal/buildtool"
 	"foreverdubbed/internal/identity"
 	"foreverdubbed/internal/pocket"
 	"foreverdubbed/internal/speech"
@@ -35,7 +36,7 @@ func TestMacAppLayoutAndExecutablePermissions(t *testing.T) {
 	}
 	stale := filepath.Join(dist, "ForeverDubbed.app", "stale")
 	putFile(t, dist, "ForeverDubbed.app/stale", "old")
-	manifest, err := macApp(dist, files)
+	manifest, err := macApp(dist, files, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +106,7 @@ func TestMacAppResourceDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	probe := filepath.Join(root, "ForeverDubbed.app", "Contents", "MacOS", "probe")
-	if err := copyBundleFile(exe, probe); err != nil {
+	if err := buildtool.CopyFile(exe, probe); err != nil {
 		t.Fatal(err)
 	}
 	putFile(t, root, "ForeverDubbed.app/Contents/Resources/native/models/bundle.json", "{}")
@@ -125,14 +126,14 @@ func TestSignedAppManifestAndFailedSigning(t *testing.T) {
 	dist := filepath.Join(root, "dist")
 	putFile(t, dist, "ForeverDubbed.app/previous", "keep until signing succeeds")
 	files := map[string]string{"foreverdubbed": filepath.Join(root, "foreverdubbed")}
-	_, err := macAppSigned(dist, files, func(app string) error { return fmt.Errorf("signing failed") })
+	_, err := macApp(dist, files, func(app string) error { return fmt.Errorf("signing failed") })
 	if err == nil {
 		t.Fatal("ignored signing failure")
 	}
 	if _, err := os.Stat(filepath.Join(dist, "ForeverDubbed.app/previous")); err != nil {
 		t.Fatal("failed signing replaced installed build", err)
 	}
-	manifest, err := macAppSigned(dist, files, func(app string) error {
+	manifest, err := macApp(dist, files, func(app string) error {
 		if !strings.HasSuffix(app, ".app") {
 			t.Fatal("signer needs an app bundle path")
 		}

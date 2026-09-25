@@ -54,3 +54,10 @@ func addReleaseManifest(dist string, files map[string]string) error {
 	files[update.ManifestName] = target
 	return nil
 }
+
+func releaseZIPName(targetOS, arch string) string {
+	if targetOS == "windows" {
+		return "ForeverDubbed-windows-" + arch + "-portable.zip"
+	}
+	return "ForeverDubbed-mac-" + arch + ".zip"
+}

@@ -4,7 +4,8 @@ PocketTTS.cpp and our C wrapper are compiled by `go build` through cgo and linke
 
 `internal/pocket/pocket_tts.hpp` is VolgaGerm/PocketTTS.cpp at commit `e801e7d6c2692121a39e80ae525cb5265174a495`, under `native/vendor/LICENSE`. The source uses a header extension so cgo compiles it once through `internal/pocket/bridge.cpp` and tracks changes for rebuilds. Local changes:
 
-- A friend adapter imports the existing April-model `.safetensors` voice states. No re-cloning or lossy conversion is performed.
+- Unused upstream HTTP server, command-line program, and alternate C API are removed; the application uses only its own `fdb_*` streaming ABI.
+- A friend adapter in `internal/pocket/voice_state.hpp` imports the existing April-model `.safetensors` voice states. No re-cloning or lossy conversion is performed.
 - Correct restoration of dynamic snapshot shapes and initialization of decoder `first` flags for the pinned April export.
 - Exceptions from generation/decoding join the worker before propagating to Go.
 - Decoder batch limits also apply after generation finishes, so playback backpressure cannot turn the remaining audio into one oversized decode batch.

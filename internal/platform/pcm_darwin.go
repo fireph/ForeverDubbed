@@ -21,19 +21,13 @@ func audioResult(op string, status C.int) error {
 	}
 	return nil
 }
-func PlayPCM(ctx context.Context, rate int, chunks <-chan []byte) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if rate < 8000 || rate > 96000 {
-		return fmt.Errorf("unsupported PCM sample rate: %d", rate)
-	}
+func openAudio(rate int) (pcmDevice, error) {
 	var status C.int
 	handle := C.fdb_audio_open(C.int(rate), &status)
 	if err := audioResult("AudioQueueNewOutput", status); err != nil {
-		return err
+		return nil, err
 	}
-	return playPCM(ctx, rate, chunks, &macAudio{handle})
+	return &macAudio{handle}, nil
 }
 func (d *macAudio) Queue(pcm []byte) error {
 	// The bridge copies bytes into AudioQueue-owned memory before returning.

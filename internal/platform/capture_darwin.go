@@ -18,11 +18,9 @@ import (
 	"unsafe"
 )
 
-var macScreen = windowCapture{driver: macWindowDriver{}}
+var macScreen windowCapture
 
 func Init(app string) error {
-	macScreen.Lock()
-	defer macScreen.Unlock()
 	app = strings.TrimSpace(app)
 	if app == "" {
 		return fmt.Errorf("-capture-app must name the game app bundle, absolute path, or bundle identifier")
@@ -31,7 +29,7 @@ func Init(app string) error {
 	if C.fdb_screen_init(&message[0], C.size_t(len(message))) != 0 {
 		return fmt.Errorf("macOS capture: %s", C.GoString(&message[0]))
 	}
-	macScreen.app = app
+	macScreen.init(app, macWindowDriver{})
 	// A missing game window is retried by Bounds/Capture, not a startup failure.
 	return nil
 }
@@ -74,4 +72,4 @@ func (macWindowDriver) Capture(rect image.Rectangle) (*image.RGBA, error) {
 }
 
 // CloseCapture releases platform capture resources at shutdown.
-func CloseCapture() {}
+func CloseCapture() { macScreen.Close() }

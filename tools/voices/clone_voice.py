@@ -127,7 +127,7 @@ def main():
             synthesis_options(config["profiles"][name])
         except ValueError as exc:
             parser.error(str(exc))
-        if (output / f"{name}.safetensors").exists() and not args.force:
+        if not args.prepare_only and (output / f"{name}.safetensors").exists() and not args.force:
             parser.error(f"{name} already exists; use --force to replace it")
         names.add(name)
         rate, audio, clipped = read_audio(Path(source))
@@ -153,7 +153,8 @@ def main():
     model = load_model(offline=not args.online)
     if not model.has_voice_cloning:
         raise SystemExit("Cloning weights unavailable. Accept access at https://huggingface.co/kyutai/pocket-tts, "
-                         "log in with the project HF_HOME, and rerun with --online. Profiles were not changed.")
+                         "run `uv run --project tools/voices hf auth login` from the repository root, "
+                         "and rerun with --online. Profiles were not changed.")
     from pocket_tts import export_model_state
     for name, _, metadata in jobs:
         started = time.monotonic()

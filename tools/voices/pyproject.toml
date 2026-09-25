@@ -1,0 +1,38 @@
+[project]
+name = "foreverdubbed-voices"
+version = "0.1.0"
+description = "Development tools for preparing and exporting ForeverDubbed voices"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "huggingface-hub>=0.34,<2",
+    "numpy>=2,<3",
+    "pocket-tts==3.1.0",
+    "scipy>=1.11,<2",
+    "soundfile==0.13.1",
+    "torch==2.9.1",
+]
+
+[tool.uv]
+package = false
+# These are the platforms supported by the pinned PyTorch wheels.
+environments = [
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')",
+]
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'linux' and platform_machine == 'aarch64'",
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

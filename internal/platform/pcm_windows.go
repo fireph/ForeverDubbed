@@ -3,7 +3,6 @@
 package platform
 
 import (
-	"context"
 	"fmt"
 	"runtime"
 	"sync"
@@ -61,20 +60,14 @@ func waveResult(op string, code uintptr) error {
 	return nil
 }
 
-func PlayPCM(ctx context.Context, rate int, chunks <-chan []byte) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if rate < 8000 || rate > 96000 {
-		return fmt.Errorf("unsupported PCM sample rate: %d", rate)
-	}
+func openAudio(rate int) (pcmDevice, error) {
 	format := waveFormat{Tag: 1, Channels: 1, Rate: uint32(rate), BytesPerSecond: uint32(rate) * 2, Align: 2, Bits: 16}
 	device := &waveDevice{}
 	code, _, _ := waveOpen.Call(uintptr(unsafe.Pointer(&device.handle)), 0xffffffff, uintptr(unsafe.Pointer(&format)), 0, 0, 0)
 	if err := waveResult("waveOutOpen", code); err != nil {
-		return err
+		return nil, err
 	}
-	return playPCM(ctx, rate, chunks, device)
+	return device, nil
 }
 
 func (d *waveDevice) Queue(pcm []byte) error {

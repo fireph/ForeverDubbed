@@ -23,7 +23,7 @@ go run -tags pocket_native ./tools/voicecheck
 go run -tags pocket_native ./tools/voicecheck -voice undead_male
 ```
 
-Speech commands require `CGO_ENABLED=1`, C/C++ compilers, and ONNX Runtime on the OS library search path (see [native instructions](../native/README.md)); live capture/playback are not implemented on Linux. The model-free Go tests run without native libraries. Python export-tool tests are optional: `python -m unittest discover -s tools/voices -p 'test_*.py'`. Lua 5.1+ enables additional addon compatibility tests through `LUA=/path/to/lua`.
+Speech commands require `CGO_ENABLED=1`, C/C++ compilers, and ONNX Runtime on the OS library search path (see [native instructions](../native/README.md)); live capture/playback are not implemented on Linux. The model-free Go tests run without native libraries. Python export-tool tests are optional: `uv run --project tools/voices --locked python -m unittest discover -s tools/voices -p 'test_*.py'` (see [voice tool setup](../tools/voices/README.md)). Lua 5.1+ enables additional addon compatibility tests through `LUA=/path/to/lua`.
 
 The portable decoder can read PNGs on any OS. For a paged message, supply one unmodified screenshot of each distinct page, in any order:
 
@@ -33,6 +33,26 @@ go run ./cmd/foreverdubbed -image page1.png,page2.png,page3.png
 
 Tests cover voice routing and overrides, cancellation, native voice selection and errors, streamed PCM validation and bounded playback, speaker metadata, the Lua/Go byte and palette contract, Unicode spanning pages, out-of-order/duplicate pages, session changes, sequence wraparound, invalid dimensions, corruption, gamma/tint/noise transforms, damaged reference swatches, moved tiles, negative monitor coordinates, desktop race-layer precedence, unchanged VoiceOver data, raw display/model observations, model-load timing and stale identities, saved race assignments and clearing, settings migration, physical pixel sizing at multiple resolutions/UI scales, and all supported cell sizes. Lua tests use mocked game APIs; they do not substitute for testing the real client. Tests explicitly skip the Lua checks if an interpreter is unavailable.
 
+
+## Code organization
+
+- `cmd/foreverdubbed`: startup/options in `main.go`, optical polling in `capture.go`, speech queue policy in `speech.go`, and offline image/snapshot commands in `images.go`.
+- `internal/platform`: native capture, audio devices, and system voices. OS-specific files stay in this package with `_windows`/`_darwin` suffixes and cgo build constraints. `capture_window.go`, `pcm.go`, and `playback_status.go` hold shared policy; fake-device tests run on any host.
+- `internal/desktop` and `internal/update`: platform-specific window and process integration stays with the feature that uses it, selected by filename suffixes/build constraints.
+- `internal/pocket`: the Go speech engine and C ABI; `bridge.cpp` owns streaming and worker shutdown, while `voice_state.hpp` validates and imports saved voice tensors. `pocket_tts.hpp` is the pinned, locally adapted upstream inference source.
+- `tools/build`: release orchestration, manifests, file selection, and ZIP output, with separate `macos_*` and `windows_*` files for target packaging. These names use OS prefixes rather than reserved suffixes because both targets must compile on every build host.
+
+Use `gofmt` for Go and the root `.clang-format` for maintained C++/Objective-C bridges. Keep formatting-only changes out of the pinned upstream `pocket_tts.hpp` so local inference fixes remain easy to compare with upstream:
+
+```sh
+gofmt -w cmd internal tools
+clang-format -i internal/pocket/bridge.cpp internal/pocket/bridge.h internal/pocket/voice_state.hpp
+clang-format -i internal/platform/*.cpp internal/platform/*.h internal/platform/*.m internal/desktop/*.m
+go test -race ./...
+go test -race -tags "gui ci" ./internal/desktop ./cmd/foreverdubbed
+```
+
+Tests should exercise observable contracts: window ownership, audio ordering and cleanup, queue controls, decoding, safe update replacement, and packaged file contents. Native live-capture tests remain opt-in because they require a running game and OS permissions. Set `FDB_TEST_CAPTURE_APP` and run `go test ./internal/platform` on Windows or macOS with cgo enabled. Real speech recovery/fade tests use `FDB_TEST_NATIVE_DIR` and `-tags pocket_native` as described in the native guide.
 
 ## Desktop interface
 
