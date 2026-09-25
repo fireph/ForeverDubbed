@@ -13,6 +13,8 @@ go run ./tools/build
 
 `tools/build` defaults to the Windows/amd64 release; `-target darwin -arch arm64|amd64` produces macOS releases (see [the Linux/macOS build guide](macos.md)). Both it and `tools/native` automatically select the installed MinGW-w64 cross-compilers on Ubuntu/WSL; explicit `CC`/`CXX` values override this selection. `tools/native` prepares matching dependencies in `.runtime/sdk/windows_amd64` and DLLs in `.runtime/native`. For an alternate runtime directory, use `-out <directory>` with setup/model downloads and `-native-dir <directory>` with the builder. It rejects missing or wrong-architecture libraries. `scripts/build.ps1` delegates to this Go tool.
 
+Windows archives are named `ForeverDubbed-windows-amd64-portable.zip`; macOS archives use `ForeverDubbed-mac-<arch>.zip` (the compiler target remains `darwin`). To also create `ForeverDubbed-windows-amd64-setup.exe`, install [NSIS](https://nsis.sourceforge.io/Docs/) (`sudo apt-get install nsis` on Ubuntu) and run `go run ./tools/build -windows-installer`. GitHub Actions enables this flag. The installer uses the portable package's exact file manifest, installs under `%LOCALAPPDATA%\Programs\ForeverDubbed` by default without elevation, creates a Start menu shortcut, and registers an uninstaller. Quit the running app before upgrading; packaged files are replaced, so back up any edits to bundled configuration or voices first. Uninstall removes packaged files and empty directories, leaving additional user files and desktop preferences intact. The addon must still be copied into WoW separately.
+
 Real native speech checks (no game or audio device required):
 
 ```sh

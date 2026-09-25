@@ -74,7 +74,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: macos-bundle-arm64${{ github.event_name == 'pull_request' && '-unsigned' || '' }}
-          path: dist/ForeverDubbed-darwin-arm64.zip
+          path: dist/ForeverDubbed-mac-arm64.zip
           if-no-files-found: error
           compression-level: 0
 
@@ -90,18 +90,19 @@ jobs:
       - name: Windows cross-compiler prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake git build-essential g++-mingw-w64-x86-64-posix
+          sudo apt-get install -y cmake git build-essential g++-mingw-w64-x86-64-posix nsis
       - name: Prepare Windows dependencies
         run: |
           go run ./tools/native -target windows -arch amd64 -out .runtime/native-windows
           go run ./tools/models -out .runtime/native-windows
       - name: Build Windows release
-        run: go run ./tools/build -target windows -arch amd64 -native-dir .runtime/native-windows
+        run: go run ./tools/build -target windows -arch amd64 -native-dir .runtime/native-windows -windows-installer
       - uses: actions/upload-artifact@v4
         with:
           name: release-windows-amd64
           path: |
-            dist/ForeverDubbed-windows-amd64.zip
+            dist/ForeverDubbed-windows-amd64-setup.exe
+            dist/ForeverDubbed-windows-amd64-portable.zip
             dist/ForeverDubbed-addon.zip
           if-no-files-found: error
           compression-level: 0
@@ -120,7 +121,7 @@ jobs:
           TARGET_ARCH: arm64
         run: |
           mkdir -p staging dist
-          ditto -x -k "incoming/ForeverDubbed-darwin-$TARGET_ARCH.zip" staging
+          ditto -x -k "incoming/ForeverDubbed-mac-$TARGET_ARCH.zip" staging
           test -x staging/ForeverDubbed.app/Contents/MacOS/foreverdubbed
           ln -s /Applications staging/Applications
       - name: Verify signed app with Apple's tools
@@ -141,7 +142,7 @@ jobs:
             if hdiutil create -volname ForeverDubbed -srcfolder staging -fs HFS+ -format UDZO "$image" >"$log" 2>&1; then
               cat "$log"
               hdiutil verify "$image"
-              mv "$image" "dist/ForeverDubbed-darwin-$TARGET_ARCH.dmg"
+              mv "$image" "dist/ForeverDubbed-mac-$TARGET_ARCH.dmg"
               exit 0
             else
               status=$?
@@ -156,8 +157,8 @@ jobs:
           done
       - uses: actions/upload-artifact@v4
         with:
-          name: release-darwin-arm64${{ github.event_name == 'pull_request' && '-unsigned' || '' }}
-          path: dist/ForeverDubbed-darwin-arm64.dmg
+          name: release-mac-arm64${{ github.event_name == 'pull_request' && '-unsigned' || '' }}
+          path: dist/ForeverDubbed-mac-arm64.dmg
           if-no-files-found: error
           compression-level: 0
 
@@ -186,8 +187,9 @@ jobs:
         working-directory: downloads
         run: |
           files=(
-            ForeverDubbed-darwin-arm64.dmg
-            ForeverDubbed-windows-amd64.zip
+            ForeverDubbed-mac-arm64.dmg
+            ForeverDubbed-windows-amd64-setup.exe
+            ForeverDubbed-windows-amd64-portable.zip
             ForeverDubbed-addon.zip
           )
           for file in "${files[@]}"; do
@@ -203,8 +205,9 @@ jobs:
           RELEASE_COMMIT: ${{ github.sha }}
         run: |
           gh release create "$RELEASE_TAG" \
-            ForeverDubbed-darwin-arm64.dmg \
-            ForeverDubbed-windows-amd64.zip \
+            ForeverDubbed-mac-arm64.dmg \
+            ForeverDubbed-windows-amd64-setup.exe \
+            ForeverDubbed-windows-amd64-portable.zip \
             ForeverDubbed-addon.zip \
             SHA256SUMS.txt \
             --target "$RELEASE_COMMIT" \

@@ -31,7 +31,7 @@ go run ./tools/build -target darwin -arch arm64 -native-dir .runtime/native-darw
 
 The release builder enables both the `gui` (Fyne 2.8.1) and `pocket_native` build tags. Fyne uses the macOS frameworks from the existing SDK; the Linux cross-build does not require Linux X11/OpenGL development packages.
 
-The result is `dist/ForeverDubbed-darwin-arm64.zip`, containing `ForeverDubbed.app`, documentation, and the addon. The app contains its executable, ONNX Runtime dylibs, models, and voice presets. Use `amd64` in all four commands for Intel. Each build also writes `dist/ForeverDubbed.app` and `dist/foreverdubbed` for the selected architecture; copy or extract the ZIP to keep separate architecture builds. Keep target dependency directories separate from the Windows runtime.
+The result is `dist/ForeverDubbed-mac-arm64.zip`, containing `ForeverDubbed.app`, documentation, and the addon. The app contains its executable, ONNX Runtime dylibs, models, and voice presets. Use `amd64` in all four commands for Intel. Each build also writes `dist/ForeverDubbed.app` and `dist/foreverdubbed` for the selected architecture; copy or extract the ZIP to keep separate architecture builds. Keep target dependency directories separate from the Windows runtime.
 
 Do **not** export `GOOS` or `GOARCH` for these `go run` commands: they execute the setup/packaging tools on Linux, and the tools select the child build target. `CC` and `CXX` from the environment script select the same compiler for CMake and Go. `MACOS_SDK` selects CMake's SDK; the deployment target is macOS 14.0. The environment script disables cgo for the Linux helper programs, and the packager enables it for the macOS child build.
 
@@ -69,7 +69,7 @@ The designated requirement should contain `io.foreverdubbed.companion` and a cer
 
 ## GitHub Actions
 
-[The build and release workflow](../.github/workflows/build.yml) builds the macOS Apple Silicon app and the Windows x64 ZIP in parallel on `ubuntu-24.04`. It runs for pull requests, pushes to `main`, version-tag pushes, and manual dispatch. The macOS build job runs the portable Go tests/vet and GUI tests and caches the pinned OSXCross toolchain. The Windows job uses MinGW-w64 and the existing Go packager, which also runs tests/vet.
+[The build and release workflow](../.github/workflows/build.yml) builds the macOS Apple Silicon app and the Windows x64 installer and portable ZIP in parallel on `ubuntu-24.04`. It runs for pull requests, pushes to `main`, version-tag pushes, and manual dispatch. The macOS build job runs the portable Go tests/vet and GUI tests and caches the pinned OSXCross toolchain. The Windows job uses MinGW-w64, NSIS, and the Go packager, which also runs tests/vet. The installer and portable ZIP share the same runtime, model, voice, documentation, and addon file manifest.
 
 After the macOS build succeeds, a dependent job on `macos-14` unpacks the app ZIP, verifies the signed app with Apple's `codesign`, and creates and verifies a compressed DMG with `hdiutil`. The disk image includes the app, an Applications shortcut, documentation, and the addon. The macOS ZIP is an intermediate build artifact; the macOS release download is a `.dmg` file. DMG creation retries transient `Resource busy` errors up to five total attempts, with increasing delays and a fresh temporary image on each attempt. Other creation errors and verification failures stop packaging; only a verified image is uploaded.
 
@@ -79,8 +79,9 @@ Only a pushed version tag in the exact `vMAJOR.MINOR.PATCH` format, such as `v0.
 
 The release contains:
 
-- `ForeverDubbed-darwin-arm64.dmg` for Apple Silicon.
-- `ForeverDubbed-windows-amd64.zip` for Windows x64.
+- `ForeverDubbed-mac-arm64.dmg` for Apple Silicon.
+- `ForeverDubbed-windows-amd64-setup.exe` for installing on Windows x64.
+- `ForeverDubbed-windows-amd64-portable.zip` for portable Windows x64 use.
 - `ForeverDubbed-addon.zip` for the standalone addon.
 - `SHA256SUMS.txt` for download verification.
 
@@ -93,7 +94,7 @@ git push origin v0.5.1
 
 Use an unused version number for each release. The workflow refuses to overwrite an existing release. If uploading or publishing fails after draft creation, inspect and remove the incomplete draft before rerunning the release job.
 
-The workflow uses Go 1.27.1 and matching LLVM 18 packages. It adds LLVM's `bin` directory to `GITHUB_PATH` before toolchain setup or cache restore, so subsequent steps can find `ld64.lld` and the other LLVM tools. Download the `release-darwin-arm64` or `release-windows-amd64` artifact from a push or manual workflow run for builds without a release. Pull-request macOS artifacts have an additional `-unsigned` suffix. Native screen/audio behavior still needs checking on a Mac or Windows PC.
+The workflow uses Go 1.27.1 and matching LLVM 18 packages. It adds LLVM's `bin` directory to `GITHUB_PATH` before toolchain setup or cache restore, so subsequent steps can find `ld64.lld` and the other LLVM tools. Download the `release-mac-arm64` or `release-windows-amd64` artifact from a push or manual workflow run for builds without a release. Pull-request macOS artifacts have an additional `-unsigned` suffix. Native screen/audio behavior still needs checking on a Mac or Windows PC.
 
 ## Build directly on a Mac
 

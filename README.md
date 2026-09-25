@@ -10,7 +10,7 @@ See [CHANGELOG.md](CHANGELOG.md) for earlier releases and [PROTOCOL.md](PROTOCOL
 
 ## Quick start on macOS
 
-The macOS release requires macOS 14+ on Apple Silicon. Download `ForeverDubbed-darwin-arm64.dmg` and open the disk image.
+The macOS release requires macOS 14+ on Apple Silicon. Download `ForeverDubbed-mac-arm64.dmg` and open the disk image.
 
 Drag **ForeverDubbed.app** to Applications and double-click it. The app includes its speech libraries, models, and voices; no Terminal, Go, or compiler tools are needed. The addon is included separately in the disk image and as `ForeverDubbed-addon.zip` on the release.
 
@@ -22,7 +22,9 @@ Install the addon and test it using the steps below. See the [macOS guide](docs/
 
 Windows capture targets **WoWB.exe** only, using Windows Graphics Capture (Windows 10 version 1903+ or Windows 11). It never falls back to desktop capture. See [Windows window-capture details](docs/windows.md) for executable selection, troubleshooting, and live checks.
 
-From a release ZIP, extract the entire folder and run `foreverdubbed.exe` (or the optional `Start-ForeverDubbed.cmd`). Keep the ONNX Runtime DLLs, `native/`, and `tts/` beside the executable. Python, uv, and Go are not needed to run a prepared release.
+Run `ForeverDubbed-windows-amd64-setup.exe` to install for your Windows user, with a Start menu shortcut and an entry in Installed apps. The addon is included under the installation folder and still needs copying into WoW (see below).
+
+For a portable installation, download `ForeverDubbed-windows-amd64-portable.zip`, extract the entire folder and run `foreverdubbed.exe` (or the optional `Start-ForeverDubbed.cmd`). Keep the ONNX Runtime DLLs, `native/`, and `tts/` beside the executable. Python, uv, and Go are not needed to run a prepared release.
 
 For source builds on Windows or Linux/WSL, see the [Windows build guide](native/README.md#build).
 
