@@ -103,6 +103,9 @@ func build() error {
 	if err := os.MkdirAll(dist, 0755); err != nil {
 		return err
 	}
+	if err := stageAddon(dist, bundle, addon); err != nil {
+		return err
+	}
 	// Keep the development executable runnable outside the ZIP too.
 	for name, source := range bundle {
 		ext := filepath.Ext(name)
@@ -129,8 +132,9 @@ func build() error {
 	nativeEnv := buildEnv(os.Environ(), targetOS, targetArch)
 	nativeEnv[len(nativeEnv)-1] = "CGO_ENABLED=1"
 	nativeEnv = append(nativeEnv, "CC="+cc, "CXX="+cxx)
+	versionFlag := "-X foreverdubbed/internal/buildinfo.Version=" + release
 	helperName := "foreverdubbed-updater"
-	helperFlags := "-s -w"
+	helperFlags := versionFlag + " -s -w"
 	if targetOS == "windows" {
 		helperName += ".exe"
 		helperFlags += " -H=windowsgui"
@@ -140,7 +144,6 @@ func build() error {
 		return err
 	}
 	bundle[helperName] = helperPath
-	versionFlag := "-X foreverdubbed/internal/buildinfo.Version=" + release
 	buildArgs := []string{"build", "-tags", "pocket_native,gui", "-buildvcs=false", "-trimpath"}
 	if targetOS == "darwin" {
 		// cgo source directives reject @-prefixed rpaths. Pass these deliberate

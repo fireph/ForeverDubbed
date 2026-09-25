@@ -71,7 +71,7 @@ For terminal-only operation, use `-headless`. One-shot commands such as `-voices
 
 On either platform:
 
-1. Copy `addon/ForeverDubbed` into the Forever client's `Interface\AddOns` directory and enable it in the game.
+1. From the release, copy `addon/ForeverDubbed` into the Forever client's `Interface\AddOns` directory and enable it in the game.
 2. Run the companion. It loads the native engine directly; there is no separate service to start.
 3. Enter `/fdb test`. You should see the tile detected and hear the connection test.
 4. Use `/fdb unlock`, move the tile, then `/fdb lock`. Prefer windowed or borderless game mode.
@@ -199,6 +199,8 @@ The tile uses the Chromaglyph OKLab palette centered at h 264, L 0.25, C 0.05, w
 There is no forward error correction. Per-page and whole-message Adler-32 checksums reject most accidental damage, and repeated pages provide retries. Checksums are for accidental corruption, not authentication. The companion accepts a valid tile anywhere within the selected game window.
 
 ## Building from source and development
+
+The local version is set only in `addon/ForeverDubbed/ForeverDubbed.toc` (`## Version:`). Tagged releases use the Git tag instead and stamp every packaged component automatically. Source builders can install the versioned addon from `dist/addon/ForeverDubbed` after building.
 
 - [macOS builds](docs/macos.md): Linux cross-compilation, GitHub Actions, and native Mac builds.
 - [Windows builds and native runtime](native/README.md): Windows and Linux/WSL toolchains, dependencies, and packaging.

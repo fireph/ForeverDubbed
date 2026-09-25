@@ -1,4 +1,4 @@
-local _, NS = ...
+local addonName, NS = ...
 local Codec = NS.Codec
 local frame = CreateFrame("Frame", "ForeverDubbedTile", UIParent)
 frame:SetFrameStrata("TOOLTIP")
@@ -16,7 +16,8 @@ local sequence, lastBody, lastAt, ready = 0, nil, -1, false
 local PAGE_SECONDS = 0.25
 local WAVE_SECONDS = 1 / 15
 local wavePhase, waveElapsed = 0, 0
-local VERSION = "0.6.5"
+local getMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+local VERSION = getMetadata and getMetadata(addonName, "Version") or "unknown"
 local requestID, lastSpeaker = 0, nil
 local controlUntil, deferredDialogue = 0, nil
 local drawnColors, pageValues = {}, {}

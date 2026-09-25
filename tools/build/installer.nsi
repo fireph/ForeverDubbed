@@ -3,6 +3,12 @@ Unicode true
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 Name "ForeverDubbed"
+VIProductVersion "@VERSION@.0"
+VIAddVersionKey /LANG=1033 "ProductName" "ForeverDubbed"
+VIAddVersionKey /LANG=1033 "ProductVersion" "@VERSION@"
+VIAddVersionKey /LANG=1033 "FileVersion" "@VERSION@"
+VIAddVersionKey /LANG=1033 "FileDescription" "ForeverDubbed installer"
+VIAddVersionKey /LANG=1033 "LegalCopyright" "ForeverDubbed contributors"
 OutFile @OUTPUT@
 InstallDir "$LOCALAPPDATA\Programs\ForeverDubbed"
 InstallDirRegKey HKCU "Software\ForeverDubbed" "InstallDir"
@@ -34,6 +40,7 @@ Section "ForeverDubbed"
   CreateShortcut "$SMPROGRAMS\ForeverDubbed.lnk" "$INSTDIR\foreverdubbed.exe"
   WriteRegStr HKCU "Software\ForeverDubbed" "InstallDir" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ForeverDubbed" "DisplayName" "ForeverDubbed"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ForeverDubbed" "DisplayVersion" "@VERSION@"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ForeverDubbed" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ForeverDubbed" "DisplayIcon" "$INSTDIR\foreverdubbed.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\ForeverDubbed" "UninstallString" '"$INSTDIR\Uninstall.exe"'

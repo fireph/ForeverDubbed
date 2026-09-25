@@ -3,6 +3,8 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"foreverdubbed/internal/buildinfo"
+	"foreverdubbed/internal/update"
 	"os"
 	"os/exec"
 	"path"
@@ -24,6 +26,9 @@ func releaseZIPName(targetOS, arch string) string {
 // Use the ZIP's exact manifest, including only configured voices. Explicit
 // uninstall paths avoid recursively deleting unrelated files in the install dir.
 func installerScript(output string, files map[string]string) (string, error) {
+	if _, err := update.Version(buildinfo.Version); err != nil {
+		return "", err
+	}
 	if _, ok := files["foreverdubbed.exe"]; !ok {
 		return "", fmt.Errorf("Windows installer is missing its executable")
 	}
@@ -61,7 +66,7 @@ func installerScript(output string, files map[string]string) (string, error) {
 	for _, dir := range orderedDirs {
 		fmt.Fprintf(&remove, "  RMDir \"$INSTDIR\\%s\"\n", nsisEscape(strings.ReplaceAll(dir, "/", "\\")))
 	}
-	return strings.NewReplacer("@OUTPUT@", nsisQuote(output), "@INSTALL_FILES@", install.String(), "@REMOVE_FILES@", remove.String()).Replace(installerTemplate), nil
+	return strings.NewReplacer("@VERSION@", buildinfo.Version, "@OUTPUT@", nsisQuote(output), "@INSTALL_FILES@", install.String(), "@REMOVE_FILES@", remove.String()).Replace(installerTemplate), nil
 }
 
 func nsisEscape(value string) string {

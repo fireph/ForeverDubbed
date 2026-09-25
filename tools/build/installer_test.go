@@ -2,6 +2,7 @@ package main
 
 import (
 	"debug/pe"
+	"foreverdubbed/internal/buildinfo"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -18,6 +19,11 @@ func TestInstallerManifest(t *testing.T) {
 	script, err := installerScript("setup.exe", files)
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, expected := range []string{`VIProductVersion "` + buildinfo.Version + `.0"`, `"DisplayVersion" "` + buildinfo.Version + `"`} {
+		if !strings.Contains(script, expected) {
+			t.Fatalf("missing installer version: %s", expected)
+		}
 	}
 	if strings.Count(script, `  File "/oname=`) != len(files) {
 		t.Fatal("installer must include every manifest file exactly once")

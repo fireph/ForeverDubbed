@@ -48,6 +48,11 @@ function GetCursorPosition() return cursorX, cursorY end
 DEFAULT_CHAT_FRAME = {AddMessage=function(_, text) messages[#messages+1]=text end}
 function time() return 12345 end
 function GetTime() return now end
+local metadataVersion = "9.8.7"
+C_AddOns = {GetAddOnMetadata=function(name, field)
+    assert(name == "ForeverDubbed" and field == "Version")
+    return metadataVersion
+end}
 function GetBuildInfo() return "1.60.1", "test", "date", 16001 end
 function GetPhysicalScreenSize() return physicalHeight*16/9,physicalHeight end
 function UnitName() return "Thrall" end
@@ -155,7 +160,13 @@ assert(#calls==before and not tile.visible)
 SlashCmdList.FOREVERDUBBED("on")
 SlashCmdList.FOREVERDUBBED("test")
 assert(tile.visible)
+local statusStart = #messages
 SlashCmdList.FOREVERDUBBED("status")
+assert(messages[statusStart+1]:find("Addon " .. metadataVersion, 1, true), "status must use TOC metadata version")
+-- Older clients expose metadata through the global API instead.
+GetAddOnMetadata = C_AddOns.GetAddOnMetadata
+C_AddOns = nil
+metadataVersion = "9.8.8"
 -- A custom cell size survives reload after the one-time encoding upgrade.
 ForeverDubbedDB.encodingVersion=3 -- upgrade preserves a valid custom cell size
 SlashCmdList.FOREVERDUBBED("cell 3")
@@ -164,6 +175,9 @@ assert(loadfile("addon/ForeverDubbed/ForeverDubbed.lua"))("ForeverDubbed", ns)
 events, tile = objects[#objects], ForeverDubbedTile
 events.scripts.OnEvent(events, "ADDON_LOADED", "ForeverDubbed")
 assert(ForeverDubbedDB.cell==3 and ForeverDubbedDB.encodingVersion==5)
+statusStart = #messages
+SlashCmdList.FOREVERDUBBED("status")
+assert(messages[statusStart+1]:find("Addon " .. metadataVersion, 1, true), "legacy metadata API must provide the version")
 assert(tile.width==154 and tile.height==154)
 now = now + 1
 GetQuestText = function() return string.rep("A long quest. ", 200) end

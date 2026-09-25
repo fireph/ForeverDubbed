@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -294,6 +295,9 @@ func Restart(planPath string) error {
 	p, err := LoadPlan(planPath)
 	if err != nil {
 		return err
+	}
+	if err := recordInstalledVersion(p.Install, p.Version); err != nil {
+		log.Printf("Could not refresh installed version: %v", err)
 	}
 	// Keep backups if restarting fails, so recovery remains possible.
 	if err = os.WriteFile(filepath.Join(filepath.Dir(planPath), "complete"), []byte("complete"), 0600); err != nil {

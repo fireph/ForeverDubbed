@@ -57,3 +57,5 @@ func designatedRequirement(output string) (string, error) {
 	}
 	return "", fmt.Errorf("installed app has no signing identity")
 }
+
+func recordInstalledVersion(install Installation, version string) error { return nil }

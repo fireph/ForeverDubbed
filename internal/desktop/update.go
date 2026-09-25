@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"time"
 
+	"foreverdubbed/internal/buildinfo"
 	"foreverdubbed/internal/update"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -125,6 +126,7 @@ func RunUpdater(planPath string) error {
 	if plan.Install.OS != runtime.GOOS {
 		return fmt.Errorf("update target does not match this operating system")
 	}
+	app.SetMetadata(fyne.AppMetadata{ID: "io.foreverdubbed.updater", Name: "ForeverDubbed updater", Version: buildinfo.Version})
 	a := app.NewWithID("io.foreverdubbed.updater")
 	a.SetIcon(Icon)
 	a.Settings().SetTheme(companionTheme{theme.DefaultTheme()})
