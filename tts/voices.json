@@ -91,7 +91,8 @@
       "voice": "custom/nightelf_male.safetensors"
     },
     "nightelf_female": {
-      "voice": "custom/nightelf_female.safetensors"
+      "voice": "custom/nightelf_female.safetensors",
+      "decode_steps": 4
     },
     "undead_male": {
       "voice": "custom/undead_male.safetensors",
