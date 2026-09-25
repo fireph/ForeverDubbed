@@ -92,7 +92,7 @@
     },
     "nightelf_female": {
       "voice": "custom/nightelf_female.safetensors",
-      "decode_steps": 4
+      "decode_steps": 2
     },
     "undead_male": {
       "voice": "custom/undead_male.safetensors",
