@@ -15,9 +15,15 @@ import (
 
 const SampleRate = 24000
 
+type StreamOptions struct {
+	DecodeSteps int
+	FadeInMS    int
+	FadeOutMS   int
+}
+
 type library interface {
 	create(string, int) (unsafe.Pointer, error)
-	start(unsafe.Pointer, string, string, int) error
+	start(unsafe.Pointer, string, string, StreamOptions) error
 	read(unsafe.Pointer, []int16) (int, error)
 	stop(unsafe.Pointer)
 	destroy(unsafe.Pointer)
@@ -70,7 +76,7 @@ func (e *Engine) Close() error {
 }
 
 // Calls are serialized because ONNX state and the imported voice cache are mutable.
-func (e *Engine) Stream(ctx context.Context, text, voice string, steps int, emit func([]byte) error) error {
+func (e *Engine) Stream(ctx context.Context, text, voice string, options StreamOptions, emit func([]byte) error) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -82,7 +88,10 @@ func (e *Engine) Stream(ctx context.Context, text, voice string, steps int, emit
 	if e.handle == nil {
 		return fmt.Errorf("native engine is closed")
 	}
-	if err := e.lib.start(e.handle, text, voice, steps); err != nil {
+	if options.FadeInMS < 0 || options.FadeInMS > 500 || options.FadeOutMS < 0 || options.FadeOutMS > 500 {
+		return fmt.Errorf("fade durations must be 0..500 milliseconds")
+	}
+	if err := e.lib.start(e.handle, text, voice, options); err != nil {
 		return err
 	}
 	defer e.lib.stop(e.handle)

@@ -42,6 +42,7 @@
 
 // ── External Libraries ──────────────────────────────────────────────────────
 
+#include "sentence_fade.hpp"
 #include <onnxruntime_cxx_api.h>
 #include <sentencepiece_processor.h>
 
@@ -167,6 +168,7 @@ struct Config {
     float eos_threshold = -4.0f;
     float noise_clamp = 0.0f;
     int lsd_steps = 1, num_threads = 0, first_chunk_frames = 1, max_chunk_frames = 15;
+    int fade_in_ms = 0, fade_out_ms = 0;
     int eos_extra_frames = -1;  // -1 = auto-calculate from text length
     bool verbose = false;
     bool voice_cache = true;
@@ -2003,6 +2005,7 @@ void PocketTTS::stream(const std::string& text, const Tensor& voice, StreamCallb
     for (size_t si = 0; si < sentences.size(); ++si) {
         auto [prepared, eos_extra] = prepare_text(sentences[si], cfg_.eos_extra_frames);
         if (prepared.empty()) continue;
+        SentenceFade fade(size_t(cfg_.fade_in_ms) * SR / 1000, size_t(cfg_.fade_out_ms) * SR / 1000);
         auto gen = make_gen(voice, tokenize(prepared), max_frames, eos_extra);
         dec_runner_->reset_state();  // zero existing buffers, no reallocation
         
@@ -2075,7 +2078,7 @@ void PocketTTS::stream(const std::string& text, const Tensor& voice, StreamCallb
                 size_t n = 1;
                 for (auto d : shape) n *= d;
                 
-                if (!cb(outputs[0].GetTensorData<float>(), n)) {
+                if (!fade.push(outputs[0].GetTensorData<float>(), n, cb)) {
                     std::lock_guard<std::mutex> lock(mtx);
                     aborted = true;
                     break;
@@ -2095,6 +2098,7 @@ void PocketTTS::stream(const std::string& text, const Tensor& voice, StreamCallb
         }
         if (gen_error) std::rethrow_exception(gen_error);
         if (aborted) return;
+        if (!fade.finish(cb)) return;
     }
 }
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.6
+
+- Add per-voice `fade_in_ms` and `fade_out_ms` settings for generated sentence boundaries. Enable 50 ms in and 100 ms out only for Undead male/female to soften abrupt reverb endings. Preserve audio length, decoding steps, and existing extra frames after EOS.
+- Compatible with the 0.6.5 addon; no addon update is required.
+
 ## 0.6.5
 
 - Read only the main quest dialogue by default in both Pocket TTS and system speech. Add separate saved desktop options for Quest title and Quest objectives, both off by default, applied when each quest starts playback.

@@ -15,7 +15,7 @@ import (
 )
 
 type Synthesizer interface {
-	Stream(context.Context, string, string, int, func([]byte) error) error
+	Stream(context.Context, string, string, pocket.StreamOptions, func([]byte) error) error
 	Close() error
 }
 type Local struct {
@@ -86,6 +86,8 @@ func (l *Local) Speak(parent context.Context, m protocol.Message) error {
 		return err
 	}
 	gain := math.Pow(10, l.Config.Profiles[name].GainDB/20)
+	profile := l.Config.Profiles[name]
+	options := pocket.StreamOptions{DecodeSteps: steps, FadeInMS: profile.FadeInMS, FadeOutMS: profile.FadeOutMS}
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	chunks := make(chan []byte, platform.PCMQueueDepth)
@@ -96,7 +98,7 @@ func (l *Local) Speak(parent context.Context, m protocol.Message) error {
 		defer close(chunks)
 		text := m.DialogueText(false, false)
 		for _, text := range Chunks(text, 180) {
-			streamErr = l.Engine.Stream(ctx, text, voice, steps, func(pcm []byte) error {
+			streamErr = l.Engine.Stream(ctx, text, voice, options, func(pcm []byte) error {
 				pcm = amplifyPCM(pcm, gain)
 				select {
 				case chunks <- pcm:

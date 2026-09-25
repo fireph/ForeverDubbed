@@ -15,6 +15,8 @@ type Profile struct {
 	Voice       string  `json:"voice"`
 	DecodeSteps int     `json:"decode_steps"`
 	GainDB      float64 `json:"gain_db,omitempty"`
+	FadeInMS    int     `json:"fade_in_ms,omitempty"`
+	FadeOutMS   int     `json:"fade_out_ms,omitempty"`
 }
 
 type Config struct {
@@ -53,6 +55,9 @@ func Load(path string) (*Config, error) {
 	}
 	c.BaseDir = filepath.Dir(abs)
 	for id, profile := range c.Profiles {
+		if profile.FadeInMS < 0 || profile.FadeInMS > 500 || profile.FadeOutMS < 0 || profile.FadeOutMS > 500 {
+			return nil, fmt.Errorf("profile %q fade_in_ms and fade_out_ms must be 0..500", id)
+		}
 		if math.IsNaN(profile.GainDB) || math.IsInf(profile.GainDB, 0) || profile.GainDB < -24 || profile.GainDB > 12 {
 			return nil, fmt.Errorf("profile %q gain_db must be between -24 and 12", id)
 		}

@@ -34,8 +34,10 @@ func run() error {
 	}
 	var cfg struct {
 		Profiles map[string]struct {
-			Voice string `json:"voice"`
-			Steps int    `json:"decode_steps"`
+			Voice     string `json:"voice"`
+			Steps     int    `json:"decode_steps"`
+			FadeInMS  int    `json:"fade_in_ms"`
+			FadeOutMS int    `json:"fade_out_ms"`
 		}
 	}
 	if err = json.Unmarshal(data, &cfg); err != nil {
@@ -74,7 +76,7 @@ func run() error {
 		chunks := 0
 		pcm := []byte{}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		err = engine.Stream(ctx, *text, voice, p.Steps, func(chunk []byte) error {
+		err = engine.Stream(ctx, *text, voice, pocket.StreamOptions{DecodeSteps: p.Steps, FadeInMS: p.FadeInMS, FadeOutMS: p.FadeOutMS}, func(chunk []byte) error {
 			if chunks == 0 {
 				first = time.Since(start)
 			}
@@ -134,12 +136,12 @@ func run() error {
 		voice = filepath.Join(*dir, "presets", p.Voice+".safetensors")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	err = engine.Stream(ctx, *text, voice, 1, func([]byte) error { cancel(); return ctx.Err() })
+	err = engine.Stream(ctx, *text, voice, pocket.StreamOptions{DecodeSteps: 1, FadeInMS: p.FadeInMS, FadeOutMS: p.FadeOutMS}, func([]byte) error { cancel(); return ctx.Err() })
 	cancel()
 	if err != context.Canceled {
 		return fmt.Errorf("cancellation failed: %v", err)
 	}
-	if err = engine.Stream(context.Background(), "The test is complete.", voice, 1, func([]byte) error { return nil }); err != nil {
+	if err = engine.Stream(context.Background(), "The test is complete.", voice, pocket.StreamOptions{DecodeSteps: 1, FadeInMS: p.FadeInMS, FadeOutMS: p.FadeOutMS}, func([]byte) error { return nil }); err != nil {
 		return fmt.Errorf("reuse after cancellation: %w", err)
 	}
 	data, _ = json.MarshalIndent(map[string]any{"samples": reports, "cancel_and_reuse": "passed", "text": *text}, "", "  ")

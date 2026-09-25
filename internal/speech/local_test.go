@@ -3,6 +3,7 @@ package speech
 import (
 	"context"
 	"errors"
+	"foreverdubbed/internal/pocket"
 	"foreverdubbed/internal/protocol"
 	"path/filepath"
 	"testing"
@@ -10,10 +11,10 @@ import (
 )
 
 type fakeEngine struct {
-	generate func(context.Context, string, string, int, func([]byte) error) error
+	generate func(context.Context, string, string, pocket.StreamOptions, func([]byte) error) error
 }
 
-func (e fakeEngine) Stream(c context.Context, t, v string, s int, f func([]byte) error) error {
+func (e fakeEngine) Stream(c context.Context, t, v string, s pocket.StreamOptions, f func([]byte) error) error {
 	return e.generate(c, t, v, s, f)
 }
 func (fakeEngine) Close() error { return nil }
@@ -24,7 +25,7 @@ func TestQuestSynthesisOmitsTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got string
-	local := Local{Config: c, Engine: fakeEngine{func(_ context.Context, text, _ string, _ int, emit func([]byte) error) error {
+	local := Local{Config: c, Engine: fakeEngine{func(_ context.Context, text, _ string, _ pocket.StreamOptions, emit func([]byte) error) error {
 		got += text
 		return emit([]byte{0, 0})
 	}}, Play: func(_ context.Context, _ int, chunks <-chan []byte) error {
@@ -45,11 +46,17 @@ func TestNativeStreamingAndVoiceOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 	playing := make(chan struct{})
+	profile := c.Profiles["undead_male"]
+	profile.FadeInMS, profile.FadeOutMS = 50, 100
+	c.Profiles["undead_male"] = profile
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	local := Local{Config: c, Engine: fakeEngine{func(ctx context.Context, text, voice string, steps int, emit func([]byte) error) error {
-		if filepath.Base(voice) != "undead_male.safetensors" || steps != 4 {
-			t.Errorf("voice=%s steps=%d", voice, steps)
+	local := Local{Config: c, Engine: fakeEngine{func(ctx context.Context, text, voice string, options pocket.StreamOptions, emit func([]byte) error) error {
+		if filepath.Base(voice) != "undead_male.safetensors" || options.DecodeSteps != c.Profiles["undead_male"].DecodeSteps {
+			t.Errorf("voice=%s steps=%d", voice, options.DecodeSteps)
+		}
+		if options.FadeInMS != 50 || options.FadeOutMS != 100 {
+			t.Errorf("fade options lost: %+v", options)
 		}
 		if err := emit([]byte{1, 0}); err != nil {
 			return err
@@ -84,7 +91,7 @@ func TestNativeCancellationAndErrors(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			boom := errors.New("native failed")
-			local := Local{Config: c, Engine: fakeEngine{func(ctx context.Context, _, _ string, _ int, emit func([]byte) error) error {
+			local := Local{Config: c, Engine: fakeEngine{func(ctx context.Context, _, _ string, _ pocket.StreamOptions, emit func([]byte) error) error {
 				if fail {
 					return boom
 				}

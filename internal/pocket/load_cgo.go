@@ -42,11 +42,11 @@ func (linkedLibrary) create(models string, threads int) (unsafe.Pointer, error) 
 	}
 	return h, nil
 }
-func (l linkedLibrary) start(h unsafe.Pointer, text, voice string, steps int) error {
+func (l linkedLibrary) start(h unsafe.Pointer, text, voice string, options StreamOptions) error {
 	t, v := C.CString(text), C.CString(voice)
 	defer C.free(unsafe.Pointer(t))
 	defer C.free(unsafe.Pointer(v))
-	if C.fdb_start(h, t, v, C.int(steps)) != 0 {
+	if C.fdb_start(h, t, v, C.int(options.DecodeSteps), C.int(options.FadeInMS), C.int(options.FadeOutMS)) != 0 {
 		return l.message(h)
 	}
 	return nil

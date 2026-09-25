@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"foreverdubbed/internal/pocket"
 	"foreverdubbed/internal/protocol"
 	"math"
 	"os"
@@ -40,7 +41,7 @@ func TestVoicePlaybackGain(t *testing.T) {
 			config.Profiles["tauren_male"] = profile
 			input := pcmSamples(0, 1000, -1000, 20000, -20000)
 			original := bytes.Clone(input)
-			local := Local{Config: config, Engine: fakeEngine{func(_ context.Context, _, _ string, _ int, emit func([]byte) error) error {
+			local := Local{Config: config, Engine: fakeEngine{func(_ context.Context, _, _ string, _ pocket.StreamOptions, emit func([]byte) error) error {
 				return emit(input)
 			}}}
 			var got []byte

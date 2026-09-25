@@ -95,11 +95,16 @@
     },
     "undead_male": {
       "voice": "custom/undead_male.safetensors",
-      "decode_steps": 2
+      "decode_steps": 2,
+      "gain_db": 3,
+      "fade_in_ms": 50,
+      "fade_out_ms": 100
     },
     "undead_female": {
       "voice": "custom/undead_female.safetensors",
-      "decode_steps": 4
+      "decode_steps": 4,
+      "fade_in_ms": 50,
+      "fade_out_ms": 200
     },
     "tauren_male": {
       "voice": "custom/tauren_male.safetensors",

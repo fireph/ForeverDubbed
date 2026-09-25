@@ -63,6 +63,11 @@ struct ForeverDubbedAccess {
         Tensor dummy({1,1,1024});
         tts.voice_kv_hash_=tts.voice_hash(dummy);
     }
+    static void fades(PocketTTS& tts, int fade_in_ms, int fade_out_ms) {
+        if (fade_in_ms<0 || fade_in_ms>500 || fade_out_ms<0 || fade_out_ms>500) throw std::runtime_error("Fade durations must be 0..500 milliseconds");
+        tts.cfg_.fade_in_ms=fade_in_ms;
+        tts.cfg_.fade_out_ms=fade_out_ms;
+    }
     static void steps(PocketTTS& tts, int steps) {
         if (steps<1 || steps>64) throw std::runtime_error("Decode steps must be 1..64");
         tts.cfg_.lsd_steps=steps;
@@ -111,14 +116,15 @@ FDB_EXPORT void* fdb_create(const char* models, int threads, char* error, int ca
         return nullptr;
     }
 }
-FDB_EXPORT int fdb_start(void* handle, const char* text, const char* voice, int steps) {
+FDB_EXPORT int fdb_start(void* handle, const char* text, const char* voice, int steps, int fade_in_ms, int fade_out_ms) {
     auto& e=*static_cast<Engine*>(handle);
     e.stop(); e.cancelled=false; e.done=false; e.error.clear();
     try {
         std::string prompt(text), filename(voice);
-        e.worker=std::thread([&e,prompt,filename,steps] {
+        e.worker=std::thread([&e,prompt,filename,steps,fade_in_ms,fade_out_ms] {
             try {
                 pocket_tts::ForeverDubbedAccess::steps(*e.tts,steps);
+                pocket_tts::ForeverDubbedAccess::fades(*e.tts,fade_in_ms,fade_out_ms);
                 if(e.last_voice!=filename) {
                     pocket_tts::ForeverDubbedAccess::voice(*e.tts,filename);
                     e.last_voice=filename;

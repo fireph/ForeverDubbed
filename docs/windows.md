@@ -40,6 +40,8 @@ Normal captures stay in memory. Only an explicit `-snapshot` writes a PNG. Cover
 
 ## Build and test
 
+In `tts/voices.json`, `fade_in_ms` and `fade_out_ms` set optional Pocket TTS fades at each generated sentence boundary. Both accept 0–500 milliseconds; omitted or `0` disables that fade. Undead male and female use `"fade_in_ms": 50` and `"fade_out_ms": 100`; other profiles have no fades. Restart after editing. Fades preserve audio length and apply across decoder/playback buffers, not separately to each buffer. The final fade-out window is held back until its sentence ends. No voice regeneration is needed. The native engine's existing extra frames after EOS remain unchanged (3 normally, 5 for sentences of four words or fewer).
+
 To adjust one Pocket TTS voice's playback volume, set `gain_db` in its profile in `tts/voices.json`, then restart the app. Tauren male starts at `4` (+4 dB); `0` or an omitted setting uses the original volume. Values from -24 to +12 dB are supported. This adjusts desktop playback without regenerating the voice or changing timing. Peaks are capped at the PCM limits, so reduce the gain if loud passages become distorted. Exported example clips do not use this playback setting.
 
 Follow the [Windows build instructions](../native/README.md#build) to prepare dependencies and package this backend, including from Linux with MinGW-w64. Capture requires cgo and a Windows C/C++ compiler, even for a system-voice-only build. No extra capture DLL, Windows SDK download, C++/WinRT package, or Go module is needed. The small WinRT ABI declarations in `internal/platform/wgc_abi_windows.h` let the code compile with MinGW.
