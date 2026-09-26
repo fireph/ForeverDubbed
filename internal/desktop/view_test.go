@@ -18,11 +18,11 @@ func TestDashboardLiveStates(t *testing.T) {
 	a := test.NewApp()
 	defer a.Quit()
 	a.Settings().SetTheme(companionTheme{theme.DefaultTheme()})
-	stops := 0
+	stops, skips := 0, 0
 	queued := false
 	var filters appstate.SpeechFilters
 	var choices map[string]string
-	d := newDashboard("0.5.0", func() {}, func() {}, func() { stops++ }, func(enabled bool) { queued = enabled }, func(f appstate.SpeechFilters) { filters = f },
+	d := newDashboard("0.5.0", func() {}, func() {}, func() { stops++ }, func() { skips++ }, func(enabled bool) { queued = enabled }, func(f appstate.SpeechFilters) { filters = f },
 		[]string{"human", "nightelf", "orc"}, map[string]string{"nightelf:female": "narrator"}, func(c map[string]string) { choices = c })
 	w := a.NewWindow("ForeverDubbed")
 	defer w.Close()
@@ -132,8 +132,8 @@ func TestDashboardLiveStates(t *testing.T) {
 		t.Fatal("skip unavailable during queued playback")
 	}
 	test.Tap(d.skip)
-	if stops != 2 {
-		t.Fatal("skip did not interrupt current speech")
+	if stops != 1 || skips != 1 {
+		t.Fatal("stop and skip must use separate callbacks")
 	}
 	state.SetQueueSpeech(false)
 	d.render(state.Snapshot())
@@ -169,8 +169,8 @@ func TestDashboardLiveStates(t *testing.T) {
 		test.Tap(d.stop)
 		test.Tap(d.skip)
 	}
-	if stops != 2 {
-		t.Fatal("disabled stop invoked callback")
+	if stops != 1 || skips != 1 {
+		t.Fatal("disabled playback control invoked callback")
 	}
 	state.Update(func(v *appstate.Snapshot) { v.PlaybackID = 2 })
 	state.Audio("Speaking (system voice)")
@@ -233,7 +233,7 @@ func TestDashboardSavedVoicesWithoutConfig(t *testing.T) {
 	a := test.NewApp()
 	defer a.Quit()
 	var choices map[string]string
-	d := newDashboard("test", func() {}, func() {}, func() {}, func(bool) {}, func(appstate.SpeechFilters) {},
+	d := newDashboard("test", func() {}, func() {}, func() {}, func() {}, func(bool) {}, func(appstate.SpeechFilters) {},
 		nil, map[string]string{"orc:male": "none", "human:female": "obsolete"}, func(c map[string]string) { choices = c })
 	d.render(appstate.New("game", "system", false).Snapshot())
 	if d.voiceSelects["orc:male"].Selected != "None" || d.voiceSelects["human:female"].Selected != "Default" {

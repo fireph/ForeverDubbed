@@ -97,6 +97,12 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 			// Apply queue mode and category changes at the top of the loop.
 		case id := <-state.AudioStops():
 			if id == state.Snapshot().PlaybackID {
+				pending = nil
+				updateQueue()
+				stopCurrent()
+			}
+		case id := <-state.AudioSkips():
+			if id == state.Snapshot().PlaybackID {
 				stopCurrent()
 			}
 		case message, ok := <-requests:
@@ -105,8 +111,11 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 				continue
 			}
 			if message.IsControl() {
-				// Controls bypass queue mode. Cancelling the current utterance
-				// advances any pending dialogue, just like the desktop buttons.
+				// Stop discards queued speech; Skip preserves it.
+				if message.Kind == protocol.KindStop {
+					pending = nil
+					updateQueue()
+				}
 				stopCurrent()
 				continue
 			}

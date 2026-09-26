@@ -37,7 +37,7 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 	state.SetQueueSpeech(a.Preferences().Bool("queueSpeech"))
 	state.SetSpeechFilters(loadSpeechFilters(a.Preferences()))
 	state.SetVoiceChoices(loadVoiceChoices(a.Preferences()))
-	d := newDashboard(version, hide, quit, state.StopAudio, func(enabled bool) {
+	d := newDashboard(version, hide, quit, state.StopAudio, state.SkipAudio, func(enabled bool) {
 		state.SetQueueSpeech(enabled)
 		a.Preferences().SetBool("queueSpeech", enabled)
 	}, func(filters appstate.SpeechFilters) {

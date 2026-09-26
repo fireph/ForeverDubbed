@@ -55,6 +55,7 @@ type State struct {
 	value         Snapshot
 	announcements chan protocol.Message
 	stopAudio     chan uint64
+	skipAudio     chan uint64
 	speechChanges chan struct{}
 	// Voice choices stay outside Snapshot, which must remain comparable.
 	voiceMu      sync.RWMutex
@@ -66,7 +67,7 @@ func New(target, backend string, muted bool) *State {
 	if muted {
 		audio = "Muted"
 	}
-	return &State{announcements: make(chan protocol.Message, 4), stopAudio: make(chan uint64, 1), speechChanges: make(chan struct{}, 1), value: Snapshot{Volume: 1, Target: target, Backend: backend, Audio: audio, Filters: SpeechFilters{Quests: true, Conversations: true, NPCSpeech: true}}}
+	return &State{announcements: make(chan protocol.Message, 4), stopAudio: make(chan uint64, 1), skipAudio: make(chan uint64, 1), speechChanges: make(chan struct{}, 1), value: Snapshot{Volume: 1, Target: target, Backend: backend, Audio: audio, Filters: SpeechFilters{Quests: true, Conversations: true, NPCSpeech: true}}}
 }
 func (s *State) Snapshot() Snapshot {
 	s.mu.RLock()
@@ -105,15 +106,21 @@ func (s *State) Finished(err error) {
 	})
 }
 
-// StopAudio requests cancellation of the utterance visible when clicked.
+// StopAudio cancels current playback and clears the waiting queue.
 // IDs prevent a delayed click from interrupting its replacement.
-func (s *State) StopAudio() {
+func (s *State) StopAudio() { s.requestAudioControl(s.stopAudio) }
+
+// SkipAudio cancels only the current utterance, keeping queued dialogue.
+func (s *State) SkipAudio()                { s.requestAudioControl(s.skipAudio) }
+func (s *State) AudioSkips() <-chan uint64 { return s.skipAudio }
+
+func (s *State) requestAudioControl(ch chan uint64) {
 	id := s.Snapshot().PlaybackID
 	if id == 0 {
 		return
 	}
 	select {
-	case s.stopAudio <- id:
+	case ch <- id:
 	default:
 	}
 }

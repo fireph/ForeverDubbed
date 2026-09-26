@@ -76,7 +76,7 @@ type dashboard struct {
 	onVoiceChoices                   func(map[string]string)
 }
 
-func newDashboard(version string, hide, quit, stop func(), queue func(bool), filters func(appstate.SpeechFilters), races []string, voiceChoices map[string]string, onVoiceChoices func(map[string]string)) *dashboard {
+func newDashboard(version string, hide, quit, stop, skip func(), queue func(bool), filters func(appstate.SpeechFilters), races []string, voiceChoices map[string]string, onVoiceChoices func(map[string]string)) *dashboard {
 	d := &dashboard{window: newStatusCard("Game window"), tile: newStatusCard("Dialogue tile"), audio: newStatusCard("Audio"), voiceSelects: map[string]*widget.Select{}, voiceChoices: maps.Clone(voiceChoices)}
 	if d.voiceChoices == nil {
 		d.voiceChoices = map[string]string{}
@@ -102,9 +102,7 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool), fil
 	d.addonNotice.Hide()
 	d.stop = widget.NewButton("Stop", stop)
 	d.stop.Disable()
-	// The speech worker already advances the queue after cancelling the current
-	// utterance, and becomes idle when there is no next message.
-	d.skip = widget.NewButton("Skip", stop)
+	d.skip = widget.NewButton("Skip", skip)
 	d.skip.Disable()
 	d.skipControl = questButtonWidget(d.skip)
 	d.skipControl.Hide()
