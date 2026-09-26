@@ -21,7 +21,7 @@ function NS.Controls.Init(db)
     button:RegisterForDrag("LeftButton")
 
     local icon = button:CreateTexture(nil, "BACKGROUND")
-    icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
+    icon:SetTexture("Interface\\AddOns\\ForeverDubbed\\Icon")
     icon:SetSize(20, 20)
     icon:SetPoint("CENTER", button, "CENTER", 0, 0)
     local border = button:CreateTexture(nil, "OVERLAY")
