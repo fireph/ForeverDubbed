@@ -200,6 +200,14 @@ jobs:
             test -s "$file"
           done
           sha256sum "${files[@]}" > SHA256SUMS.txt
+        # History is direct commits rather than merged PRs; commit mode also
+        # covers any future PRs squash-merged without merge commits.
+      - name: Build changelog since previous release
+        uses: mikepenz/release-changelog-builder-action@cb021f9b36a51a7c6f18e4679b6fa2cb77a1260c # v6.3.0
+        with:
+          mode: COMMIT
+          failOnError: true
+          outputFile: downloads/CHANGELOG.md
       - name: Create release, attach downloads, and publish
         working-directory: downloads
         env:
@@ -218,5 +226,5 @@ jobs:
             --target "$RELEASE_COMMIT" \
             --verify-tag \
             --title "ForeverDubbed $RELEASE_TAG" \
-            --generate-notes --draft
+            --notes-file CHANGELOG.md --draft
           gh release edit "$RELEASE_TAG" --draft=false --latest
