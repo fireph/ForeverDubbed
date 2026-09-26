@@ -39,6 +39,7 @@ type Snapshot struct {
 	CaptureError, SpeechError, FatalError string
 	Audio                                 string
 	QueueSpeech                           bool
+	Volume                                float64
 	Queued                                int
 	PlaybackID                            uint64
 	Played, Duration                      time.Duration
@@ -65,7 +66,7 @@ func New(target, backend string, muted bool) *State {
 	if muted {
 		audio = "Muted"
 	}
-	return &State{announcements: make(chan protocol.Message, 4), stopAudio: make(chan uint64, 1), speechChanges: make(chan struct{}, 1), value: Snapshot{Target: target, Backend: backend, Audio: audio, Filters: SpeechFilters{Quests: true, Conversations: true, NPCSpeech: true}}}
+	return &State{announcements: make(chan protocol.Message, 4), stopAudio: make(chan uint64, 1), speechChanges: make(chan struct{}, 1), value: Snapshot{Volume: 1, Target: target, Backend: backend, Audio: audio, Filters: SpeechFilters{Quests: true, Conversations: true, NPCSpeech: true}}}
 }
 func (s *State) Snapshot() Snapshot {
 	s.mu.RLock()
@@ -177,3 +178,15 @@ func (s *State) Announcements() <-chan protocol.Message { return s.announcements
 func (s *State) ObserveAddon(m protocol.Message) {
 	s.Update(func(v *Snapshot) { v.AddonVersion, v.AddonSession = m.AddonVersion, m.Session })
 }
+
+// SetVolume sets the playback gain from silent (0) to full volume (1).
+func (s *State) SetVolume(volume float64) {
+	if !(volume >= 0) {
+		volume = 0
+	}
+	if volume > 1 {
+		volume = 1
+	}
+	s.Update(func(v *Snapshot) { v.Volume = volume })
+}
+func (s *State) Volume() float64 { return s.Snapshot().Volume }

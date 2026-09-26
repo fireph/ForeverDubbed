@@ -4,6 +4,7 @@ package desktop
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"foreverdubbed/internal/appicon"
@@ -32,6 +33,7 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 			w.Hide()
 		}
 	}
+	state.SetVolume(a.Preferences().FloatWithFallback("voiceVolume", 1))
 	state.SetQueueSpeech(a.Preferences().Bool("queueSpeech"))
 	state.SetSpeechFilters(loadSpeechFilters(a.Preferences()))
 	state.SetVoiceChoices(loadVoiceChoices(a.Preferences()))
@@ -45,6 +47,13 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 		state.SetVoiceChoices(choices)
 		saveVoiceChoices(a.Preferences(), choices)
 	})
+	d.volume.OnChanged = func(value float64) {
+		state.SetVolume(value / 100)
+		d.volumeLabel.SetText(fmt.Sprintf("%.0f%%", value))
+	}
+	d.volume.OnChangeEnded = func(value float64) {
+		a.Preferences().SetFloat("voiceVolume", value/100)
+	}
 	w.SetContent(d.root)
 	d.render(state.Snapshot())
 	if hasTray {

@@ -81,7 +81,7 @@ func playPCM(ctx context.Context, rate int, chunks <-chan []byte, device pcmDevi
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if err := device.Queue(pcm); err != nil {
+			if err := device.Queue(scalePlayback(pcm, playbackVolume(ctx))); err != nil {
 				return err
 			}
 			sizes = append(sizes, len(pcm))

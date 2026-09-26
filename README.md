@@ -41,7 +41,7 @@ Use **Locate WoW…** to change the installation or retry. If access is denied, 
 
 ## Make it yours
 
-- **Settings:** choose quest dialogue, NPC conversations, and ambient NPC speech. Quest titles and objectives are optional and off by default.
+- **Settings:** choose quest dialogue, NPC conversations, and ambient NPC speech. Quest titles and objectives are optional and off by default. The **Voice volume** slider below Read aloud adjusts playback from 0–100% and remembers your setting. Changes apply during native voice playback; the system speech fallback applies them to the next utterance.
 - **Voices:** choose **Default**, **Narrator**, or **None** for each race and gender. **None** silences that selection, including speech already playing or queued. Your choices are saved.
 - **Queue new dialogue:** finish each message before starting the next. When off, new dialogue interrupts the current line.
 - **Stop / Skip:** interrupt the current line. If messages are queued, the next one plays. In WoW, use `/fdb stop` or `/fdb skip`, or the minimap button: **left-click to Skip**, **right-click to Stop**. Shortcuts can be assigned under **Key Bindings → ForeverDubbed**.

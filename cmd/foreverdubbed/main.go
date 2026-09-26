@@ -148,6 +148,7 @@ func run() error {
 				}
 				log.Print("PocketTTS.cpp: native CPU streaming ready")
 				speak = func(ctx context.Context, m protocol.Message) error {
+					ctx = platform.WithPlaybackVolume(ctx, state.Volume)
 					ctx = platform.WithPlaybackObserver(ctx, func() { state.Audio("Playing audio") })
 					ctx = platform.WithPlaybackProgress(ctx, func(played, total time.Duration, known bool) {
 						state.Update(func(v *appstate.Snapshot) { v.Played, v.Duration, v.DurationKnown = played, total, known })
@@ -160,7 +161,7 @@ func run() error {
 						return nil
 					}
 					state.Audio("Speaking (system voice)")
-					return platform.Speak(ctx, m.Speech(), voice, rate)
+					return platform.Speak(platform.WithPlaybackVolume(ctx, state.Volume), m.Speech(), voice, rate)
 				}
 			}
 		}

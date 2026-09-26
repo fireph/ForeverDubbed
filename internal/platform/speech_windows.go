@@ -35,7 +35,8 @@ func Speak(ctx context.Context, text, voice string, rate int) error {
 	data, _ := json.Marshal(struct {
 		Text, Voice string
 		Rate        int
-	}{text, voice, rate})
+		Volume      int
+	}{text, voice, rate, int(playbackVolume(ctx) * 100)})
 	return powershell(ctx, `$ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
 $p = [Console]::In.ReadToEnd() | ConvertFrom-Json
@@ -45,6 +46,7 @@ try {
     $s.SetOutputToDefaultAudioDevice()
     if ($p.Voice) { $s.SelectVoice($p.Voice) }
     $s.Rate = [int]$p.Rate
+    $s.Volume = [int]$p.Volume
     $s.Speak([string]$p.Text)
 } finally { $s.Dispose() }`, string(data))
 }

@@ -59,6 +59,8 @@ type dashboard struct {
 	addonNotice                      fyne.CanvasObject
 	locateWoW                        *widget.Button
 	queue                            *widget.Check
+	volume                           *widget.Slider
+	volumeLabel                      *widget.Label
 	quests, conversations, npcSpeech *widget.Check
 	questObjectives                  *widget.Check
 	questTitle                       *widget.Check
@@ -126,8 +128,13 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool), fil
 			container.NewVBox(d.conversations),
 			container.NewVBox(d.npcSpeech)))
 
+	d.volume = widget.NewSlider(0, 100)
+	d.volume.Step = 1
+	d.volume.SetValue(100)
+	d.volumeLabel = widget.NewLabel("100%")
+	volumeControl := container.NewBorder(nil, nil, widget.NewLabel("Voice volume"), d.volumeLabel, d.volume)
 	audioCard := container.NewVBox(d.audio.root, inset(3, container.NewHBox(questButtonWidget(d.stop), d.skipControl)))
-	header := container.NewVBox(container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), questRule(), categories, d.queue)
+	header := container.NewVBox(container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), questRule(), categories, volumeControl, d.queue)
 	paper := parchment(container.NewVScroll(header))
 	voices := parchment(container.NewVScroll(d.voicePanel(races)))
 	voices.Hide()
@@ -273,6 +280,11 @@ func (d *dashboard) render(s appstate.Snapshot) {
 			check.Refresh()
 		}
 	}
+	if d.volume.Value != s.Volume*100 {
+		d.volume.Value = s.Volume * 100
+		d.volume.Refresh()
+	}
+	d.volumeLabel.SetText(fmt.Sprintf("%.0f%%", d.volume.Value))
 	d.showQuestOptions()
 	if d.queue.Checked != s.QueueSpeech {
 		d.queue.Checked = s.QueueSpeech

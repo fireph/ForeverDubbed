@@ -22,7 +22,7 @@ func Speak(ctx context.Context, text, voice string, rate int) error {
 		args = append(args, "-v", voice)
 	}
 	cmd := exec.CommandContext(ctx, "/usr/bin/say", args...)
-	cmd.Stdin = strings.NewReader(text)
+	cmd.Stdin = strings.NewReader(fmt.Sprintf("[[volm %.4f]]%s", playbackVolume(ctx), text))
 	out, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {
 		return ctx.Err()
