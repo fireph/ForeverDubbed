@@ -3,9 +3,10 @@
 package desktop
 
 import (
+	"syscall"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver"
-	"syscall"
 )
 
 var user32 = syscall.NewLazyDLL("user32.dll")

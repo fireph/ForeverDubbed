@@ -4,25 +4,32 @@ Python is an optional **development-time export tool only**. The application pla
 
 ## Prepare an export environment
 
-Install uv and create a separate environment:
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/). From the repository root:
 
 ```sh
-uv venv --python 3.12 .runtime/export-env
+uv sync --project tools/voices --locked
+uv run --project tools/voices --locked tools/voices/clone_voice.py --help
 ```
 
-On Windows, the interpreter is `.runtime/export-env/Scripts/python.exe`; on Linux/macOS it is `.runtime/export-env/bin/python`. Install `tools/voices/requirements.txt` using `uv pip install --python <interpreter> -r tools/voices/requirements.txt`. For CPU-only Windows/Linux builds, install `torch==2.9.1` first from `https://download.pytorch.org/whl/cpu` using uv's `--index-url` option. macOS uses the normal PyPI wheel.
+The project pins Python 3.12 and locks its Python dependencies. uv creates `tools/voices/.venv` automatically; no activation or separate PyTorch installation is needed. Windows/Linux use CPU-only PyTorch wheels; Apple Silicon macOS uses the PyPI wheel. The pinned PyTorch release does not support Intel macOS. See [the tools README](../tools/voices/README.md) for reference-only preparation, model-cache setup, and tests.
 
-Cloning requires access to the official Kyutai cloning-enabled weights. Authenticate using Hugging Face's CLI if necessary. Credentials and downloads stay in the export environment/cache; nothing is included in the application bundle.
+Cloning requires access to the official [Kyutai cloning-enabled weights](https://huggingface.co/kyutai/pocket-tts). Accept access if required, then authenticate:
+
+```sh
+uv run --project tools/voices --locked hf auth login
+```
+
+The tools reuse your Hugging Face CLI login and keep downloaded models in `.runtime/pocket`. Credentials, caches, and the Python environment are not included in the application bundle.
 
 ## Export and assign a voice
 
-Run with the export environment's interpreter:
+Run from the repository root:
 
 ```sh
-python tools/voices/clone_voice.py --voice undead_male=audio_clips/undead-male.wav --seconds 20 --online --activate
+uv run --project tools/voices --locked tools/voices/clone_voice.py --voice undead_male=audio_clips/undead-male.wav --seconds 20 --online --force --activate
 ```
 
-Use `--start` to choose an excerpt, `--prepare-only` to inspect the reference first, and `--force` to intentionally replace an existing state. WAV and MP3 sources are supported. `--decode-steps 4` is retained in the profile and honored by native synthesis. `--cpu-threads` controls the Python preview only; the application's thread budget is set with its `-cpu-threads` flag.
+The example replaces the existing bundled voice with `--force`. Omit that flag when creating a new voice. By default a recording under 30 seconds is used whole; longer recordings are cut at the first quiet pause at/after `--seconds` (default 20). Use `--start` to choose a fixed excerpt, `--prepare-only` to inspect the reference first, and `--force` to intentionally replace an existing state. WAV and MP3 sources are supported. `--decode-steps 4` is retained in the profile and honored by native synthesis. Each export also writes comparison samples at 1, 2, and 4 decode steps to `.runtime/voice-samples/<profile>.preview-d<steps>.wav` to help choose that value. `--cpu-threads` controls the Python preview only; the application's thread budget is set with its `-cpu-threads` flag.
 
 Exports go to `tts/custom/<profile>.safetensors`. The tool checks a Python preview before activating a profile, but also validate the final native result:
 
@@ -30,6 +37,6 @@ Exports go to `tts/custom/<profile>.safetensors`. The tool checks a Python previ
 go run -tags pocket_native ./tools/voicecheck -voice undead_male
 ```
 
-The native test creates `.runtime/voice-samples/undead_male.wav`. Listen to it before distributing the voice. `tts/voices.json` stores custom paths relative to itself; source recordings, reference WAVs, previews, and backups are not needed for runtime playback and are excluded from release packages.
+The native test creates `.runtime/voice-samples/undead_male.wav`. Listen to it before distributing the voice. `tts/voices.json` stores custom paths relative to itself and requires forward slashes on every platform, for example `custom/undead_male.safetensors`. Backslashes are rejected by the app, release builder, and Python tools. Runtime profiles must reference preset names or exported `.safetensors` files. The release builder rejects profiles still pointing to WAV/MP3 references. Source recordings, reference WAVs, previews, and backups are excluded from release packages.
 
 Do not load states from another checkpoint. April-model exported states include BOS-before-voice conditioning; the native adapter restores them directly. See [native runtime/model details](../native/README.md) for ONNX exports and upstream issue #12.

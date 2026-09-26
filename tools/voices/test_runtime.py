@@ -21,6 +21,8 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(voice_source('tts/voices.json', {'voice': 'alba'}), 'alba')
         self.assertEqual(voice_source('tts/voices.json', {'voice': 'custom/orc.wav'}),
                          Path('tts/custom/orc.wav').resolve())
+        with self.assertRaisesRegex(ValueError, r"forward slashes \(/\)"):
+            voice_source('tts/voices.json', {'voice': r'custom\orc.safetensors'})
         with self.assertRaises(ValueError):
             voice_source('tts/voices.json', {'voice': 'https://example.com/voice'})
 
@@ -32,6 +34,9 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(load_profiles(p)['orc']['voice'], 'javert')
             p.write_text('{"profiles":{"orc":{"seed":123}}}')
             with self.assertRaises(ValueError):
+                load_profiles(p)
+            p.write_text(r'{"profiles":{"orc":{"voice":"custom\\orc.safetensors"}}}')
+            with self.assertRaisesRegex(ValueError, "forward slashes"):
                 load_profiles(p)
 
 

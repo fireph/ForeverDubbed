@@ -7,12 +7,12 @@ from runtime import MODEL, ROOT, RUNTIME, load_model, load_profiles, voice_sourc
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=str, default=str(ROOT / "tts" / "voices.json"))
     args = parser.parse_args()
+    sources = {voice_source(args.config, p) for p in load_profiles(args.config).values()}
     print(f"Downloading {MODEL} and preset voices...", flush=True)
     model = load_model(offline=False)
-    sources = {voice_source(args.config, p) for p in load_profiles(args.config).values()}
     for source in sorted(sources, key=str):
         model.get_state_for_audio_prompt(source)
         print(f"Cached voice: {source}", flush=True)

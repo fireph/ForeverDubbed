@@ -12,12 +12,15 @@ import soundfile as sf
 from scipy.io import wavfile
 from scipy.signal import resample_poly
 
-from runtime import LANGUAGE, ROOT, load_model, synthesis_options, synthesis_settings
+from runtime import LANGUAGE, ROOT, RUNTIME, load_model, synthesis_options, synthesis_settings, voice_source
 
 SAMPLE_TEXT = (
     "Welcome, traveler. The road to the village is dangerous after sunset. "
     "Speak with the captain at the gates, and tell her that help is on the way."
 )
+SAMPLE_DECODE_STEPS = (1, 2, 4)
+SAMPLES_DIR = RUNTIME.parent / "voice-samples"
+PROMPT_LIMIT_SECONDS = 30
 
 
 def read_audio(path):
@@ -45,34 +48,38 @@ def read_audio(path):
 
 
 def excerpt(audio, rate, seconds, start=None):
-    """Choose an active window; energy cannot judge acting, music, or speaker purity."""
-    length = min(len(audio), round(seconds * rate))
+    """Use recordings under 30s whole; otherwise select 0s through the first quiet
+    pause at/after `seconds`. --start uses a fixed window instead."""
     if start is not None:
         first = round(start * rate)
         if first < 0 or first >= len(audio):
             raise ValueError("Start time is outside the recording")
-        last = min(first + length, len(audio))
+        last = min(first + min(len(audio), round(seconds * rate)), len(audio))
+    elif len(audio) < PROMPT_LIMIT_SECONDS * rate:
+        first, last = 0, len(audio)
     else:
+        # Voice lines should run from the start of the recording and end between
+        # lines: find the first pause after the minimum duration. A pause must
+        # survive 0.2s so stop-closure gaps do not end the excerpt mid-sentence.
+        first = 0
         hop = max(1, round(rate * 0.1))
         rms = np.array([np.sqrt(np.mean(audio[i:i+hop] ** 2))
                         for i in range(0, len(audio), hop)])
         threshold = max(0.003, float(np.percentile(rms, 90)) * 0.12)
-        width = min(len(rms), max(1, length // hop))
-        scores = np.convolve((rms > threshold).astype(float), np.ones(width), "valid")
-        # Among similarly active windows, prefer quiet boundaries between lines.
-        best = np.flatnonzero(scores >= scores.max() - 1)
-        index = min(best, key=lambda i: rms[i] + rms[min(i + width - 1, len(rms)-1)])
-        first, last = int(index * hop), min(int(index * hop) + length, len(audio))
-        # Find a quieter nearby start/end without extending beyond 30 seconds.
-        for edge in ("start", "end"):
-            center = first if edge == "start" else last
-            lo, hi = max(0, center-rate), min(len(audio), center+rate)
-            candidates = list(range(lo, max(lo+1, hi-hop), hop))
-            point = min(candidates, key=lambda i: (np.mean(audio[i:i+hop] ** 2), abs(i-center)))
-            if edge == "start":
-                first = point
+        quiet = np.convolve((rms < threshold).astype(float), np.ones(2), "valid")
+        lo, hi = round(seconds * rate), min(len(audio), PROMPT_LIMIT_SECONDS * rate)
+        last = hi
+        if lo < hi:
+            begin = -(-lo // hop)  # first hop starting at/after the minimum duration
+            pauses = (i for i in range(begin, min(len(quiet), hi // hop)) if quiet[i] >= 2)
+            pause = next(pauses, None)
+            if pause is not None:
+                last = pause * hop
             else:
-                last = min(len(audio), point + hop, first + 30*rate)
+                window = rms[begin : hi // hop]
+                if window.size:
+                    # No pause in range; end at the quietest hop instead.
+                    last = (begin + int(np.argmin(window))) * hop
     if last - first < rate * 3:
         raise ValueError("Reference needs at least three seconds of audio")
     clip = audio[first:last].copy()
@@ -82,8 +89,9 @@ def excerpt(audio, rate, seconds, start=None):
         raise ValueError("Selected excerpt is silent; choose another start time")
     clip *= min(4.0, 0.9 / peak)
     fade = min(round(rate * 0.005), len(clip)//2)
-    clip[:fade] *= np.linspace(0, 1, fade)
-    clip[-fade:] *= np.linspace(1, 0, fade)
+    if fade:
+        clip[:fade] *= np.linspace(0, 1, fade)
+        clip[-fade:] *= np.linspace(1, 0, fade)
     divisor = math.gcd(rate, 24000)
     clip = resample_poly(clip, 24000 // divisor, rate // divisor)
     return clip, first / rate, last / rate
@@ -94,8 +102,9 @@ def main():
     parser.add_argument("--voice", action="append", required=True, metavar="PROFILE=AUDIO",
                         help="Configured profile and local WAV or MP3 file; repeat for multiple voices")
     parser.add_argument("--config", type=Path, default=ROOT / "tts/voices.json")
-    parser.add_argument("--seconds", type=float, default=20)
-    parser.add_argument("--start", type=float, help="Explicit excerpt start; otherwise choose an active window")
+    parser.add_argument("--seconds", type=float, default=20,
+                        help="Minimum reference duration; recordings under 30s are used whole, longer ones end at the first quiet pause at/after this")
+    parser.add_argument("--start", type=float, help="Explicit excerpt start for a fixed --seconds window")
     parser.add_argument("--prepare-only", action="store_true", help="Prepare WAVs without loading a model")
     parser.add_argument("--online", action="store_true", help="Allow downloading cloning weights; audio stays local")
     parser.add_argument("--activate", action="store_true", help="Assign profiles after every export and sample succeeds")
@@ -111,6 +120,11 @@ def main():
         parser.error("--activate requires export; remove --prepare-only")
     original = args.config.read_bytes()
     config = json.loads(original)
+    try:
+        for profile in config["profiles"].values():
+            voice_source(args.config, profile)
+    except ValueError as exc:
+        parser.error(str(exc))
     output = args.config.resolve().parent / "custom"
     jobs, names = [], set()
     for item in args.voice:
@@ -127,7 +141,7 @@ def main():
             synthesis_options(config["profiles"][name])
         except ValueError as exc:
             parser.error(str(exc))
-        if (output / f"{name}.safetensors").exists() and not args.force:
+        if not args.prepare_only and (output / f"{name}.safetensors").exists() and not args.force:
             parser.error(f"{name} already exists; use --force to replace it")
         names.add(name)
         rate, audio, clipped = read_audio(Path(source))
@@ -138,7 +152,9 @@ def main():
             "source_seconds": len(audio)/rate, "source_clipped_fraction": clipped,
             "start_seconds": first, "end_seconds": last,
             "sample_rate": 24000, "language": LANGUAGE,
-            "selection": "manual" if args.start is not None else "energy heuristic; audition for quality",
+            "selection": ("manual" if args.start is not None
+                          else "whole recording (under 30s)" if len(audio) < PROMPT_LIMIT_SECONDS * rate
+                          else "0s through first quiet pause at/after minimum duration"),
         }))
     output.mkdir(parents=True, exist_ok=True)
     for name, clip, metadata in jobs:
@@ -153,8 +169,19 @@ def main():
     model = load_model(offline=not args.online)
     if not model.has_voice_cloning:
         raise SystemExit("Cloning weights unavailable. Accept access at https://huggingface.co/kyutai/pocket-tts, "
-                         "log in with the project HF_HOME, and rerun with --online. Profiles were not changed.")
+                         "run `uv run --project tools/voices hf auth login` from the repository root, "
+                         "and rerun with --online. Profiles were not changed.")
     from pocket_tts import export_model_state
+    SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
+
+    def preview(restored, profile, path):
+        with synthesis_settings(model, profile):
+            generated = model.generate_audio(restored, SAMPLE_TEXT, copy_state=True).detach().cpu().numpy()
+        if not generated.size or not np.isfinite(generated).all() or np.max(np.abs(generated)) < 1e-5:
+            raise RuntimeError(f"Invalid generated sample {path.name}; profiles were not changed")
+        wavfile.write(path, model.sample_rate, (generated.clip(-1, 1) * 32767).astype(np.int16))
+        return generated
+
     for name, _, metadata in jobs:
         started = time.monotonic()
         state = model.get_state_for_audio_prompt(output / f"{name}.reference.wav", truncate=True)
@@ -162,17 +189,22 @@ def main():
         export_model_state(state, str(temporary))
         # Verify the exported state can be loaded, then generate unseen dialogue.
         restored = model.get_state_for_audio_prompt(temporary)
-        with synthesis_settings(model, config["profiles"][name]):
-            generated = model.generate_audio(restored, SAMPLE_TEXT, copy_state=True).detach().cpu().numpy()
-        if not generated.size or not np.isfinite(generated).all() or np.max(np.abs(generated)) < 1e-5:
-            raise RuntimeError(f"Invalid generated sample for {name}; profiles were not changed")
-        wavfile.write(output / f"{name}.preview.wav", model.sample_rate,
-                      (generated.clip(-1, 1) * 32767).astype(np.int16))
+        generated = preview(restored, config["profiles"][name], output / f"{name}.preview.wav")
+        # Audition decode-step tradeoffs without rerunning the export. These
+        # samples live outside the packaged voices.
+        steps = []
+        for count in SAMPLE_DECODE_STEPS:
+            path = SAMPLES_DIR / f"{name}.preview-d{count}.wav"
+            sample = preview(restored, dict(config["profiles"][name], decode_steps=count), path)
+            steps.append({"decode_steps": count, "seconds": len(sample)/model.sample_rate,
+                          "file": str(path)})
         temporary.replace(output / f"{name}.safetensors")
         metadata.update({"preview_text": SAMPLE_TEXT, "preview_seconds": len(generated)/model.sample_rate,
+                         "decode_step_samples": steps,
                          "synthesis_options": synthesis_options(config["profiles"][name])})
         (output / f"{name}.voice.json").write_text(json.dumps(metadata, indent=2) + "\n")
         print(f"Exported and verified {name} in {time.monotonic()-started:.1f}s", flush=True)
+        print(f"{name}: decode-step samples {SAMPLE_DECODE_STEPS} in {SAMPLES_DIR}", flush=True)
     if args.activate:
         if args.config.read_bytes() != original:
             raise RuntimeError("Voice config changed during export; exported voices are ready but were not assigned")

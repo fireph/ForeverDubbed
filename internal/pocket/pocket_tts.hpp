@@ -1,11 +1,15 @@
 // PocketTTS.cpp — Single-file C++ TTS runtime using ONNX Runtime
 // https://github.com/VolgaGerm/PocketTTS.cpp
 //
-// Build with CMake:
-//   cmake -B .build -DCMAKE_BUILD_TYPE=Release
-//   cmake --build .build -j$(nproc)
+// Embedded inference runtime; built through bridge.cpp by Go/cgo.
+// Upstream HTTP, command-line, and alternate FFI entry points are omitted.
 
-// ── Platform (must come first — winsock2.h before windows.h) ────────────────
+#pragma once
+
+// Model-free tests compile the same helpers without loading the inference SDK.
+#ifndef POCKET_TTS_HELPERS_ONLY
+
+// ── Platform filesystem and path support ────────────────────────────────────────────
 
 #ifdef _WIN32
   #ifndef NOMINMAX
@@ -14,35 +18,21 @@
   #ifndef _CRT_SECURE_NO_WARNINGS
     #define _CRT_SECURE_NO_WARNINGS
   #endif
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
+  #include <windows.h>
   #include <direct.h>
   #include <io.h>
   #include <fcntl.h>
-  #pragma comment(lib, "ws2_32.lib")
   #define ptt_mkdir(path) _mkdir(path)
-  #define ptt_close closesocket
-  typedef SOCKET ptt_socket_t;
-  typedef int socklen_t;
-  static constexpr ptt_socket_t PTT_INVALID_SOCKET = INVALID_SOCKET;
-  using ssize_t = ptrdiff_t;
 #else
-  #include <sys/socket.h>
-  #include <netinet/in.h>
-  #include <arpa/inet.h>
   #include <unistd.h>
   #define ptt_mkdir(path) mkdir(path, 0755)
-  #define ptt_close close
-  typedef int ptt_socket_t;
-  static constexpr ptt_socket_t PTT_INVALID_SOCKET = -1;
 #endif
 
 #include <sys/stat.h>
-#include <csignal>
 
 // ── External Libraries ──────────────────────────────────────────────────────
 
-#include "sentence_fade.hpp"
+#include <nlohmann/json.hpp>
 #include <onnxruntime_cxx_api.h>
 #include <sentencepiece_processor.h>
 
@@ -55,19 +45,24 @@
 #define DR_FLAC_IMPLEMENTATION
 #include "dr_flac.h"
 
+#endif // POCKET_TTS_HELPERS_ONLY
+
 // ── Standard Library ────────────────────────────────────────────────────────
 
 #include <algorithm>
-#include <atomic>
+#include <cctype>
+#include <cstddef>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
 #include <cstdio>
 #include <cstring>
 #include <deque>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iomanip>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -75,11 +70,206 @@
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace pocket_tts {
+
+// ── Text preparation ──────────────────────────────────────────────────────
+
+namespace text_detail {
+// Match whole UTF-8 characters, never individual bytes of curly quotes or dashes.
+inline size_t suffix_length(std::string_view text,
+                            std::initializer_list<std::string_view> characters) {
+    for (auto character : characters) {
+        if (text.size() >= character.size() &&
+            text.substr(text.size() - character.size()) == character)
+            return character.size();
+    }
+    return 0;
+}
+
+inline std::string_view trim_end(std::string_view text,
+                                 std::initializer_list<std::string_view> characters) {
+    while (auto length = suffix_length(text, characters))
+        text.remove_suffix(length);
+    return text;
+}
+} // namespace text_detail
+
+inline std::string ensure_terminal_punctuation(const std::string &text) {
+    using text_detail::suffix_length;
+    using text_detail::trim_end;
+    auto core = trim_end(text, {"\"", "'", "\u201d", "\u2019", ")", "]", "\u00bb", " "});
+    if (core.empty() || suffix_length(core, {".", "!", "?", "\u2026"}))
+        return text;
+
+    // Weak endings can cause the final word to repeat or be mispronounced.
+    if (suffix_length(core, {",", ";", ":", "-", "\u2013", "\u2014"})) {
+        auto closers = std::string_view(text).substr(core.size());
+        while (!closers.empty() && closers.front() == ' ')
+            closers.remove_prefix(1);
+        closers = trim_end(closers, {" "});
+        core = trim_end(core, {",", ";", ":", "-", "\u2013", "\u2014", " "});
+        return std::string(core) + "." + std::string(closers);
+    }
+    // Keep the period after closing quotes/brackets, matching upstream tokenization.
+    return text + ".";
+}
+
+static int count_words(const std::string &text) {
+    int count = 0;
+    bool in_word = false;
+    for (char c : text) {
+        if (std::isspace((unsigned char)c)) {
+            in_word = false;
+        } else if (!in_word) {
+            in_word = true;
+            count++;
+        }
+    }
+    return count;
+}
+
+// Prepare text for synthesis and compute frames_after_eos.
+// Returns {prepared_text, eos_extra_frames}.
+static std::pair<std::string, int> prepare_text(const std::string &raw, int cfg_eos_extra) {
+    std::string text = raw;
+
+    // Strip characters the model can't speak
+    std::string cleaned;
+    cleaned.reserve(text.size());
+    for (char c : text) {
+        if (c == '"' || c == '`')
+            continue;
+        cleaned += c;
+    }
+    // Strip curly double quotes (UTF-8: " ")
+    auto stripUtf8 = [](std::string &s, const char *seq) {
+        size_t len = strlen(seq);
+        size_t pos;
+        while ((pos = s.find(seq)) != std::string::npos)
+            s.erase(pos, len);
+    };
+    stripUtf8(cleaned, "\xe2\x80\x9c"); // "
+    stripUtf8(cleaned, "\xe2\x80\x9d"); // "
+    text = cleaned;
+
+    // Strip apostrophes/quotes from edges only (preserve contractions like don't, it's)
+    while (!text.empty() && (text.front() == '\'' || text.front() == '`'))
+        text.erase(0, 1);
+    while (!text.empty() && (text.back() == '\'' || text.back() == '`'))
+        text.pop_back();
+    // Curly apostrophes at edges (UTF-8: ' ')
+    while (text.size() >= 3 && text.substr(0, 3) == "\xe2\x80\x98")
+        text.erase(0, 3);
+    while (text.size() >= 3 && text.substr(0, 3) == "\xe2\x80\x99")
+        text.erase(0, 3);
+    while (text.size() >= 3 && text.substr(text.size() - 3) == "\xe2\x80\x98")
+        text.erase(text.size() - 3);
+    while (text.size() >= 3 && text.substr(text.size() - 3) == "\xe2\x80\x99")
+        text.erase(text.size() - 3);
+
+    // Strip leading/trailing whitespace
+    size_t start = text.find_first_not_of(" \t\n\r");
+    size_t end = text.find_last_not_of(" \t\n\r");
+    if (start == std::string::npos)
+        return {"", cfg_eos_extra >= 0 ? cfg_eos_extra : 3};
+    text = text.substr(start, end - start + 1);
+
+    // Normalize whitespace
+    for (auto &c : text) {
+        if (c == '\n' || c == '\r')
+            c = ' ';
+    }
+
+    int nwords = count_words(text);
+    int eos_extra = cfg_eos_extra >= 0 ? cfg_eos_extra : ((nwords <= 4) ? 5 : 3);
+
+    // Capitalize first letter
+    if (!text.empty() && std::islower((unsigned char)text[0]))
+        text[0] = std::toupper((unsigned char)text[0]);
+
+    text = ensure_terminal_punctuation(text);
+
+    // Pad short text — model doesn't perform well with very few tokens
+    if (nwords < 5)
+        text = "        " + text; // 8 spaces, matching Python
+
+    return {text, eos_extra};
+}
+
+// ── Generation stopping ──────────────────────────────────────────────────
+
+class GenerationEnd {
+    int first_frame_ = -1;
+
+  public:
+    bool should_stop(int frame, float logit, float threshold, int frames_after_eos) {
+        // Some voices predict EOS during their leading pause. Ignore the first
+        // six frames (480 ms) so a short word has time to start. Frame is zero-based.
+        constexpr int min_frames_before_eos = 6;
+        if (first_frame_ < 0 && frame >= min_frames_before_eos && logit > threshold)
+            first_frame_ = frame;
+        // Preserve the configured tail after the first accepted EOS prediction.
+        return first_frame_ >= 0 && frame - first_frame_ >= frames_after_eos;
+    }
+
+    int first_frame() const {
+        return first_frame_;
+    }
+};
+
+// ── Sentence fades ───────────────────────────────────────────────────────
+
+// Retain only the fade-out tail. Decoder batch boundaries do not restart the
+// envelope; each generated sentence gets its own instance.
+class SentenceFade {
+    size_t fade_in_, fade_out_, seen_ = 0;
+    std::vector<float> tail_;
+
+public:
+    SentenceFade(size_t fade_in, size_t fade_out)
+        : fade_in_(fade_in), fade_out_(fade_out) {}
+
+    template<class Callback>
+    bool push(const float* data, size_t count, Callback&& emit) {
+        if (count == 0) return true;
+        if (fade_in_ == 0 && fade_out_ == 0) return emit(data, count);
+        const size_t offset = tail_.size();
+        tail_.insert(tail_.end(), data, data + count);
+        for (size_t i = 0; i < count && seen_ + i < fade_in_; ++i) {
+            const float gain = fade_in_ <= 1 ? 0.0f :
+                0.5f * (1.0f - std::cos(3.14159265358979323846 * (seen_ + i) / (fade_in_ - 1)));
+            tail_[offset + i] *= gain;
+        }
+        seen_ += count;
+        if (tail_.size() > fade_out_) {
+            const size_t ready = tail_.size() - fade_out_;
+            if (!emit(tail_.data(), ready)) return false;
+            tail_.erase(tail_.begin(), tail_.begin() + ready);
+        }
+        return true;
+    }
+
+    template<class Callback>
+    bool finish(Callback&& emit) {
+        if (tail_.empty()) return true;
+        for (size_t i = 0; i < tail_.size(); ++i) {
+            const float gain = tail_.size() <= 1 ? 0.0f :
+                0.5f * (1.0f + std::cos(3.14159265358979323846 * i / (tail_.size() - 1)));
+            tail_[i] *= gain;
+        }
+        const bool ok = emit(tail_.data(), tail_.size());
+        tail_.clear();
+        return ok;
+    }
+};
+
+#ifndef POCKET_TTS_HELPERS_ONLY
 
 // ════════════════════════════════════════════════════════════════════════════
 // Types
@@ -296,76 +486,6 @@ static std::vector<std::string> split_sentences(const std::string& text) {
     }
     
     return sentences;
-}
-
-// ── Text preparation (matches Python's prepare_text_prompt) ────────────────
-
-static int count_words(const std::string& text) {
-    int count = 0;
-    bool in_word = false;
-    for (char c : text) {
-        if (std::isspace((unsigned char)c)) { in_word = false; }
-        else if (!in_word) { in_word = true; count++; }
-    }
-    return count;
-}
-
-// Prepare text for synthesis and compute frames_after_eos.
-// Returns {prepared_text, eos_extra_frames}.
-static std::pair<std::string, int> prepare_text(const std::string& raw, int cfg_eos_extra) {
-    std::string text = raw;
-    
-    // Strip characters the model can't speak
-    std::string cleaned;
-    cleaned.reserve(text.size());
-    for (char c : text) {
-        if (c == '"' || c == '`') continue;
-        cleaned += c;
-    }
-    // Strip curly double quotes (UTF-8: " ")
-    auto stripUtf8 = [](std::string& s, const char* seq) {
-        size_t len = strlen(seq);
-        size_t pos;
-        while ((pos = s.find(seq)) != std::string::npos) s.erase(pos, len);
-    };
-    stripUtf8(cleaned, "\xe2\x80\x9c");  // "
-    stripUtf8(cleaned, "\xe2\x80\x9d");  // "
-    text = cleaned;
-    
-    // Strip apostrophes/quotes from edges only (preserve contractions like don't, it's)
-    while (!text.empty() && (text.front() == '\'' || text.front() == '`')) text.erase(0, 1);
-    while (!text.empty() && (text.back() == '\'' || text.back() == '`')) text.pop_back();
-    // Curly apostrophes at edges (UTF-8: ' ')
-    while (text.size() >= 3 && text.substr(0, 3) == "\xe2\x80\x98") text.erase(0, 3);
-    while (text.size() >= 3 && text.substr(0, 3) == "\xe2\x80\x99") text.erase(0, 3);
-    while (text.size() >= 3 && text.substr(text.size() - 3) == "\xe2\x80\x98") text.erase(text.size() - 3);
-    while (text.size() >= 3 && text.substr(text.size() - 3) == "\xe2\x80\x99") text.erase(text.size() - 3);
-    
-    // Strip leading/trailing whitespace
-    size_t start = text.find_first_not_of(" \t\n\r");
-    size_t end = text.find_last_not_of(" \t\n\r");
-    if (start == std::string::npos) return {"", cfg_eos_extra >= 0 ? cfg_eos_extra : 3};
-    text = text.substr(start, end - start + 1);
-    
-    // Normalize whitespace
-    for (auto& c : text) { if (c == '\n' || c == '\r') c = ' '; }
-    
-    int nwords = count_words(text);
-    int eos_extra = cfg_eos_extra >= 0 ? cfg_eos_extra : ((nwords <= 4) ? 5 : 3);
-    
-    // Capitalize first letter
-    if (!text.empty() && std::islower((unsigned char)text[0]))
-        text[0] = std::toupper((unsigned char)text[0]);
-    
-    // Ensure ends with punctuation
-    if (!text.empty() && std::isalnum((unsigned char)text.back()))
-        text += '.';
-    
-    // Pad short text — model doesn't perform well with very few tokens
-    if (nwords < 5)
-        text = "        " + text;  // 8 spaces, matching Python
-    
-    return {text, eos_extra};
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1396,7 +1516,6 @@ public:
 // ════════════════════════════════════════════════════════════════════════════
 
 class PocketTTS {
-    friend struct ForeverDubbedAccess;
 public:
     static constexpr int SR = 24000;
     
@@ -1619,6 +1738,12 @@ public:
     }
     
     AudioData generate(const std::string& text, const Tensor& voice, int max_frames = 500);
+    // Change voice/settings only when no synthesis is running on this instance.
+    // Saved states must match the April English model's six-layer cache layout.
+    void load_voice_state(const std::string& filename);
+    void set_decode_steps(int steps);
+    void set_sentence_fades(int fade_in_ms, int fade_out_ms);
+
     void stream(const std::string& text, const std::string& voice, StreamCallback cb, int max_frames = 500);
     void stream(const std::string& text, const Tensor& voice, StreamCallback cb, int max_frames = 500);
     const Config& config() const { return cfg_; }
@@ -1691,10 +1816,10 @@ private:
     
     class LatentGen {
         PocketTTS& tts;
-        int max_, idx_ = 0, extra_ = 0;
-        int eos_frame_ = -1;
+        int max_, idx_ = 0;
+        GenerationEnd ending_;
         int eos_extra_;  // frames to generate after EOS
-        bool done_ = false, eos_ = false;
+        bool done_ = false;
         float temp_;
         Ort::MemoryInfo m_;
         
@@ -1816,18 +1941,11 @@ private:
                 eos_logit = outputs[1].GetTensorData<float>()[0];
             }
             
-            if (!eos_ && eos_logit > tts.cfg_.eos_threshold) {
-                eos_ = true;
-                eos_frame_ = idx_;
+            if (ending_.should_stop(idx_, eos_logit, tts.cfg_.eos_threshold, eos_extra_)) {
+                done_ = true;
+                return Tensor();
             }
-            
-            if (eos_) {
-                if (++extra_ > eos_extra_) { 
-                    done_ = true; 
-                    return Tensor(); 
-                }
-            }
-            
+
             {
                 auto _ = g_prof.time("frame:rng");
                 if (temp_ > 0) {
@@ -1864,7 +1982,7 @@ private:
         }
         
         int frame_idx() const { return idx_; }
-        int eos_frame() const { return eos_frame_; }
+        int eos_frame() const { return ending_.first_frame(); }
     };
     
     friend class LatentGen;
@@ -2102,787 +2220,100 @@ void PocketTTS::stream(const std::string& text, const Tensor& voice, StreamCallb
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// HTTP Server
-// ════════════════════════════════════════════════════════════════════════════
+// ── Saved voice states and synthesis settings ─────────────────────────────
 
-static std::atomic<bool> g_server_running{true};
-static ptt_socket_t g_server_fd = PTT_INVALID_SOCKET;
-
-struct HttpRequest {
-    std::string method;
-    std::string path;
-    std::string body;
-    
-    static HttpRequest parse(ptt_socket_t client_fd) {
-        HttpRequest req;
-        std::string data;
-        char buf[4096];
-        
-        while (true) {
-            ssize_t n = recv(client_fd, buf, (int)sizeof(buf), 0);
-            if (n <= 0) break;
-            data.append(buf, n);
-            
-            size_t header_end = data.find("\r\n\r\n");
-            if (header_end != std::string::npos) {
-                // Case-insensitive search for Content-Length header
-                std::string lower_data = data.substr(0, header_end);
-                for (auto& c : lower_data) c = std::tolower((unsigned char)c);
-                size_t cl_pos = lower_data.find("content-length:");
-                
-                if (cl_pos != std::string::npos) {
-                    size_t cl_end = data.find("\r\n", cl_pos);
-                    int content_length = std::stoi(data.substr(cl_pos + 15, cl_end - cl_pos - 15));
-                    size_t body_start = header_end + 4;
-                    
-                    while (data.size() < body_start + content_length) {
-                        n = recv(client_fd, buf, (int)sizeof(buf), 0);
-                        if (n <= 0) break;
-                        data.append(buf, n);
-                    }
-                }
-                break;
-            }
+// The pinned April export stores six attention layers in safetensors files.
+// Validate their layout so a model change cannot silently reuse incompatible state.
+void PocketTTS::load_voice_state(const std::string &filename) {
+    std::ifstream input(std::filesystem::u8path(filename), std::ios::binary | std::ios::ate);
+    if (!input)
+        throw std::runtime_error("Cannot open voice: " + filename);
+    auto length = input.tellg();
+    if (length < 8 || length > 128 * 1024 * 1024)
+        throw std::runtime_error("Invalid voice file size");
+    input.seekg(0);
+    uint64_t header_size = 0;
+    input.read(reinterpret_cast<char *>(&header_size), 8);
+    if (header_size > 1024 * 1024 || header_size + 8 > uint64_t(length))
+        throw std::runtime_error("Invalid safetensors header");
+    std::string header(header_size, '\0');
+    input.read(header.data(), header.size());
+    auto tensors = nlohmann::json::parse(header);
+    auto read = [&](const std::string &key, const std::string &dtype,
+                    const std::vector<int64_t> &shape, void *dest, size_t bytes) {
+        const auto &tensor = tensors.at(key);
+        auto offsets = tensor.at("data_offsets").get<std::vector<uint64_t>>();
+        if (tensor.at("dtype") != dtype ||
+            tensor.at("shape").get<std::vector<int64_t>>() != shape || offsets.size() != 2 ||
+            offsets[1] < offsets[0] || offsets[1] - offsets[0] != bytes ||
+            offsets[1] > uint64_t(length) - 8 - header_size)
+            throw std::runtime_error("Incompatible voice tensor: " + key);
+        input.seekg(8 + header_size + offsets[0]);
+        input.read(static_cast<char *>(dest), bytes);
+        if (!input)
+            throw std::runtime_error("Truncated voice tensor: " + key);
+    };
+    main_runner_->reinit();
+    auto &state = main_runner_->state();
+    if (state.names.size() != 18)
+        throw std::runtime_error("Expected April English six-layer model state");
+    int64_t voice_length = -1;
+    for (size_t layer = 0; layer < 6; ++layer) {
+        std::string prefix = "transformer.layers." + std::to_string(layer) + ".self_attn/";
+        int64_t offset = 0, pad = 0;
+        read(prefix + "offset", "I64", {1}, &offset, 8);
+        if (tensors.contains(prefix + "pad"))
+            read(prefix + "pad", "I64", {1}, &pad, 8);
+        if (offset < 1 || offset > 500 || pad != 0 ||
+            (voice_length != -1 && offset != voice_length))
+            throw std::runtime_error("Unsupported voice offset/padding");
+        voice_length = offset;
+        size_t i = layer * 3;
+        if (state.init_shapes[i] != std::vector<int64_t>({2, 1, 1000, 16, 64}) ||
+            state.types[i] != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ||
+            state.types[i + 2] != ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64)
+            throw std::runtime_error("Incompatible ONNX state layout");
+        auto shape = tensors.at(prefix + "cache").at("shape").get<std::vector<int64_t>>();
+        if (shape.size() != 5 || shape[0] != 2 || shape[1] != 1 || shape[2] < offset ||
+            shape[2] > 1000 || shape[3] != 16 || shape[4] != 64)
+            throw std::runtime_error("Invalid voice cache shape");
+        std::vector<float> cache(2 * shape[2] * 1024);
+        read(prefix + "cache", "F32", shape, cache.data(), cache.size() * 4);
+        for (int kv = 0; kv < 2; ++kv) {
+            const float *begin = cache.data() + kv * shape[2] * 1024;
+            if (!std::all_of(begin, begin + offset * 1024,
+                             [](float v) { return std::isfinite(v); }))
+                throw std::runtime_error("Non-finite voice state");
+            std::copy(begin, begin + offset * 1024, state.f32[0][i].begin() + kv * 1000 * 1024);
         }
-        
-        size_t line_end = data.find("\r\n");
-        if (line_end != std::string::npos) {
-            std::string line = data.substr(0, line_end);
-            size_t sp1 = line.find(' ');
-            size_t sp2 = line.find(' ', sp1 + 1);
-            if (sp1 != std::string::npos && sp2 != std::string::npos) {
-                req.method = line.substr(0, sp1);
-                req.path = line.substr(sp1 + 1, sp2 - sp1 - 1);
-            }
-        }
-        
-        size_t body_start = data.find("\r\n\r\n");
-        if (body_start != std::string::npos) {
-            req.body = data.substr(body_start + 4);
-        }
-        
-        return req;
+        // The exported current_end input is an unused, fixed empty tensor.
+        state.shapes[i + 1] = {0};
+        state.f32[0][i + 1].clear();
+        state.i64[0][i + 2] = {offset};
     }
-};
-
-static std::string json_get_string(const std::string& json, const std::string& key) {
-    std::string search = "\"" + key + "\"";
-    size_t pos = json.find(search);
-    if (pos == std::string::npos) return "";
-    
-    pos = json.find(':', pos);
-    if (pos == std::string::npos) return "";
-    
-    pos = json.find('"', pos);
-    if (pos == std::string::npos) return "";
-    
-    // Walk forward, unescaping JSON escape sequences and stopping at the
-    // closing (unescaped) double-quote.
-    std::string result;
-    for (size_t i = pos + 1; i < json.size(); ++i) {
-        if (json[i] == '\\' && i + 1 < json.size()) {
-            char next = json[i + 1];
-            if      (next == '"')  result += '"';
-            else if (next == '\\') result += '\\';
-            else if (next == '/')  result += '/';
-            else if (next == 'n')  result += '\n';
-            else if (next == 'r')  result += '\r';
-            else if (next == 't')  result += '\t';
-            else if (next == 'b')  result += '\b';
-            else if (next == 'f')  result += '\f';
-            else if (next == 'u' && i + 5 < json.size()) {
-                // \uXXXX — decode as UTF-8
-                unsigned cp = 0;
-                bool ok = true;
-                for (int k = 0; k < 4; ++k) {
-                    char h = json[i + 2 + k];
-                    cp <<= 4;
-                    if      (h >= '0' && h <= '9') cp |= (h - '0');
-                    else if (h >= 'a' && h <= 'f') cp |= (h - 'a' + 10);
-                    else if (h >= 'A' && h <= 'F') cp |= (h - 'A' + 10);
-                    else { ok = false; break; }
-                }
-                if (ok) {
-                    int extra_skip = 4; // skip past uXXXX (++i covers backslash, for-loop covers next)
-                    // Handle surrogate pairs (\uD800-\uDBFF followed by \uDC00-\uDFFF)
-                    if (cp >= 0xD800 && cp <= 0xDBFF && i + 11 < json.size() &&
-                        json[i + 6] == '\\' && json[i + 7] == 'u') {
-                        unsigned lo = 0;
-                        bool ok2 = true;
-                        for (int k = 0; k < 4; ++k) {
-                            char h = json[i + 8 + k];
-                            lo <<= 4;
-                            if      (h >= '0' && h <= '9') lo |= (h - '0');
-                            else if (h >= 'a' && h <= 'f') lo |= (h - 'a' + 10);
-                            else if (h >= 'A' && h <= 'F') lo |= (h - 'A' + 10);
-                            else { ok2 = false; break; }
-                        }
-                        if (ok2 && lo >= 0xDC00 && lo <= 0xDFFF) {
-                            cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
-                            extra_skip = 10; // skip past uXXXX\uYYYY
-                        }
-                        // else: malformed surrogate, encode high surrogate as-is
-                    }
-                    // Encode code point as UTF-8
-                    if (cp < 0x80) {
-                        result += (char)cp;
-                    } else if (cp < 0x800) {
-                        result += (char)(0xC0 | (cp >> 6));
-                        result += (char)(0x80 | (cp & 0x3F));
-                    } else if (cp < 0x10000) {
-                        result += (char)(0xE0 | (cp >> 12));
-                        result += (char)(0x80 | ((cp >> 6) & 0x3F));
-                        result += (char)(0x80 | (cp & 0x3F));
-                    } else {
-                        result += (char)(0xF0 | (cp >> 18));
-                        result += (char)(0x80 | ((cp >> 12) & 0x3F));
-                        result += (char)(0x80 | ((cp >> 6) & 0x3F));
-                        result += (char)(0x80 | (cp & 0x3F));
-                    }
-                    i += extra_skip;
-                } else {
-                    result += '\\'; result += next; // malformed, pass through
-                }
-            }
-            else { result += '\\'; result += next; }
-            ++i;
-        } else if (json[i] == '"') {
-            break;
-        } else {
-            result += json[i];
-        }
-    }
-    return result;
+    voice_kv_snap_ =
+        std::make_unique<VoiceKVSnapshot>(main_runner_->take_snapshot());
+    Tensor dummy({1, 1, 1024});
+    voice_kv_hash_ = voice_hash(dummy);
 }
 
-class TTSServer {
-    PocketTTS& tts_;
-    int port_;
-    ptt_socket_t server_fd_ = PTT_INVALID_SOCKET;
-    std::mutex tts_mutex_;
-    
-public:
-    TTSServer(PocketTTS& tts, int port) : tts_(tts), port_(port) {}
-    
-    ~TTSServer() {
-        if (server_fd_ != PTT_INVALID_SOCKET && server_fd_ == g_server_fd) {
-            ptt_close(server_fd_);
-            g_server_fd = PTT_INVALID_SOCKET;
-        }
-        server_fd_ = PTT_INVALID_SOCKET;
-#ifdef _WIN32
-        WSACleanup();
-#endif
-    }
-    
-    bool start() {
-#ifdef _WIN32
-        WSADATA wsa;
-        if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-            std::cerr << "WSAStartup failed\n";
-            return false;
-        }
-#endif
-        server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
-        if (server_fd_ == PTT_INVALID_SOCKET) {
-            std::cerr << "Failed to create socket\n";
-            return false;
-        }
-        g_server_fd = server_fd_;
-        
-        int opt = 1;
-        setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
-        
-        sockaddr_in addr{};
-        addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = INADDR_ANY;
-        addr.sin_port = htons(port_);
-        
-        if (bind(server_fd_, (sockaddr*)&addr, sizeof(addr)) < 0) {
-            std::cerr << "Failed to bind to port " << port_ << "\n";
-            return false;
-        }
-        
-        if (listen(server_fd_, 5) < 0) {
-            std::cerr << "Failed to listen\n";
-            return false;
-        }
-        
-        std::cout << "TTS Server listening on http://localhost:" << port_ << "\n";
-        std::cout << "Endpoints:\n";
-        std::cout << "  POST /v1/audio/speech - OpenAI-compatible TTS (JSON: {\"input\": \"...\", \"voice\": \"...\"})\n";
-        std::cout << "  POST /tts            - Streaming TTS (JSON: {\"text\": \"...\", \"voice\": \"...\"})\n";
-        std::cout << "  GET  /health         - Health check\n";
-        std::cout << "Press Ctrl+C to stop\n\n";
-        
-        return true;
-    }
-    
-    void run() {
-        while (g_server_running) {
-            sockaddr_in client_addr{};
-            socklen_t client_len = sizeof(client_addr);
-            
-            ptt_socket_t client_fd = accept(server_fd_, (sockaddr*)&client_addr, &client_len);
-            if (client_fd == PTT_INVALID_SOCKET) break;
-            
-#ifdef _WIN32
-            DWORD tv = 30000;  // milliseconds
-            setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
-#else
-            struct timeval tv;
-            tv.tv_sec = 30;
-            tv.tv_usec = 0;
-            setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-#endif
-            
-            handle_request(client_fd);
-            ptt_close(client_fd);
-        }
-    }
-    
-private:
-    static bool ptt_send(ptt_socket_t fd, const void* data, size_t len) {
-        int flags = 0;
-#ifdef MSG_NOSIGNAL
-        flags |= MSG_NOSIGNAL;
-#endif
-        const char* ptr = static_cast<const char*>(data);
-        while (len > 0) {
-            ssize_t sent = send(fd, ptr, static_cast<int>(len), flags);
-            if (sent <= 0) return false;
-            ptr += sent;
-            len -= static_cast<size_t>(sent);
-        }
-        return true;
-    }
-    
-    void send_response(ptt_socket_t fd, int status, const std::string& content_type, const std::string& body) {
-        std::string status_text = (status == 200) ? "OK" : (status == 404) ? "Not Found" : "Bad Request";
-        std::ostringstream resp;
-        resp << "HTTP/1.1 " << status << " " << status_text << "\r\n";
-        resp << "Content-Type: " << content_type << "\r\n";
-        resp << "Content-Length: " << body.size() << "\r\n";
-        resp << "Access-Control-Allow-Origin: *\r\n";
-        resp << "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n";
-        resp << "Access-Control-Allow-Headers: Content-Type, Authorization\r\n";
-        resp << "\r\n";
-        resp << body;
-        
-        std::string data = resp.str();
-        ptt_send(fd, data.c_str(), data.size());
-    }
-    
-    void send_binary_response(ptt_socket_t fd, const std::string& content_type, const std::vector<uint8_t>& body) {
-        send_binary_response(fd, content_type, body.data(), body.size());
-    }
-    
-    void send_binary_response(ptt_socket_t fd, const std::string& content_type, const void* data, size_t len) {
-        std::ostringstream resp;
-        resp << "HTTP/1.1 200 OK\r\n";
-        resp << "Content-Type: " << content_type << "\r\n";
-        resp << "Content-Length: " << len << "\r\n";
-        resp << "Access-Control-Allow-Origin: *\r\n";
-        resp << "Access-Control-Allow-Headers: Content-Type, Authorization\r\n";
-        resp << "\r\n";
-        
-        std::string header = resp.str();
-        ptt_send(fd, header.c_str(), header.size());
-        ptt_send(fd, data, len);
-    }
-    
-    // Encode float PCM samples as a WAV file in memory
-    static std::vector<uint8_t> wav_encode(const float* samples, size_t count, int sample_rate) {
-        uint32_t data_size = count * sizeof(float);
-        uint32_t file_size = 36 + data_size;
-        
-        std::vector<uint8_t> buf(44 + data_size);
-        auto w = [&](size_t off, const void* src, size_t n) { memcpy(buf.data() + off, src, n); };
-        auto w32 = [&](size_t off, uint32_t v) { memcpy(buf.data() + off, &v, 4); };
-        auto w16 = [&](size_t off, uint16_t v) { memcpy(buf.data() + off, &v, 2); };
-        
-        w(0, "RIFF", 4);
-        w32(4, file_size);
-        w(8, "WAVE", 4);
-        w(12, "fmt ", 4);
-        w32(16, 16);                            // fmt chunk size
-        w16(20, 3);                             // IEEE float
-        w16(22, 1);                             // mono
-        w32(24, sample_rate);
-        w32(28, sample_rate * sizeof(float));   // byte rate
-        w16(32, sizeof(float));                 // block align
-        w16(34, 32);                            // bits per sample
-        w(36, "data", 4);
-        w32(40, data_size);
-        memcpy(buf.data() + 44, samples, data_size);
-        
-        return buf;
-    }
-    
-    bool send_chunked_header(ptt_socket_t fd, const std::string& content_type) {
-        std::ostringstream resp;
-        resp << "HTTP/1.1 200 OK\r\n";
-        resp << "Content-Type: " << content_type << "\r\n";
-        resp << "Transfer-Encoding: chunked\r\n";
-        resp << "Access-Control-Allow-Origin: *\r\n";
-        resp << "\r\n";
-        
-        std::string data = resp.str();
-        return ptt_send(fd, data.c_str(), data.size());
-    }
-    
-    bool send_chunk(ptt_socket_t fd, const void* data, size_t len) {
-        char size_buf[32];
-        snprintf(size_buf, sizeof(size_buf), "%zx\r\n", len);
-        if (!ptt_send(fd, size_buf, strlen(size_buf))) return false;
-        if (!ptt_send(fd, data, len)) return false;
-        return ptt_send(fd, "\r\n", 2);
-    }
-    
-    bool send_final_chunk(ptt_socket_t fd) {
-        return ptt_send(fd, "0\r\n\r\n", 5);
-    }
-    
-    void handle_request(ptt_socket_t client_fd) {
-        auto req = HttpRequest::parse(client_fd);
-        
-        char client_ip[INET_ADDRSTRLEN];
-        sockaddr_in addr;
-        socklen_t len = sizeof(addr);
-        getpeername(client_fd, (sockaddr*)&addr, &len);
-        inet_ntop(AF_INET, &addr.sin_addr, client_ip, sizeof(client_ip));
-        std::cout << client_ip << " " << req.method << " " << req.path << "\n";
-        
-        if (req.method == "OPTIONS") {
-            send_response(client_fd, 200, "text/plain", "");
-            return;
-        }
-        
-        if (req.method == "GET" && req.path == "/health") {
-            send_response(client_fd, 200, "application/json", "{\"status\":\"ok\"}");
-        }
-        else if (req.method == "POST" && req.path == "/tts") {
-            std::string text = json_get_string(req.body, "text");
-            std::string voice = json_get_string(req.body, "voice");
-            
-            if (text.empty() || voice.empty()) {
-                send_response(client_fd, 400, "application/json", "{\"error\":\"Missing text or voice\"}");
-                return;
-            }
-            
-            auto start = std::chrono::high_resolution_clock::now();
-            std::cout << "  Generating: \"" << text << "\" with voice '" << voice << "'\n";
-            
-            try {
-                send_chunked_header(client_fd, "audio/pcm;rate=24000;encoding=float;bits=32");
-                
-                bool first_chunk = true;
-                bool client_disconnected = false;
-                size_t total_samples = 0;
-                
-                {
-                    std::lock_guard<std::mutex> lock(tts_mutex_);
-                    tts_.stream(text, voice, [&](const float* samples, size_t n) {
-                        if (first_chunk) {
-                            auto now = std::chrono::high_resolution_clock::now();
-                            double latency = std::chrono::duration<double, std::milli>(now - start).count();
-                            std::cout << "  First chunk latency: " << std::fixed << std::setprecision(0) << latency << "ms\n";
-                            first_chunk = false;
-                        }
-                        if (!send_chunk(client_fd, samples, n * sizeof(float))) {
-                            client_disconnected = true;
-                            return false; // triggers stream() abort path
-                        }
-                        total_samples += n;
-                        return true;
-                    });
-                }
-                
-                if (client_disconnected) {
-                    std::cout << "  Client disconnected during stream\n";
-                } else {
-                    send_final_chunk(client_fd);
-                }
-                
-                auto end = std::chrono::high_resolution_clock::now();
-                double elapsed = std::chrono::duration<double>(end - start).count();
-                double duration = double(total_samples) / PocketTTS::SR;
-                std::cout << "  Done: " << std::fixed << std::setprecision(2) << duration << "s audio in " << elapsed << "s (RTFx: " << duration/elapsed << "x)\n";
-            } catch (const std::exception& e) {
-                send_response(client_fd, 400, "application/json", "{\"error\":\"" + std::string(e.what()) + "\"}");
-            }
-        }
-        else if (req.method == "POST" && req.path == "/v1/audio/speech") {
-            // OpenAI-compatible TTS endpoint
-            // Accepts: { "model": "...", "input": "...", "voice": "...", "response_format": "wav"|"pcm" }
-            // "model" and "speed" are accepted but ignored.
-            std::string text = json_get_string(req.body, "input");
-            std::string voice = json_get_string(req.body, "voice");
-            std::string format = json_get_string(req.body, "response_format");
-            if (format.empty()) format = "wav";
-            
-            if (text.empty() || voice.empty()) {
-                send_response(client_fd, 400, "application/json", 
-                    "{\"error\":{\"message\":\"Missing 'input' or 'voice'\",\"type\":\"invalid_request_error\"}}");
-                return;
-            }
-            
-            if (format != "wav" && format != "pcm") {
-                send_response(client_fd, 400, "application/json",
-                    "{\"error\":{\"message\":\"Unsupported response_format. Use 'wav' or 'pcm'.\",\"type\":\"invalid_request_error\"}}");
-                return;
-            }
-            
-            auto start = std::chrono::high_resolution_clock::now();
-            std::cout << "  [OpenAI] Generating: \"" << text << "\" with voice '" << voice << "' (format: " << format << ")\n";
-            
-            try {
-                AudioData audio;
-                {
-                    std::lock_guard<std::mutex> lock(tts_mutex_);
-                    audio = tts_.generate(text, voice);
-                }
-                
-                auto end = std::chrono::high_resolution_clock::now();
-                double elapsed = std::chrono::duration<double>(end - start).count();
-                double duration = audio.duration_sec();
-                std::cout << "  Done: " << std::fixed << std::setprecision(2) << duration << "s audio in " << elapsed << "s (RTFx: " << duration/elapsed << "x)\n";
-                
-                if (format == "pcm") {
-                    send_binary_response(client_fd, "audio/pcm",
-                        audio.samples.data(), audio.samples.size() * sizeof(float));
-                } else {
-                    auto wav = wav_encode(audio.samples.data(), audio.samples.size(), PocketTTS::SR);
-                    send_binary_response(client_fd, "audio/wav", wav);
-                }
-            } catch (const std::exception& e) {
-                send_response(client_fd, 400, "application/json",
-                    "{\"error\":{\"message\":\"" + std::string(e.what()) + "\",\"type\":\"server_error\"}}");
-            }
-        }
-        else {
-            send_response(client_fd, 404, "application/json", "{\"error\":\"Not found\"}");
-        }
-    }
-};
+void PocketTTS::set_sentence_fades(int fade_in_ms, int fade_out_ms) {
+    if (fade_in_ms < 0 || fade_in_ms > 500 || fade_out_ms < 0 || fade_out_ms > 500)
+        throw std::runtime_error("Fade durations must be 0..500 milliseconds");
+    cfg_.fade_in_ms = fade_in_ms;
+    cfg_.fade_out_ms = fade_out_ms;
+}
+
+void PocketTTS::set_decode_steps(int steps) {
+    if (steps < 1 || steps > 64)
+        throw std::runtime_error("Decode steps must be 1..64");
+    cfg_.lsd_steps = steps;
+    dt_ = 1.0f / steps;
+    st_values_.clear();
+    for (int i = 0; i < steps; ++i)
+        st_values_.emplace_back(float(i) / steps, float(i + 1) / steps);
+}
+
+#endif // POCKET_TTS_HELPERS_ONLY
 
 } // namespace pocket_tts
-
-// ════════════════════════════════════════════════════════════════════════════
-// C API (FFI)
-// ════════════════════════════════════════════════════════════════════════════
-
-extern "C" {
-
-void* ptt_create(const char* models_dir, const char* voices_dir,
-                 const char* tokenizer_path, const char* precision,
-                 float temperature, int lsd_steps, int num_threads) {
-    try {
-        pocket_tts::Config cfg;
-        if (models_dir) cfg.models_dir = models_dir;
-        if (voices_dir) cfg.voices_dir = voices_dir;
-        if (tokenizer_path) cfg.tokenizer_path = tokenizer_path;
-        if (precision) cfg.precision = precision;
-        cfg.temperature = temperature;
-        cfg.lsd_steps = lsd_steps;
-        cfg.num_threads = num_threads;
-        return new pocket_tts::PocketTTS(cfg);
-    } catch (const std::exception& e) {
-        std::cerr << "[pocket-tts] init error: " << e.what() << "\n";
-        return nullptr;
-    }
-}
-
-double ptt_warmup(void* handle) {
-    if (!handle) return -1;
-    try {
-        return static_cast<pocket_tts::PocketTTS*>(handle)->warmup();
-    } catch (const std::exception& e) {
-        std::cerr << "[pocket-tts] warmup error: " << e.what() << "\n";
-        return -1;
-    }
-}
-
-void ptt_free_audio(float* samples) {
-    free(samples);
-}
-
-void ptt_destroy(void* handle) {
-    delete static_cast<pocket_tts::PocketTTS*>(handle);
-}
-
-// ── Streaming API ───────────────────────────────────────────────────────────
-
-struct ptt_stream_ctx {
-    std::thread thread;
-    std::mutex mtx;
-    std::condition_variable cv;
-    std::deque<std::pair<float*, size_t>> chunks;
-    bool done = false;
-    bool aborted = false;
-};
-
-void* ptt_stream_start(void* handle, const char* text, const char* voice) {
-    if (!handle || !text || !voice) return nullptr;
-    auto* tts = static_cast<pocket_tts::PocketTTS*>(handle);
-    auto* ctx = new ptt_stream_ctx();
-
-    ctx->thread = std::thread([tts, t = std::string(text), v = std::string(voice), ctx]() {
-        try {
-            tts->stream(t, v, [ctx](const float* samples, size_t n) -> bool {
-                float* copy = static_cast<float*>(malloc(n * sizeof(float)));
-                if (!copy) return false;
-                std::memcpy(copy, samples, n * sizeof(float));
-                {
-                    std::lock_guard<std::mutex> lock(ctx->mtx);
-                    if (ctx->aborted) { free(copy); return false; }
-                    ctx->chunks.push_back({copy, n});
-                }
-                ctx->cv.notify_one();
-                return true;
-            });
-        } catch (const std::exception& e) {
-            std::cerr << "[pocket-tts] stream error: " << e.what() << "\n";
-        }
-        {
-            std::lock_guard<std::mutex> lock(ctx->mtx);
-            ctx->done = true;
-        }
-        ctx->cv.notify_one();
-    });
-
-    return ctx;
-}
-
-int ptt_stream_read(void* stream_ctx, float** out_samples, int* out_len) {
-    if (!stream_ctx || !out_samples || !out_len) return -1;
-    auto* ctx = static_cast<ptt_stream_ctx*>(stream_ctx);
-
-    std::unique_lock<std::mutex> lock(ctx->mtx);
-    ctx->cv.wait(lock, [ctx]{ return !ctx->chunks.empty() || ctx->done; });
-
-    if (!ctx->chunks.empty()) {
-        auto [ptr, len] = ctx->chunks.front();
-        ctx->chunks.pop_front();
-        *out_samples = ptr;
-        *out_len = static_cast<int>(len);
-        return 1;
-    }
-    return 0;
-}
-
-void ptt_stream_end(void* stream_ctx) {
-    if (!stream_ctx) return;
-    auto* ctx = static_cast<ptt_stream_ctx*>(stream_ctx);
-    {
-        std::lock_guard<std::mutex> lock(ctx->mtx);
-        ctx->aborted = true;
-    }
-    ctx->cv.notify_all();
-    if (ctx->thread.joinable()) ctx->thread.join();
-    for (auto& [ptr, len] : ctx->chunks) free(ptr);
-    delete ctx;
-}
-
-} // extern "C"
-
-// ════════════════════════════════════════════════════════════════════════════
-// CLI + HTTP Server Entry Point
-// ════════════════════════════════════════════════════════════════════════════
-
-#ifndef PTT_SHARED_LIB
-
-static void signal_handler(int sig) {
-    (void)sig;
-    pocket_tts::g_server_running = false;
-    if (pocket_tts::g_server_fd != PTT_INVALID_SOCKET) {
-        ptt_close(pocket_tts::g_server_fd);
-        pocket_tts::g_server_fd = PTT_INVALID_SOCKET;
-    }
-    std::cout << "\nShutting down...\n";
-}
-
-int main(int argc, char* argv[]) {
-    pocket_tts::Config cfg;
-    bool stdout_output = false;
-    bool server_mode = false;
-    int server_port = 8080;
-    std::string text, voice, output;
-    int pos = 0;
-    
-    for (int i = 1; i < argc; ++i) {
-        std::string a = argv[i];
-        auto next = [&]() -> char* {
-            if (++i >= argc) { std::cerr << "Missing value for " << a << "\n"; exit(1); }
-            return argv[i];
-        };
-        if (a == "-h" || a == "--help") {
-            std::cerr << "Usage: " << argv[0] << " [OPTIONS] TEXT VOICE [OUTPUT]\n"
-                "       " << argv[0] << " --server [OPTIONS]\n"
-                "\nOptions:\n"
-                "  --precision <int8|fp32>  Model precision (default: int8)\n"
-                "  --temperature <float>    Sampling temperature (default: 0.7)\n"
-                "  --lsd-steps <int>        Flow matching steps (default: 1)\n"
-                "  --threads <int>          Total thread budget (default: 0 = half cores)\n"
-                "  --models-dir <path>      ONNX models directory (default: models)\n"
-                "  --voices-dir <path>      Voice samples directory (default: voices)\n"
-                "  --tokenizer <path>       Tokenizer path (default: models/tokenizer.model)\n"
-                "  --eos-threshold <float>  EOS detection threshold (default: -4.0)\n"
-                "  --noise-clamp <float>    Noise clamp value (default: 0, disabled)\n"
-                "  --eos-extra <int>        Extra frames after EOS (default: -1, auto)\n"
-                "  --first-chunk <int>      Frames in first decode chunk (default: 1)\n"
-                "  --max-chunk <int>        Max frames per decode chunk (default: 15)\n"
-                "  --no-cache               Disable all disk caching (.emb and .kv files)\n"
-                "\nOutput:\n"
-                "  --stdout                 Output raw f32le PCM to stdout (for piping)\n"
-                "  --verbose                Enable verbose output\n"
-                "  --profile                Show profiling report with first-chunk latency\n"
-                "\nServer mode:\n"
-                "  --server                 Start HTTP server (models prewarmed on startup)\n"
-                "  --port <port>            Server port (default: 8080)\n";
-            return 0;
-        }
-        else if (a == "--precision") cfg.precision = next();
-        else if (a == "--temperature") cfg.temperature = std::stof(next());
-        else if (a == "--lsd-steps") cfg.lsd_steps = std::stoi(next());
-        else if (a == "--threads") cfg.num_threads = std::stoi(next());
-        else if (a == "--models-dir") cfg.models_dir = next();
-        else if (a == "--voices-dir") cfg.voices_dir = next();
-        else if (a == "--tokenizer") cfg.tokenizer_path = next();
-        else if (a == "--eos-threshold") cfg.eos_threshold = std::stof(next());
-        else if (a == "--noise-clamp") cfg.noise_clamp = std::stof(next());
-        else if (a == "--eos-extra") cfg.eos_extra_frames = std::stoi(next());
-        else if (a == "--first-chunk") cfg.first_chunk_frames = std::stoi(next());
-        else if (a == "--max-chunk") cfg.max_chunk_frames = std::stoi(next());
-        else if (a == "--no-cache") cfg.voice_cache = false;
-        else if (a == "--stdout") stdout_output = true;
-        else if (a == "--verbose") cfg.verbose = true;
-        else if (a == "--profile") pocket_tts::g_prof.enabled = true;
-        else if (a == "--server") server_mode = true;
-        else if (a == "--port") server_port = std::stoi(next());
-        else if (a[0] == '-') { std::cerr << "Unknown: " << a << "\n"; return 1; }
-        else { if (pos == 0) text = a; else if (pos == 1) voice = a; else if (pos == 2) output = a; pos++; }
-    }
-    
-    if (!server_mode) {
-        if (pos < 2) { std::cerr << "Need: TEXT VOICE [OUTPUT]\n"; return 1; }
-        if (pos < 3 && !stdout_output) { std::cerr << "Need OUTPUT file (or use --stdout)\n"; return 1; }
-        
-        if (stdout_output) {
-            cfg.verbose = false;
-            pocket_tts::g_prof.enabled = false;
-        }
-    }
-    
-    try {
-        int threads = cfg.num_threads ? cfg.num_threads : std::max(2, int(std::thread::hardware_concurrency()) / 2);
-        
-        if (!stdout_output) {
-            std::cerr << "Loading (precision=" << cfg.precision << ", threads=" << threads << ")...\n";
-        }
-        
-        auto t0 = std::chrono::high_resolution_clock::now();
-        pocket_tts::PocketTTS tts(cfg);
-        auto elapsed = [&]() { return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - t0).count(); };
-        
-        if (!stdout_output) {
-            std::cerr << "  Loaded in " << std::fixed << std::setprecision(2) << elapsed() << "s\n";
-        }
-        
-        if (server_mode) {
-            double warmup_ms = tts.warmup();
-            std::cerr << "  Warmup in " << std::fixed << std::setprecision(0) << warmup_ms << "ms\n";
-            
-            signal(SIGINT, signal_handler);
-            signal(SIGTERM, signal_handler);
-#ifndef _WIN32
-            signal(SIGPIPE, SIG_IGN);
-#endif
-            
-            pocket_tts::TTSServer server(tts, server_port);
-            if (!server.start()) return 1;
-            server.run();
-        }
-        else {
-            tts.reset_profiling();
-            
-            if (!stdout_output) {
-                std::cerr << "Generating: \"" << text << "\" with " << voice << "\n";
-            }
-            t0 = std::chrono::high_resolution_clock::now();
-            
-            pocket_tts::AudioData audio;
-            double first_chunk_latency = 0;
-            
-            if (stdout_output) {
-#ifdef _WIN32
-                _setmode(_fileno(stdout), _O_BINARY);
-#endif
-                size_t total_samples = 0;
-                bool first = true;
-                tts.stream(text, voice, [&](const float* s, size_t n) {
-                    if (first) {
-                        first_chunk_latency = std::chrono::duration<double, std::milli>(
-                            std::chrono::high_resolution_clock::now() - t0).count();
-                        first = false;
-                    }
-                    fwrite(s, sizeof(float), n, stdout);
-                    fflush(stdout);
-                    total_samples += n;
-                    return true;
-                });
-                audio.sample_rate = pocket_tts::PocketTTS::SR;
-                audio.samples.resize(total_samples);
-            } else {
-                if (pocket_tts::g_prof.enabled) {
-                    std::vector<float> samples;
-                    bool first = true;
-                    tts.stream(text, voice, [&](const float* s, size_t n) {
-                        if (first) {
-                            first_chunk_latency = std::chrono::duration<double, std::milli>(
-                                std::chrono::high_resolution_clock::now() - t0).count();
-                            first = false;
-                        }
-                        samples.insert(samples.end(), s, s + n);
-                        return true;
-                    });
-                    audio = {std::move(samples), pocket_tts::PocketTTS::SR};
-                } else {
-                    audio = tts.generate(text, voice);
-                }
-            }
-            
-            double gen_time = elapsed();
-            double duration = audio.duration_sec();
-            
-            if (!stdout_output) {
-                std::cerr << "  " << std::fixed << std::setprecision(2) 
-                          << duration << "s audio in " << gen_time << "s (RTFx: " << duration / gen_time << "x)\n";
-                if (pocket_tts::g_prof.enabled) {
-                    std::cerr << "  First chunk latency: " << std::fixed << std::setprecision(0) 
-                              << first_chunk_latency << "ms\n";
-                }
-                pocket_tts::PocketTTS::save_audio(audio, output);
-                std::cerr << "  Saved: " << output << "\n";
-            } else {
-                std::cerr << "  " << std::fixed << std::setprecision(2)
-                          << duration << "s audio in " << gen_time << "s (RTFx: " << duration / gen_time << "x)\n";
-                if (pocket_tts::g_prof.enabled) {
-                    std::cerr << "  First chunk latency: " << std::fixed << std::setprecision(0) 
-                              << first_chunk_latency << "ms\n";
-                }
-            }
-            
-            if (pocket_tts::g_prof.enabled) {
-                tts.print_profiling_report();
-            }
-        }
-        
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << "\n";
-        return 1;
-    }
-}
-
-#endif // PTT_SHARED_LIB

@@ -2,17 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"image"
-	"image/png"
 	"log"
 	"os"
 	"os/signal"
 	"runtime"
 	"sort"
-	"strings"
 	"time"
 
 	"foreverdubbed/internal/appstate"
@@ -97,44 +93,12 @@ func run() error {
 		fmt.Print(s)
 		return err
 	}
-	var assembler protocol.Assembler
 	identities, err := identity.Load(raceConfigPath)
 	if err != nil {
 		return fmt.Errorf("race config: %w", err)
 	}
-	output := json.NewEncoder(os.Stdout)
 	if files != "" {
-		completed := 0
-		for _, name := range strings.Split(files, ",") {
-			f, err := os.Open(strings.TrimSpace(name))
-			if err != nil {
-				return err
-			}
-			im, _, err := image.Decode(f)
-			f.Close()
-			if err != nil {
-				return err
-			}
-			_, p, err := protocol.Find(im)
-			if err != nil {
-				return fmt.Errorf("%s: %w", name, err)
-			}
-			m, err := assembler.Add(p, time.Now())
-			if err != nil {
-				return err
-			}
-			if m != nil {
-				*m = identities.Resolve(*m)
-				if err := output.Encode(m); err != nil {
-					return err
-				}
-				completed++
-			}
-		}
-		if completed == 0 {
-			return fmt.Errorf("valid pages read, but no complete message; supply screenshots for every page")
-		}
-		return nil
+		return decodeImages(files, identities, os.Stdout)
 	}
 	guiMode := desktopEnabled && !headless && !list && testText == "" && snapshot == ""
 	state := appstate.New(captureApp, backend, mute)
@@ -202,256 +166,10 @@ func run() error {
 				v.Audio = "Idle"
 			}
 		})
-		// A single worker applies the selected queue/interrupt policy.
-		speech := make(chan protocol.Message, 1)
-		done := make(chan struct{})
-		speechCtx, cancelSpeech := context.WithCancel(ctx)
-		go func() { defer close(done); speakLoop(speechCtx, speech, speak, state) }()
-		defer func() { cancelSpeech(); <-done }()
-		log.Printf("ForeverDubbed %s (FDB5, 16 colors). Searching; in WoW: /fdb unlock. Ctrl+C to quit.", version)
-		var location *protocol.Location
-		failures := 0
-		var lastError time.Time
-		for ctx.Err() == nil {
-			delay := poll
-			var p protocol.Packet
-			windowOK, tileOK := false, false
-			var err error
-			if location == nil {
-				delay = scan
-				im, captureErr := platform.Capture(platform.Desktop())
-				if captureErr != nil {
-					err = captureErr
-				} else {
-					windowOK = true
-					l, packet, findErr := protocol.Find(im)
-					if findErr == nil {
-						tileOK = true
-						location = &l
-						p = packet
-						failures = 0
-						delay = poll
-						log.Printf("Found tile at (%d, %d), %dpx cells, %d bytes/page.", l.X, l.Y, l.Cell, protocol.PayloadBytes)
-					} else {
-						err = findErr
-					}
-				}
-			} else {
-				im, captureErr := platform.Capture(location.Rect())
-				if captureErr != nil {
-					err = captureErr
-				} else {
-					windowOK = true
-					p, err = protocol.Decode(im, *location)
-					tileOK = err == nil
-				}
-				if err != nil {
-					failures++
-					if failures >= 4 {
-						location = nil
-						log.Print("Tile lost; searching again.")
-					}
-				} else {
-					failures = 0
-				}
-			}
-			state.Capture(windowOK, tileOK, err)
-			if err == nil {
-				m, assemblyErr := assembler.Add(p, time.Now())
-				if assemblyErr != nil {
-					log.Printf("Discarding message: %v", assemblyErr)
-				}
-				if m != nil {
-					*m = identities.Resolve(*m)
-					if !m.IsControl() {
-						state.Received(*m)
-					}
-					if !guiMode {
-						if err := output.Encode(m); err != nil {
-							return err
-						}
-					}
-					if !mute {
-						select {
-						case speech <- *m:
-						case <-ctx.Done():
-							return nil
-						}
-					}
-				}
-			} else if time.Since(lastError) > 15*time.Second {
-				log.Printf("Waiting: %v", err)
-				lastError = time.Now()
-			}
-			timer := time.NewTimer(delay)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-			case <-timer.C:
-			}
-		}
-		return nil
+		return captureLoop(ctx, captureSettings{poll: poll, scan: scan, emitJSON: !guiMode, mute: mute}, state, identities, speak)
 	}
 	if guiMode {
 		return runDesktop(ctx, stop, state, work)
 	}
 	return work()
-}
-
-func saveSnapshot(ctx context.Context, path string) error {
-	log.Print("Taking a game-window snapshot in 3 seconds. Keep the game and square visible.")
-	timer := time.NewTimer(3 * time.Second)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-	}
-	im, err := platform.Capture(platform.Desktop())
-	if err != nil {
-		return err
-	}
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	encodeErr := png.Encode(f, im)
-	closeErr := f.Close()
-	if encodeErr != nil {
-		return encodeErr
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	log.Printf("Saved capture PNG %s (%d × %d).", path, im.Bounds().Dx(), im.Bounds().Dy())
-	l, p, err := protocol.Find(im)
-	if err != nil {
-		return err
-	}
-	log.Printf("Valid tile at (%d,%d), %dpx cells; page %d/%d.", l.X, l.Y, l.Cell, p.Index+1, p.Count)
-	return nil
-}
-
-func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func(context.Context, protocol.Message) error, state *appstate.State) {
-	var cancel context.CancelFunc
-	var finished chan error
-	var nextID uint64
-	var activeKind byte
-	var pending []protocol.Message
-	updateQueue := func() { state.Update(func(v *appstate.Snapshot) { v.Queued = len(pending) }) }
-	stopCurrent := func() {
-		if cancel != nil {
-			cancel()
-			<-finished
-			cancel = nil
-			finished = nil
-			state.ResetPlayback()
-		}
-	}
-	defer func() { stopCurrent(); pending = nil; updateQueue() }()
-	start := func(message protocol.Message) {
-		// Select quest content when playback starts, so queued quests use the
-		// latest preference. Keep the original received message in app state.
-		if message.IsQuest() {
-			filters := state.Snapshot().Filters
-			message.Text = message.DialogueText(filters.QuestTitle, filters.QuestObjectives)
-			if message.Text == "" {
-				return
-			}
-		}
-		activeKind = message.Kind
-		nextID++
-		state.Update(func(v *appstate.Snapshot) {
-			v.Audio = "Preparing speech"
-			v.SpeechError = ""
-			v.PlaybackID = nextID
-			v.PlayingSpeaker = message.Speaker
-		})
-		child, c := context.WithCancel(ctx)
-		cancel = c
-		result := make(chan error, 1)
-		finished = result
-		go func() { result <- speak(child, message) }()
-	}
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-		// Remove disabled categories before starting any queued message.
-		filters := state.Snapshot().Filters
-		kept := pending[:0]
-		for _, message := range pending {
-			if filters.Allows(message.Kind) {
-				kept = append(kept, message)
-			}
-		}
-		clear(pending[len(kept):])
-		if len(kept) != len(pending) {
-			pending = kept
-			updateQueue()
-		}
-		if finished != nil && !filters.Allows(activeKind) {
-			stopCurrent()
-		}
-		// Switching back to interrupt mode keeps only the newest waiting message.
-		if !state.Snapshot().QueueSpeech && len(pending) > 0 {
-			newest := pending[len(pending)-1]
-			pending = nil
-			updateQueue()
-			stopCurrent()
-			start(newest)
-		}
-		if finished == nil && len(pending) > 0 {
-			next := pending[0]
-			pending[0] = protocol.Message{}
-			pending = pending[1:]
-			updateQueue()
-			start(next)
-		}
-		if finished == nil && len(pending) > 0 {
-			continue // An empty quest body must not stall the remaining queue.
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-state.SpeechChanges():
-			// Apply queue mode and category changes at the top of the loop.
-		case id := <-state.AudioStops():
-			if id == state.Snapshot().PlaybackID {
-				stopCurrent()
-			}
-		case message, ok := <-requests:
-			if !ok {
-				requests = nil
-				continue
-			}
-			if message.IsControl() {
-				// Controls bypass queue mode. Cancelling the current utterance
-				// advances any pending dialogue, just like the desktop buttons.
-				stopCurrent()
-				continue
-			}
-			if !state.Snapshot().Filters.Allows(message.Kind) {
-				continue
-			}
-			if state.Snapshot().QueueSpeech && finished != nil {
-				pending = append(pending, message)
-				updateQueue()
-			} else {
-				pending = nil
-				updateQueue()
-				stopCurrent()
-				start(message)
-			}
-		case err := <-finished:
-			state.ResetPlayback()
-			if err != nil && ctx.Err() == nil {
-				log.Printf("TTS error: %v", err)
-				state.Update(func(v *appstate.Snapshot) { v.SpeechError = err.Error() })
-			}
-			cancel()
-			cancel = nil
-			finished = nil
-		}
-	}
 }

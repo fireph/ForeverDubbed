@@ -137,28 +137,20 @@ func (c *Client) Check(ctx context.Context, current, goos, arch string) (*Releas
 	if r.Draft || r.Prerelease || !newer(r.Tag, current) {
 		return nil, nil
 	}
-	var names []string
+	var archiveName string
 	switch goos {
 	case "windows":
-		names = []string{"ForeverDubbed-windows-" + arch + "-portable.zip"}
+		archiveName = "ForeverDubbed-windows-" + arch + "-portable.zip"
 	case "darwin":
-		names = []string{"ForeverDubbed-mac-" + arch + ".zip"}
+		archiveName = "ForeverDubbed-mac-" + arch + ".zip"
 	default:
 		return nil, nil
 	}
-	for _, name := range names {
-		for _, a := range r.Assets {
-			if a.Name == name {
-				r.Archive = a
-				break
-			}
-		}
-		if r.Archive.Name != "" {
-			break
-		}
-	}
 	for _, a := range r.Assets {
-		if a.Name == "SHA256SUMS.txt" {
+		switch a.Name {
+		case archiveName:
+			r.Archive = a
+		case "SHA256SUMS.txt":
 			r.Checksums = a
 		}
 	}

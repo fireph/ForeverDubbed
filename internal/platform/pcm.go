@@ -20,6 +20,7 @@ type pcmDevice interface {
 	Close() error
 }
 
+// playPCM consumes signed 16-bit mono PCM and owns the device until it returns.
 func playPCM(ctx context.Context, rate int, chunks <-chan []byte, device pcmDevice) (err error) {
 	defer func() {
 		if closeErr := device.Close(); err == nil {

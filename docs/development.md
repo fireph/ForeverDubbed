@@ -23,7 +23,7 @@ go run -tags pocket_native ./tools/voicecheck
 go run -tags pocket_native ./tools/voicecheck -voice undead_male
 ```
 
-Speech commands require `CGO_ENABLED=1`, C/C++ compilers, and ONNX Runtime on the OS library search path (see [native instructions](../native/README.md)); live capture/playback are not implemented on Linux. The model-free Go tests run without native libraries. Python export-tool tests are optional: `python -m unittest discover -s tools/voices -p 'test_*.py'`. Lua 5.1+ enables additional addon compatibility tests through `LUA=/path/to/lua`.
+Speech commands require `CGO_ENABLED=1`, C/C++ compilers, and ONNX Runtime on the OS library search path (see [native instructions](../native/README.md)); live capture/playback are not implemented on Linux. The model-free Go tests run without native libraries. Python export-tool tests are optional: `uv run --project tools/voices --locked python -m unittest discover -s tools/voices -p 'test_*.py'` (see [voice tool setup](../tools/voices/README.md)). Lua 5.1+ enables additional addon compatibility tests through `LUA=/path/to/lua`.
 
 The portable decoder can read PNGs on any OS. For a paged message, supply one unmodified screenshot of each distinct page, in any order:
 
@@ -31,8 +31,29 @@ The portable decoder can read PNGs on any OS. For a paged message, supply one un
 go run ./cmd/foreverdubbed -image page1.png,page2.png,page3.png
 ```
 
-Tests cover voice routing and overrides, cancellation, native voice selection and errors, streamed PCM validation and bounded playback, speaker metadata, the Lua/Go byte and palette contract, Unicode spanning pages, out-of-order/duplicate pages, session changes, sequence wraparound, invalid dimensions, corruption, gamma/tint/noise transforms, damaged reference swatches, moved tiles, negative monitor coordinates, desktop race-layer precedence, unchanged VoiceOver data, raw display/model observations, model-load timing and stale identities, saved race assignments and clearing, settings migration, physical pixel sizing at multiple resolutions/UI scales, and all supported cell sizes. Lua tests use mocked game APIs; they do not substitute for testing the real client. Tests explicitly skip the Lua checks if an interpreter is unavailable.
+The default suite covers protocol/Lua compatibility, identity and voice routing, speech cancellation and queueing, fake capture/audio devices, update rollback, and release packaging. Model-free C++ speech tests compile with `c++` and skip if it is unavailable. Lua tests also skip without an interpreter and use mocked game APIs, so they do not substitute for testing the real client.
 
+## Code organization
+
+- `cmd/foreverdubbed`: startup/options in `main.go`, optical polling in `capture.go`, speech queue policy in `speech.go`, and offline image/snapshot commands in `images.go`.
+- `internal/platform`: native capture, audio devices, and system voices. OS-specific files stay in this package with `_windows`/`_darwin` suffixes and cgo build constraints. `capture_window.go`, `pcm.go`, and `playback_status.go` hold shared policy; fake-device tests run on any host.
+- `internal/desktop` and `internal/update`: platform-specific window and process integration stays with the feature that uses it, selected by filename suffixes/build constraints.
+- `internal/pocket`: the Go speech engine and C ABI; `bridge.cpp` owns streaming and worker shutdown. `pocket_tts.hpp` contains the complete locally adapted PocketTTS implementation, including text preparation, generation stopping, sentence fades, and saved voice tensor validation/import. Model-free C++ tests include this same header with `POCKET_TTS_HELPERS_ONLY` to omit inference SDK dependencies.
+- `tools/build`: release orchestration, manifests, file selection, and ZIP output, with separate `macos_*` and `windows_*` files for target packaging. These names use OS prefixes rather than reserved suffixes because both targets must compile on every build host.
+
+Use `gofmt` for Go and the root `.clang-format` for maintained C++/Objective-C bridges. Keep formatting-only changes out of the pinned upstream `pocket_tts.hpp` so local inference fixes remain easy to compare with upstream:
+
+```sh
+gofmt -w cmd internal tools
+clang-format -i internal/pocket/bridge.cpp internal/pocket/bridge.h
+clang-format -i internal/platform/*.cpp internal/platform/*.h internal/platform/*.m internal/desktop/*.m
+go test -race ./...
+go test -race -tags "gui ci" ./internal/desktop ./cmd/foreverdubbed
+```
+
+Tests should exercise observable contracts: window ownership, audio ordering and cleanup, queue controls, decoding, safe update replacement, and packaged file contents. Native live-capture tests remain opt-in because they require a running game and OS permissions. Set `FDB_TEST_CAPTURE_APP` and run `go test ./internal/platform` on Windows or macOS with cgo enabled. Real speech recovery/fade tests use `FDB_TEST_NATIVE_DIR` and `-tags pocket_native` as described in the native guide.
+
+When fixing a bug, first reproduce it with a focused regression test. Check the resulting audio, file contents, or state rather than implementation details, and extend an existing test when it already exercises the affected behavior.
 
 ## Desktop interface
 
@@ -84,5 +105,7 @@ persistence, control priority, late identity callbacks, and duplicate frames.
 The builder includes a standalone GUI updater without PocketTTS dependencies and `release-manifest.json`. The desktop downloads/verifies/extracts before changing any installed files. It copies the existing updater into a private staging folder, waits for readiness, then shuts down normally. The updater waits for the parent process to exit before moving locked files, reports installation progress, rolls back on replacement errors, and relaunches with the original arguments and working directory. Unrelated files and Fyne preferences are untouched; bundled voice/config files are replaced. Successful jobs are cleaned after the helper exits; failures retain logs and backups. Updates require sufficient space for the download, staged payload, and previous files. Manual release installation remains available.
 
 The only local product version is `## Version:` in `addon/ForeverDubbed/ForeverDubbed.toc`. `internal/buildinfo` embeds that metadata for ordinary Go builds, and addon Lua reads it through WoW's addon metadata API. Tagged GitHub builds override it with `vMAJOR.MINOR.PATCH` from the Git tag: the desktop, updater, macOS app metadata, Windows installer, release manifest, and packaged addon all receive that version. The builder stamps a copy under `dist/addon/ForeverDubbed`, leaving the source TOC unchanged. Both the standalone addon ZIP and desktop packages use that same staged copy. For local releases, change only the TOC version and rebuild; for tagged releases, choose the version in the tag. Windows auto-updates also refresh Installed apps' version for the matching registered installation. Publish both the macOS ZIP and DMG and include the ZIP in release checksums. A machine running an older release without an updater must install this feature manually once.
+
+Archive and manifest paths are validated using the same rules on every build host. Parent directories participate in case-collision checks, so `Data/a` and `data/b` are rejected even on Linux. File/directory conflicts and manifests listing themselves are rejected before installation.
 
 Tests use fake HTTP transports and temporary installations to cover version/asset selection, download verification and cancellation, archive traversal/link rejection, file replacement, rollback, and confirmation/progress UI. Run `go test ./internal/update ./tools/build` and `go test -tags "gui ci" ./internal/desktop`. Real macOS signature checks and full native GUI update/restart need validation on their respective OSes.

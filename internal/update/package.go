@@ -68,14 +68,16 @@ func extract(ctx context.Context, archive, destination string, progress Reporter
 	if len(z.File) > 10000 {
 		return fmt.Errorf("too many files in update")
 	}
-	seen := map[string]bool{}
+	paths := packagePaths{}
 	var total uint64
 	for _, f := range z.File {
 		name := strings.TrimSuffix(f.Name, "/")
-		if !safePath(name) || seen[strings.ToLower(name)] || f.Mode()&os.ModeSymlink != 0 || (!f.FileInfo().IsDir() && !f.Mode().IsRegular()) {
+		if f.Mode()&os.ModeSymlink != 0 || (!f.FileInfo().IsDir() && !f.Mode().IsRegular()) {
 			return fmt.Errorf("unsafe update archive path %q", f.Name)
 		}
-		seen[strings.ToLower(name)] = true
+		if err := paths.add(name, f.FileInfo().IsDir()); err != nil {
+			return err
+		}
 		if f.UncompressedSize64 > 4<<30 || total > 4<<30-f.UncompressedSize64 {
 			return fmt.Errorf("update archive is too large")
 		}
@@ -150,6 +152,36 @@ func safePath(name string) bool {
 	}
 	return true
 }
+
+type packagePath struct {
+	name      string
+	directory bool
+	explicit  bool
+}
+
+// Validate implicit parent directories too: Data/a and data/b collide on the
+// usual Windows/macOS filesystems even though their complete names differ.
+type packagePaths map[string]packagePath
+
+func (paths packagePaths) add(name string, directory bool) error {
+	if !safePath(name) {
+		return fmt.Errorf("unsafe update path %q", name)
+	}
+	parts := strings.Split(name, "/")
+	for i := range parts {
+		prefix := strings.Join(parts[:i+1], "/")
+		explicit := i == len(parts)-1
+		isDir := !explicit || directory
+		key := strings.ToLower(prefix)
+		previous, exists := paths[key]
+		if exists && (previous.name != prefix || previous.directory != isDir || (previous.explicit && explicit)) {
+			return fmt.Errorf("conflicting update path %q", name)
+		}
+		paths[key] = packagePath{name: prefix, directory: isDir, explicit: explicit || previous.explicit}
+	}
+	return nil
+}
+
 func fileHash(filename string) (string, error) {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -197,9 +229,17 @@ func readManifest(filename string) (Manifest, error) {
 	if len(m.Files) == 0 {
 		return m, fmt.Errorf("empty release manifest")
 	}
+	paths := packagePaths{}
+	// The manifest is installed separately and must not list itself as payload.
+	if err := paths.add(ManifestName, false); err != nil {
+		return m, err
+	}
 	for name, hash := range m.Files {
+		if err := paths.add(name, false); err != nil {
+			return m, err
+		}
 		b, err := hex.DecodeString(hash)
-		if !safePath(name) || err != nil || len(b) != sha256.Size {
+		if err != nil || len(b) != sha256.Size {
 			return m, fmt.Errorf("invalid release manifest entry")
 		}
 	}

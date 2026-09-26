@@ -2,11 +2,13 @@ package main
 
 import (
 	"debug/pe"
-	"foreverdubbed/internal/buildinfo"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"foreverdubbed/internal/buildinfo"
 )
 
 func TestInstallerManifest(t *testing.T) {
@@ -58,7 +60,13 @@ func TestWindowsInstallerCompile(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{}
 	for _, name := range []string{"foreverdubbed.exe", "native/models/model.onnx", "tts/voices.json", "docs/read me.txt"} {
-		putFile(t, root, name, "installer fixture: "+name)
+		destination := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(destination, []byte("installer fixture: "+name), 0644); err != nil {
+			t.Fatal(err)
+		}
 		files[name] = filepath.Join(root, filepath.FromSlash(name))
 	}
 	output := filepath.Join(root, "test-setup.exe")

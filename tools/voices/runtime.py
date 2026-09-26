@@ -35,6 +35,7 @@ def load_profiles(path):
     for name, profile in profiles.items():
         if not isinstance(profile.get("voice"), str) or not profile["voice"]:
             raise ValueError(f"Profile {name} needs a Pocket TTS voice name")
+        voice_source(path, profile)
         synthesis_options(profile)
     return profiles
 
@@ -54,8 +55,8 @@ def synthesis_options(profile):
 
 @contextmanager
 def synthesis_settings(model, profile):
-    # The service holds its synthesis lock throughout this context. Restore all
-    # changes even after errors so one voice never affects another's settings.
+    # Previews run sequentially. Restore settings even after errors so one
+    # exported voice never affects the next preview.
     options = synthesis_options(profile)
     if not options:
         yield
@@ -75,6 +76,8 @@ def synthesis_settings(model, profile):
 
 def voice_source(config_path, profile):
     source = profile["voice"]
+    if "\\" in source:
+        raise ValueError("Voice paths in voices.json must use forward slashes (/)")
     # Custom WAV/safetensors references are relative to the config file.
     if Path(source).suffix.lower() in (".wav", ".safetensors"):
         return Path(config_path).resolve().parent / source

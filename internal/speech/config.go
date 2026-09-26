@@ -3,12 +3,13 @@ package speech
 import (
 	"encoding/json"
 	"fmt"
-	"foreverdubbed/internal/protocol"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"foreverdubbed/internal/protocol"
 )
 
 type Profile struct {
@@ -66,6 +67,9 @@ func Load(path string) (*Config, error) {
 		}
 		if strings.TrimSpace(profile.Voice) == "" {
 			return nil, fmt.Errorf("profile %q needs a Pocket TTS voice", id)
+		}
+		if strings.ContainsRune(profile.Voice, '\\') {
+			return nil, fmt.Errorf("profile %q voice path must use forward slashes (/)", id)
 		}
 	}
 	check := func(voice string) error {

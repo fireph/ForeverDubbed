@@ -5,13 +5,14 @@ package update
 import (
 	"context"
 	"fmt"
-	"golang.org/x/sys/windows"
-	"golang.org/x/sys/windows/registry"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
 func detach(cmd *exec.Cmd) {
@@ -42,9 +43,6 @@ func waitProcess(ctx context.Context, pid int) error {
 		}
 	}
 }
-func verifyMac(oldApp, newApp string) error {
-	return fmt.Errorf("macOS updates are not supported on Windows")
-}
 
 // Portable copies must never change another installation's Windows metadata.
 func recordInstalledVersion(install Installation, version string) error {
@@ -65,3 +63,5 @@ func recordInstalledVersion(install Installation, version string) error {
 	}
 	return key.SetStringValue("DisplayVersion", version)
 }
+
+func verifyMac(string, string) error { return fmt.Errorf("macOS updates are not supported on Windows") }

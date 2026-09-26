@@ -3,25 +3,19 @@ package main
 import (
 	_ "embed"
 	"fmt"
-	"foreverdubbed/internal/buildinfo"
-	"foreverdubbed/internal/update"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"foreverdubbed/internal/buildinfo"
+	"foreverdubbed/internal/update"
 )
 
 //go:embed installer.nsi
 var installerTemplate string
-
-func releaseZIPName(targetOS, arch string) string {
-	if targetOS == "windows" {
-		return "ForeverDubbed-windows-" + arch + "-portable.zip"
-	}
-	return "ForeverDubbed-mac-" + arch + ".zip"
-}
 
 // Use the ZIP's exact manifest, including only configured voices. Explicit
 // uninstall paths avoid recursively deleting unrelated files in the install dir.
@@ -75,6 +69,7 @@ func nsisEscape(value string) string {
 
 func nsisQuote(value string) string { return "\"" + nsisEscape(value) + "\"" }
 
+// writeWindowsInstaller compiles the exact portable file manifest into an NSIS installer.
 func writeWindowsInstaller(destination string, files map[string]string) error {
 	stage, err := os.MkdirTemp(filepath.Dir(destination), ".foreverdubbed-installer-")
 	if err != nil {

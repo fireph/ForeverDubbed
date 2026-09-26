@@ -5,13 +5,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"foreverdubbed/internal/platform"
-	"foreverdubbed/internal/pocket"
-	"foreverdubbed/internal/protocol"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"foreverdubbed/internal/platform"
+	"foreverdubbed/internal/pocket"
+	"foreverdubbed/internal/protocol"
 )
 
 type Synthesizer interface {
@@ -40,7 +41,7 @@ func OpenLocal(config *Config, override, nativeDir, modelsDir string, threads in
 	if modelsDir == "" {
 		modelsDir = filepath.Join(nativeDir, "models")
 	}
-	engine, err := pocket.Open(nativeDir, modelsDir, threads)
+	engine, err := pocket.Open(modelsDir, threads)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +58,7 @@ func (l *Local) voiceFile(name string) (string, int, error) {
 	if steps == 0 {
 		steps = 1
 	}
-	path := p.Voice
+	path := filepath.FromSlash(p.Voice)
 	if filepath.Ext(path) == "" {
 		if strings.ContainsAny(path, "/\\:") || path == "." || path == ".." {
 			return "", 0, fmt.Errorf("invalid preset %q", path)

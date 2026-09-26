@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	"foreverdubbed/internal/appstate"
-	"foreverdubbed/internal/protocol"
 	"testing"
 	"time"
+
+	"foreverdubbed/internal/appstate"
+	"foreverdubbed/internal/protocol"
 )
 
 func TestQueuedQuestContentUsesCurrentPreference(t *testing.T) {

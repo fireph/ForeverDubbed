@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,16 +11,13 @@ import (
 
 	"foreverdubbed/internal/appicon"
 	"foreverdubbed/internal/buildinfo"
+	"foreverdubbed/internal/buildtool"
 	"foreverdubbed/internal/update"
 )
 
-// macApp stages a standalone Finder-launchable app before replacing the previous
-// generated app. Documentation and the addon stay beside it in the release ZIP.
-func macApp(dist string, files map[string]string) (map[string]string, error) {
-	return macAppSigned(dist, files, nil)
-}
-
-func macAppSigned(dist string, files map[string]string, sign func(string) error) (map[string]string, error) {
+// macApp stages a Finder-launchable bundle before replacing the previous build.
+// Documentation and the addon stay beside it in the release ZIP.
+func macApp(dist string, files map[string]string, sign func(string) error) (map[string]string, error) {
 	staging, err := os.MkdirTemp(dist, ".foreverdubbed-app-")
 	if err != nil {
 		return nil, err
@@ -48,7 +44,7 @@ func macAppSigned(dist string, files map[string]string, sign func(string) error)
 			continue
 		}
 		destination := filepath.Join(stage, filepath.FromSlash(target))
-		if err := copyBundleFile(source, destination); err != nil {
+		if err := buildtool.CopyFile(source, destination); err != nil {
 			return nil, err
 		}
 		appFiles[target] = destination
@@ -96,7 +92,7 @@ func macAppSigned(dist string, files map[string]string, sign func(string) error)
 		if entry.IsDir() {
 			return nil
 		}
-		if err := regularFile(source); err != nil {
+		if err := buildtool.RegularFile(source); err != nil {
 			return err
 		}
 		name, err := filepath.Rel(stage, source)
@@ -118,30 +114,6 @@ func macAppSigned(dist string, files map[string]string, sign func(string) error)
 		result["ForeverDubbed.app/"+name] = filepath.Join(destination, filepath.FromSlash(name))
 	}
 	return result, nil
-}
-func copyBundleFile(source, destination string) error {
-	if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
-		return err
-	}
-	in, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	info, err := in.Stat()
-	if err != nil {
-		return err
-	}
-	out, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode().Perm())
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(out, in)
-	closeErr := out.Close()
-	if err != nil {
-		return err
-	}
-	return closeErr
 }
 func macIcon() []byte {
 	var payload bytes.Buffer
@@ -175,7 +147,7 @@ func macSigner(root string, unsigned bool) (func(string) error, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := regularFile(identity); err != nil {
+	if err := buildtool.RegularFile(identity); err != nil {
 		return nil, fmt.Errorf("macOS signing identity: %w; run bash scripts/setup-macos-signing.sh once, restore FDB_MACOS_SIGNING_PEM, or explicitly use -mac-unsigned for a test build", err)
 	}
 	signer := os.Getenv("FDB_RCODESIGN")

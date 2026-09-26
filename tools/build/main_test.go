@@ -2,8 +2,6 @@ package main
 
 import (
 	"archive/zip"
-	"debug/macho"
-	"encoding/binary"
 	"encoding/json"
 	"io"
 	"os"
@@ -50,7 +48,7 @@ func TestPackageContentsAndLayout(t *testing.T) {
 	putFile(t, root, "tts/custom/unused.safetensors", "private")
 	putFile(t, root, "tts/custom/draft.pending.safetensors", "unfinished")
 	putFile(t, root, ".runtime/secret", "excluded")
-	putVoices(t, root, `custom\used.safetensors`, "custom/used.safetensors", "alba")
+	putVoices(t, root, "custom/./used.safetensors", "custom/used.safetensors", "alba")
 	bundle, addon, err := packageFiles(root)
 	if err != nil {
 		t.Fatal(err)
@@ -110,13 +108,26 @@ func TestPackageContentsAndLayout(t *testing.T) {
 }
 
 func TestRejectInvalidVoiceReferences(t *testing.T) {
-	for _, voice := range []string{"../outside.wav", "/outside.wav", `C:\outside.wav`, `custom\..\outside.wav`, "custom/draft.pending.safetensors", "custom/missing.safetensors"} {
-		t.Run(voice, func(t *testing.T) {
+	for _, tc := range []struct{ voice, wantErr string }{
+		{"../outside.safetensors", "finished files under tts/custom"},
+		{"/outside.safetensors", "finished files under tts/custom"},
+		{"C:/outside.safetensors", "finished files under tts/custom"},
+		{"custom/../outside.safetensors", "finished files under tts/custom"},
+		{`custom\used.safetensors`, "forward slashes (/)"},
+		{"custom/draft.pending.safetensors", "finished files under tts/custom"},
+		{"custom/missing.safetensors", "voice custom/missing.safetensors"},
+		{"custom/reference.wav", "exported .safetensors"},
+		{"custom/reference.mp3", "exported .safetensors"},
+	} {
+		t.Run(tc.voice, func(t *testing.T) {
 			root := t.TempDir()
 			putFile(t, root, "tts/custom/draft.pending.safetensors", "unfinished")
-			putVoices(t, root, voice)
-			if _, err := voiceFiles(root); err == nil {
-				t.Fatal("accepted invalid voice")
+			putFile(t, root, "tts/custom/reference.wav", "reference audio")
+			putFile(t, root, "tts/custom/reference.mp3", "reference audio")
+			putFile(t, root, "tts/custom/used.safetensors", "exported voice")
+			putVoices(t, root, tc.voice)
+			if _, err := voiceFiles(root); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("voiceFiles error = %v, want %q", err, tc.wantErr)
 			}
 		})
 	}
@@ -139,74 +150,15 @@ func TestBuildEnvironmentIsolation(t *testing.T) {
 	input := []string{"PATH=tools", "GOOS=darwin", "GOARCH=arm64", "CGO_ENABLED=1", "LUA=lua"}
 	copyOfInput := append([]string(nil), input...)
 	want := []string{"PATH=tools", "LUA=lua", "GOOS=windows", "GOARCH=amd64", "CGO_ENABLED=0"}
-	if got := buildEnv(input, "windows", "amd64"); !reflect.DeepEqual(got, want) {
+	if got := buildEnv(input, "windows", "amd64", false); !reflect.DeepEqual(got, want) {
 		t.Fatalf("environment: %v", got)
 	}
+	want[len(want)-1] = "CGO_ENABLED=1"
+	if got := buildEnv(input, "windows", "amd64", true); !reflect.DeepEqual(got, want) {
+		t.Fatalf("native environment: %v", got)
+	}
+
 	if !reflect.DeepEqual(input, copyOfInput) {
 		t.Fatal("mutated caller environment")
-	}
-}
-
-func writeMachOLibrary(t *testing.T, filename string, cpu macho.Cpu) {
-	t.Helper()
-	// A minimal little-endian 64-bit dylib header is enough to test architecture
-	// validation without storing platform binaries in the repository.
-	f, err := os.Create(filename)
-	if err != nil {
-		t.Fatal(err)
-	}
-	words := []uint32{macho.Magic64, uint32(cpu), 0, uint32(macho.TypeDylib), 0, 0, 0, 0}
-	if err := binary.Write(f, binary.LittleEndian, words); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestMacLibraryArchitectureAndAliases(t *testing.T) {
-	dir := t.TempDir()
-	library := filepath.Join(dir, "libonnxruntime.dylib")
-	writeMachOLibrary(t, library, macho.CpuArm64)
-	if err := checkMachO(library, "amd64"); err == nil {
-		t.Fatal("accepted ARM library for Intel release")
-	}
-	versioned := filepath.Join(dir, "libonnxruntime.1.23.2.dylib")
-	writeMachOLibrary(t, versioned, macho.CpuArm64)
-	bundle := map[string]string{}
-	if err := addMacLibraries(bundle, dir, "arm64"); err != nil {
-		t.Fatal(err)
-	}
-	if bundle["native/libonnxruntime.dylib"] != library || bundle["native/libonnxruntime.1.23.2.dylib"] != versioned {
-		t.Fatalf("lost loader names: %v", bundle)
-	}
-	if err := os.WriteFile(library, []byte("not a library"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := addMacLibraries(map[string]string{}, dir, "arm64"); err == nil {
-		t.Fatal("accepted invalid dylib")
-	}
-}
-
-func TestZIPPreservesMacExecutableMode(t *testing.T) {
-	if os.PathSeparator == '\\' {
-		t.Skip("Unix executable modes")
-	}
-	dir := t.TempDir()
-	executable := filepath.Join(dir, "foreverdubbed")
-	if err := os.WriteFile(executable, []byte("binary"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	archive := filepath.Join(dir, "mac.zip")
-	if err := writeZIP(archive, map[string]string{"foreverdubbed": executable}); err != nil {
-		t.Fatal(err)
-	}
-	z, err := zip.OpenReader(archive)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer z.Close()
-	if z.File[0].Mode().Perm()&0111 == 0 {
-		t.Fatal("executable bit lost")
 	}
 }

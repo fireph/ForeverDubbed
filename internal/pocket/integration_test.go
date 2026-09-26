@@ -15,7 +15,7 @@ func TestNativeSentenceFades(t *testing.T) {
 	if dir == "" {
 		t.Skip("set FDB_TEST_NATIVE_DIR to exercise the real native engine")
 	}
-	engine, err := Open(dir, filepath.Join(dir, "models"), 2)
+	engine, err := Open(filepath.Join(dir, "models"), 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestNativeRecovery(t *testing.T) {
 	if dir == "" {
 		t.Skip("set FDB_TEST_NATIVE_DIR to exercise the real native engine")
 	}
-	engine, err := Open(dir, filepath.Join(dir, "models"), 2)
+	engine, err := Open(filepath.Join(dir, "models"), 2)
 	if err != nil {
 		t.Fatal(err)
 	}

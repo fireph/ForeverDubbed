@@ -1,5 +1,8 @@
 """Reference preparation checks; no model download or synthesis required."""
+import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -51,15 +54,82 @@ class ReferenceTests(unittest.TestCase):
         self.assertTrue(np.isfinite(clip).all())
         self.assertLessEqual(np.max(np.abs(clip)), 1)
 
-    def test_automatic_selection_prefers_active_audio(self):
+    def test_automatic_selection_starts_at_zero_and_ends_at_quiet_pause(self):
         rate = 1000
         audio = np.zeros(60*rate)
-        audio[30*rate:55*rate] = 0.3*np.sin(np.arange(25*rate))
+        audio[:20500] = 0.2*np.sin(np.arange(20500))
+        audio[20900:45*rate] = 0.4*np.sin(np.arange(45*rate-20900))  # louder later line
         clip, first, last = excerpt(audio, rate, 20)
-        self.assertGreaterEqual(first, 29)
-        self.assertLessEqual(last, 56)
-        self.assertLessEqual(last-first, 30)
+        self.assertEqual(first, 0)
+        self.assertGreaterEqual(last, 20)       # never before the minimum duration
+        self.assertLessEqual(last, 20.9)        # ends at the pause, before the next line
         self.assertGreater(np.sqrt(np.mean(clip**2)), 0.1)
+
+    def test_automatic_selection_extends_past_brief_gaps(self):
+        rate = 1000
+        audio = np.zeros(40*rate)
+        audio[:30*rate] = 0.2*np.sin(np.arange(30*rate))
+        audio[20100:20200] = 0                    # 0.1s stop-closure gap, not a pause
+        audio[25*rate:25600] = 0                  # first real pause >= 0.2s
+        _, first, last = excerpt(audio, rate, 20)
+        self.assertEqual((first, last), (0, 25))
+
+    def test_automatic_selection_uses_whole_recording_under_30s(self):
+        rate = 1000
+        audio = 0.2*np.sin(np.arange(25*rate))
+        audio[21*rate:21300] = 0  # pause the under-30s rule ignores
+        _, first, last = excerpt(audio, rate, 20)
+        self.assertEqual((first, last), (0, 25))
+        short = 0.3*np.sin(np.arange(16*rate))
+        _, first, last = excerpt(short, rate, 20)
+        self.assertEqual((first, last), (0, 16))  # shorter than the minimum too
+
+    def test_automatic_selection_without_pause_uses_quietest_fallback(self):
+        rate = 1000
+        _, first, last = excerpt(0.3 * np.ones(40*rate), rate, 20)
+        self.assertEqual((first, last), (0, 20))  # no pause: quietest hop in capped range
+
+    def test_automatic_selection_preserves_minimum_duration(self):
+        rate = 24000
+        for seconds in (3, 5):
+            with self.subTest(seconds=seconds):
+                audio = 0.3 * np.sin(2*np.pi*220*np.arange(rate*seconds)/rate)
+                clip, first, last = excerpt(audio, rate, 3)
+                self.assertGreaterEqual(last-first, 3)
+                self.assertGreaterEqual(len(clip), 3*24000)
+                self.assertTrue(np.isfinite(clip).all())
+
+    def test_prepare_only_preserves_existing_voice_and_config(self):
+        # Exercise the real CLI from outside the repo: source paths are relative
+        # to the caller, while outputs follow the selected configuration file.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "voices.json"
+            original = json.dumps({"profiles": {"test": {"voice": "custom/test.safetensors"}}})
+            config.write_text(original, encoding="utf-8")
+            custom = root / "custom"
+            custom.mkdir()
+            voice = custom / "test.safetensors"
+            voice.write_bytes(b"existing exported voice")
+            rate = 24000
+            samples = 0.3 * np.sin(2 * np.pi * 220 * np.arange(rate * 5) / rate)
+            sf.write(root / "source with spaces.wav", samples, rate)
+            script = Path(__file__).with_name("clone_voice.py").resolve()
+            result = subprocess.run(
+                [sys.executable, str(script), "--config", str(config),
+                 "--voice", "test=source with spaces.wav", "--seconds", "3",
+                 "--start", "1", "--prepare-only"],
+                cwd=root, capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(config.read_text(encoding="utf-8"), original)
+            self.assertEqual(voice.read_bytes(), b"existing exported voice")
+            metadata = json.loads((custom / "test.reference.json").read_text())
+            self.assertEqual(metadata["source"], str((root / "source with spaces.wav").resolve()))
+            actual_rate, audio = wavfile.read(custom / "test.reference.wav")
+            self.assertEqual(actual_rate, 24000)
+            self.assertEqual(len(audio), 72000)
+            self.assertFalse((custom / "test.preview.wav").exists())
 
     def test_invalid_or_silent_reference(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -73,6 +143,23 @@ class ReferenceTests(unittest.TestCase):
             excerpt(np.zeros(24000*5), 24000, 3, start=0)
         with self.assertRaises(ValueError):
             excerpt(np.ones(24000*5), 24000, 3, start=6)
+
+    def test_backslash_config_rejected_before_preparation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "voices.json"
+            original = json.dumps({"profiles": {"test": {"voice": r"custom\test.safetensors"}}})
+            config.write_text(original, encoding="utf-8")
+            script = Path(__file__).with_name("clone_voice.py").resolve()
+            result = subprocess.run(
+                [sys.executable, str(script), "--config", str(config),
+                 "--voice", "test=missing.wav", "--prepare-only"],
+                cwd=root, capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("forward slashes (/)", result.stderr)
+            self.assertEqual(config.read_text(encoding="utf-8"), original)
+            self.assertFalse((root / "custom").exists())
 
 
 if __name__ == "__main__":
