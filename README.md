@@ -24,7 +24,7 @@ Windows capture targets **WoWB.exe** only, using Windows Graphics Capture (Windo
 
 Run `ForeverDubbed-windows-amd64-setup.exe` to install for your Windows user, with a Start menu shortcut and an entry in Installed apps. The addon is included under the installation folder and still needs copying into WoW (see below).
 
-For a portable installation, download `ForeverDubbed-windows-amd64-portable.zip`, extract the entire folder and run `foreverdubbed.exe` (or the optional `Start-ForeverDubbed.cmd`). Keep the ONNX Runtime DLLs, `native/`, and `tts/` beside the executable. Python, uv, and Go are not needed to run a prepared release.
+For a portable installation, download `ForeverDubbed-windows-amd64-portable.zip`, extract the entire folder and run `foreverdubbed.exe`. Keep the ONNX Runtime DLLs, `native/`, and `tts/` beside the executable. Python, uv, and Go are not needed to run a prepared release.
 
 For source builds on Windows or Linux/WSL, see the [Windows build guide](native/README.md#build).
 
@@ -147,8 +147,8 @@ Pocket TTS is the default (`-tts pocket`; `-tts local` is an alias). The EXE loa
 To hear a voice without opening WoW, run from the project/bundle root:
 
 ```powershell
-.\Start-ForeverDubbed.cmd -speak-test "Welcome, traveler. Your adventure begins here." -race Orc -gender male
-.\Start-ForeverDubbed.cmd -speak-test "The forest needs your help." -voice nightelf_female
+.\foreverdubbed.exe -speak-test "Welcome, traveler. Your adventure begins here." -race Orc -gender male
+.\foreverdubbed.exe -speak-test "The forest needs your help." -voice nightelf_female
 ```
 
 ### Race and gender voices

@@ -15,7 +15,7 @@ import (
 )
 
 var runtimeFiles = []string{
-	"README.md", "PROTOCOL.md", "CHANGELOG.md", "native/README.md", "Start-ForeverDubbed.cmd", "tts/voices.json",
+	"README.md", "PROTOCOL.md", "CHANGELOG.md", "native/README.md", "tts/voices.json",
 }
 
 func main() {
@@ -74,9 +74,6 @@ func build() error {
 	bundle, addon, err := packageFiles(root)
 	if err != nil {
 		return err
-	}
-	if targetOS == "darwin" {
-		delete(bundle, "Start-ForeverDubbed.cmd")
 	}
 	if err := addTargetNativeFiles(bundle, *nativeDir, spec); err != nil {
 		return err
