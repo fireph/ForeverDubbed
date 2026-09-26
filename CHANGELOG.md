@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
 
 - Use the new Forever Dubbed banner for the centered desktop header and the square logo for window/tray icons, the Windows executable icon, and the macOS app bundle icon.
 - Add a desktop **Voices** tab with a Male and Female dropdown for every race: Default (the `tts/voices.json` mapping), Narrator, or None. Selections persist in the desktop preferences and apply immediately, including stopping and pruning silenced active and queued speech. None also silences explicit voice and NPC overrides, and applies to the system speech backend.
