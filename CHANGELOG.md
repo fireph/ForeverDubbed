@@ -2,6 +2,8 @@
 
 ## 0.8.0
 
+- Fix the binding section header showing a raw `HEADER_FOREVERDUBBED` entry in WoW Forever's Key Bindings UI: the bindings now use the modern `Category` attribute resolved through the existing `BINDING_HEADER_FOREVERDUBBED` text, keeping the legacy `header` attribute for older clients.
+- Rename the two actions to **Skip current audio** and **Stop all audio** in the Key Bindings UI and the minimap button tooltip.
 - Use the new Forever Dubbed banner for the centered desktop header and the square logo for window/tray icons, the Windows executable icon, and the macOS app bundle icon.
 - Add a desktop **Voices** tab with a Male and Female dropdown for every race: Default (the `tts/voices.json` mapping), Narrator, or None. Selections persist in the desktop preferences and apply immediately, including stopping and pruning silenced active and queued speech. None also silences explicit voice and NPC overrides, and applies to the system speech backend.
 - Remove Blood Elf and Draenei voice profiles; neither race is in classic WoW. `tts/voices.json` now ships 21 profiles (10 races × 2 genders plus the narrator), all custom voice states.

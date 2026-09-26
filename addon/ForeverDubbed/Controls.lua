@@ -2,7 +2,7 @@ local _, NS = ...
 NS.Controls = {}
 
 BINDING_HEADER_FOREVERDUBBED = "ForeverDubbed"
-BINDING_NAME_FOREVERDUBBED_STOP = "Stop current audio"
+BINDING_NAME_FOREVERDUBBED_STOP = "Stop all audio"
 BINDING_NAME_FOREVERDUBBED_SKIP = "Skip current audio"
 
 -- Bindings.xml calls these globals; the transport is initialized at ADDON_LOADED.
@@ -65,7 +65,7 @@ function NS.Controls.Init(db)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine("ForeverDubbed", 1, 0.82, 0)
         GameTooltip:AddLine("Left-click: Skip current audio", 1, 1, 1)
-        GameTooltip:AddLine("Right-click: Stop current audio", 1, 1, 1)
+        GameTooltip:AddLine("Right-click: Stop all audio", 1, 1, 1)
         GameTooltip:AddLine("Drag to move around the minimap.", 0.8, 0.8, 0.8)
         GameTooltip:AddLine("Requires the companion and visible data square.", 0.8, 0.8, 0.8)
         GameTooltip:Show()
