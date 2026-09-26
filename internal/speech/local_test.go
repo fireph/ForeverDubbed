@@ -20,6 +20,62 @@ func (e fakeEngine) Stream(c context.Context, t, v string, s pocket.StreamOption
 }
 func (fakeEngine) Close() error { return nil }
 
+func TestLocalVoiceChoices(t *testing.T) {
+	c, err := Load("../../tts/voices.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.NPCOverrides["override"] = "orc_male"
+	var choices map[string]string
+	var selected, synthesized string
+	var reads, plays int
+	local := Local{
+		Config: c,
+		ChoiceSource: func() map[string]string {
+			reads++
+			return choices
+		},
+		OnVoice: func(_ protocol.Message, name string) { selected = name },
+		Engine: fakeEngine{func(_ context.Context, _, voice string, _ pocket.StreamOptions, emit func([]byte) error) error {
+			synthesized = filepath.Base(voice)
+			return emit([]byte{0, 0})
+		}},
+		Play: func(_ context.Context, _ int, chunks <-chan []byte) error {
+			plays++
+			for range chunks {
+			}
+			return nil
+		},
+	}
+	for _, tc := range []struct{ name, choice, override, npc, want string }{
+		{"default", "", "", "", "human_female"},
+		{"narrator", VoiceNarrator, "", "", "narrator_male"},
+		{"none", VoiceNone, "", "", ""},
+		{"none with voice override", VoiceNone, "orc_male", "", ""},
+		{"none with npc override", VoiceNone, "", "override", ""},
+		{"restore default", "", "", "", "human_female"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			choices = map[string]string{"human:female": tc.choice}
+			local.Override = tc.override
+			selected, synthesized, reads, plays = "", "", 0, 0
+			if err := local.Speak(context.Background(), protocol.Message{Race: "Human", Gender: "female", NPCID: tc.npc, Text: "Hello."}); err != nil {
+				t.Fatal(err)
+			}
+			if reads != 1 || selected != tc.want {
+				t.Fatalf("choice reads=%d, selected=%q; want one read and %q", reads, selected, tc.want)
+			}
+			if tc.want == "" {
+				if synthesized != "" || plays != 0 {
+					t.Fatalf("muted voice reached synthesis/playback: %q, %d", synthesized, plays)
+				}
+			} else if synthesized != tc.want+".safetensors" || plays != 1 {
+				t.Fatalf("synthesized=%q, plays=%d; want %q once", synthesized, plays, tc.want)
+			}
+		})
+	}
+}
+
 func TestQuestSynthesisOmitsTitle(t *testing.T) {
 	c, err := Load("../../tts/voices.json")
 	if err != nil {

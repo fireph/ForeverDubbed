@@ -293,3 +293,76 @@ func TestSpeechFiltersCancelAndPruneQueue(t *testing.T) {
 	send(0)                 // Connection tests remain audible.
 	expect(0)
 }
+
+func TestVoiceChoicesMuteAndPruneQueue(t *testing.T) {
+	for _, backend := range []string{"pocket", "system"} {
+		t.Run(backend, func(t *testing.T) { testVoiceChoicesMuteAndPruneQueue(t, backend) })
+	}
+}
+
+func testVoiceChoicesMuteAndPruneQueue(t *testing.T, backend string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	state := appstate.New("game", backend, false)
+	state.SetQueueSpeech(true)
+	requests := make(chan protocol.Message)
+	started := make(chan string, 8)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		speakLoop(ctx, requests, func(ctx context.Context, m protocol.Message) error {
+			started <- m.Text
+			<-ctx.Done()
+			return ctx.Err()
+		}, state)
+	}()
+	defer func() { cancel(); <-done }()
+	send := func(text, race string) {
+		t.Helper()
+		select {
+		case requests <- protocol.Message{Kind: 1, Text: text, Race: race, Gender: "male"}:
+		case <-ctx.Done():
+			t.Fatal("send blocked")
+		}
+	}
+	expect := func(want string) {
+		t.Helper()
+		select {
+		case got := <-started:
+			if got != want {
+				t.Fatalf("spoke %q, want %q", got, want)
+			}
+		case <-ctx.Done():
+			t.Fatal("no speech")
+		}
+	}
+	wait := func(check func(appstate.Snapshot) bool) {
+		t.Helper()
+		for !check(state.Snapshot()) {
+			select {
+			case <-ctx.Done():
+				t.Fatal("state did not update")
+			case <-time.After(time.Millisecond):
+			}
+		}
+	}
+	state.SetVoiceChoices(map[string]string{"dwarf:male": "none"})
+	send("shunned", "Dwarf") // Silenced races neither queue nor interrupt.
+	select {
+	case got := <-started:
+		t.Fatalf("silenced race spoke: %q", got)
+	case <-time.After(20 * time.Millisecond):
+	}
+	send("active", "Human")
+	expect("active")
+	send("silenced while active", "Dwarf")
+	send("queued one", "Human")
+	send("queued two", "Human")
+	wait(func(s appstate.Snapshot) bool { return s.Queued == 2 })
+	// Silencing the active race stops playback and prunes its queued messages.
+	state.SetVoiceChoices(map[string]string{"human:male": "none"})
+	wait(func(s appstate.Snapshot) bool { return s.PlaybackID == 0 && s.Queued == 0 })
+	state.SetVoiceChoices(nil)
+	send("restored", "Human")
+	expect("restored")
+}

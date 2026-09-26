@@ -2,6 +2,7 @@
 package appstate
 
 import (
+	"maps"
 	"sync"
 	"time"
 
@@ -51,6 +52,9 @@ type State struct {
 	value         Snapshot
 	stopAudio     chan uint64
 	speechChanges chan struct{}
+	// Voice choices stay outside Snapshot, which must remain comparable.
+	voiceMu      sync.RWMutex
+	voiceChoices map[string]string
 }
 
 func New(target, backend string, muted bool) *State {
@@ -137,4 +141,24 @@ func (s *State) SetSpeechFilters(filters SpeechFilters) {
 	case s.speechChanges <- struct{}{}:
 	default:
 	}
+}
+
+// SetVoiceChoices replaces the per race/gender selections ("race:gender" →
+// "narrator" or "none"; absent means the voices.json default) and wakes the
+// speech worker so they apply to active and queued speech immediately.
+func (s *State) SetVoiceChoices(choices map[string]string) {
+	s.voiceMu.Lock()
+	s.voiceChoices = maps.Clone(choices)
+	s.voiceMu.Unlock()
+	select {
+	case s.speechChanges <- struct{}{}:
+	default:
+	}
+}
+
+// VoiceChoices returns a copy of the current per race/gender selections.
+func (s *State) VoiceChoices() map[string]string {
+	s.voiceMu.RLock()
+	defer s.voiceMu.RUnlock()
+	return maps.Clone(s.voiceChoices)
 }

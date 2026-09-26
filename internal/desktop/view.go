@@ -4,8 +4,13 @@ package desktop
 
 import (
 	"fmt"
+	"maps"
+	"sort"
+	"strings"
+	"unicode"
 
 	"foreverdubbed/internal/appstate"
+	"foreverdubbed/internal/speech"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
@@ -51,27 +56,27 @@ type dashboard struct {
 	questTitle                       *widget.Check
 	questOptions                     *fyne.Container
 	root                             fyne.CanvasObject
-	headline                         *canvas.Text
-	hint                             *widget.Label
 	window, tile, audio              *statusCard
 	stop                             *widget.Button
 	skip                             *widget.Button
 	skipControl                      fyne.CanvasObject
+	tabSettings, tabVoices           *widget.Button
+	voiceSelects                     map[string]*widget.Select
+	voiceChoices                     map[string]string
+	onVoiceChoices                   func(map[string]string)
 }
 
-func newDashboard(version string, hide, quit, stop func(), queue func(bool), filters func(appstate.SpeechFilters)) *dashboard {
-	d := &dashboard{window: newStatusCard("Game window"), tile: newStatusCard("Dialogue tile"), audio: newStatusCard("Audio")}
+func newDashboard(version string, hide, quit, stop func(), queue func(bool), filters func(appstate.SpeechFilters), races []string, voiceChoices map[string]string, onVoiceChoices func(map[string]string)) *dashboard {
+	d := &dashboard{window: newStatusCard("Game window"), tile: newStatusCard("Dialogue tile"), audio: newStatusCard("Audio"), voiceSelects: map[string]*widget.Select{}, voiceChoices: maps.Clone(voiceChoices)}
+	if d.voiceChoices == nil {
+		d.voiceChoices = map[string]string{}
+	}
 	title := canvas.NewText("ForeverDubbed", gold)
 	title.TextSize = 27
 	title.TextStyle.Bold = true
 	subtitle := canvas.NewText("World of Warcraft companion", gold)
 	subtitle.TextSize = 14
 	banner := container.NewBorder(nil, nil, questMedallion(), nil, container.NewCenter(container.NewVBox(title, subtitle)))
-	d.headline = canvas.NewText("Bringing Azeroth to life.", ink)
-	d.headline.TextSize = 23
-	d.headline.TextStyle.Bold = true
-	d.hint = widget.NewLabel("Starting your companion…")
-	d.hint.Wrapping = fyne.TextWrapWord
 	d.stop = widget.NewButton("Stop", stop)
 	d.stop.Disable()
 	// The speech worker already advances the queue after cancelling the current
@@ -101,8 +106,25 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool), fil
 			container.NewVBox(d.npcSpeech)))
 
 	audioCard := container.NewVBox(d.audio.root, inset(3, container.NewHBox(questButtonWidget(d.stop), d.skipControl)))
-	header := container.NewVBox(d.headline, d.hint, questRule(), container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), questRule(), categories, d.queue)
+	header := container.NewVBox(container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), questRule(), categories, d.queue)
 	paper := parchment(container.NewVScroll(header))
+	voices := parchment(container.NewVScroll(d.voicePanel(races)))
+	voices.Hide()
+	d.tabSettings = widget.NewButton("Settings", func() {
+		paper.Show()
+		voices.Hide()
+		d.tabSettings.Disable()
+		d.tabVoices.Enable()
+	})
+	d.tabVoices = widget.NewButton("Voices", func() {
+		voices.Show()
+		paper.Hide()
+		d.tabVoices.Disable()
+		d.tabSettings.Enable()
+	})
+	d.tabSettings.Disable()
+	tabBar := container.NewGridWithColumns(2, questButtonWidget(d.tabSettings), questButtonWidget(d.tabVoices))
+	panels := container.NewStack(paper, voices)
 	privacy := canvas.NewText("Only your game window is captured. Speech stays on this computer.", gold)
 	privacy.TextSize = 12
 	privacy.TextStyle.Italic = true
@@ -110,8 +132,94 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool), fil
 	versionLabel.TextSize = 13
 	privacyNote := container.New(layout.NewCustomPaddedLayout(0, 10, 0, 0), container.NewCenter(privacy))
 	footer := container.NewVBox(privacyNote, container.NewHBox(container.NewCenter(versionLabel), layout.NewSpacer(), questButton("Minimize to tray", hide), questButton("Quit", quit)))
-	d.root = questFrame(container.NewBorder(inset(5, banner), inset(5, footer), nil, nil, paper))
+	d.root = questFrame(container.NewBorder(container.NewVBox(inset(5, banner), inset(2, tabBar)), inset(5, footer), nil, nil, panels))
+	// Set only after the selects above restored their saved selections, so
+	// building the tab never persists or replays user choices.
+	d.onVoiceChoices = onVoiceChoices
 	return d
+}
+
+// voicePanel lists one dropdown pair (male/female) per race. "Default" keeps
+// the voices.json mapping, "Narrator" uses the narrator voice, "None" stays
+// silent.
+func (d *dashboard) voicePanel(races []string) fyne.CanvasObject {
+	// Keep saved selections editable even if a race was removed from the
+	// configuration or the system backend is running without that file.
+	available := make(map[string]bool, len(races))
+	for _, race := range races {
+		available[race] = true
+	}
+	for key := range d.voiceChoices {
+		race, gender, ok := strings.Cut(key, ":")
+		if ok && race != "" && (gender == "male" || gender == "female") {
+			available[race] = true
+		}
+	}
+	races = make([]string, 0, len(available))
+	for race := range available {
+		races = append(races, race)
+	}
+	sort.Strings(races)
+	if len(races) == 0 {
+		note := widget.NewLabel("No races are available. Add race mappings to the voice configuration and restart the companion.")
+		note.Wrapping = fyne.TextWrapWord
+		return note
+	}
+	options := []string{"Default", "Narrator", "None"}
+	display := map[string]string{"": "Default", speech.VoiceNarrator: "Narrator", speech.VoiceNone: "None"}
+	bold := fyne.TextStyle{Bold: true}
+	rows := make([]fyne.CanvasObject, 0, len(races)+1)
+	rows = append(rows, container.NewGridWithColumns(3,
+		widget.NewLabelWithStyle("Race", fyne.TextAlignLeading, bold),
+		widget.NewLabelWithStyle("Male", fyne.TextAlignLeading, bold),
+		widget.NewLabelWithStyle("Female", fyne.TextAlignLeading, bold)))
+	for _, race := range races {
+		cells := make([]fyne.CanvasObject, 0, 3)
+		cells = append(cells, widget.NewLabel(raceLabel(race)))
+		for _, gender := range []string{"male", "female"} {
+			key := race + ":" + gender
+			sel := widget.NewSelect(options, func(value string) { d.setVoiceChoice(key, value) })
+			label, ok := display[d.voiceChoices[key]]
+			if !ok {
+				label = "Default"
+			}
+			sel.SetSelected(label)
+			d.voiceSelects[key] = sel
+			cells = append(cells, sel)
+		}
+		rows = append(rows, container.NewGridWithColumns(3, cells...))
+	}
+	return container.NewVBox(rows...)
+}
+
+func (d *dashboard) setVoiceChoice(key, label string) {
+	value := map[string]string{"Narrator": speech.VoiceNarrator, "None": speech.VoiceNone}[label]
+	if value == "" {
+		delete(d.voiceChoices, key)
+	} else {
+		d.voiceChoices[key] = value
+	}
+	if d.onVoiceChoices != nil {
+		d.onVoiceChoices(maps.Clone(d.voiceChoices))
+	}
+}
+
+var raceLabels = map[string]string{
+	"human": "Human", "orc": "Orc", "dwarf": "Dwarf", "nightelf": "Night Elf",
+	"undead": "Undead", "tauren": "Tauren", "gnome": "Gnome", "troll": "Troll",
+	"goblin": "Goblin", "skyborne": "Skyborne",
+}
+
+func raceLabel(id string) string {
+	if label, ok := raceLabels[id]; ok {
+		return label
+	}
+	runes := []rune(id)
+	if len(runes) == 0 {
+		return id
+	}
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
 }
 
 func (d *dashboard) showQuestOptions() {
@@ -139,42 +247,17 @@ func (d *dashboard) render(s appstate.Snapshot) {
 		d.queue.Checked = s.QueueSpeech
 		d.queue.Refresh()
 	}
-	headline, hint := "Waiting for your adventure", "Open WoW and keep its game window available."
 	win, winDetail := "Waiting", "No game frames available"
 	tile, tileDetail := "Searching", "In WoW, use /fdb unlock"
 	if s.Window {
 		win, winDetail = "Detected", "Receiving game-window frames"
-		headline, hint = "Your game is connected", "Use /fdb test in WoW to check the addon connection."
 	}
 	if s.Tile {
 		tile, tileDetail = "Connected", "Reading dialogue from the addon"
-		headline, hint = "Ready for the next story", "Talk to an NPC or open a quest. New dialogue interrupts the previous speech."
-	}
-	if s.Tile && s.QueueSpeech {
-		hint = "Talk to an NPC or open a quest. New dialogue waits for the current speech to finish."
-	}
-	if !s.Ready {
-		headline, hint = "Starting your companion", "Loading speech and preparing game-window capture…"
-	}
-	if s.Audio == "Preparing speech" {
-		headline = "Preparing the next voice"
-	}
-	if s.Audio == "Playing audio" || s.Audio == "Speaking (system voice)" {
-		headline = "A voice for every story"
 	}
 	if s.Stopped {
-		headline, hint = "Companion stopped", "Quit and reopen the app to start again."
 		win, tile = "Stopped", "Stopped"
 	}
-	if s.FatalError != "" {
-		headline, hint = "Unable to start", s.FatalError
-	}
-	if s.SpeechError != "" {
-		hint = "Speech failed: " + s.SpeechError
-	}
-	d.headline.Text = headline
-	d.headline.Refresh()
-	d.hint.SetText(hint)
 	d.window.set(win, winDetail, s.Window)
 	d.tile.set(tile, tileDetail, s.Tile)
 	audio := s.Audio
@@ -183,7 +266,11 @@ func (d *dashboard) render(s appstate.Snapshot) {
 	}
 	playing := !s.Stopped && (s.Audio == "Playing audio" || s.Audio == "Speaking (system voice)")
 	audioDetail := ""
-	if playing && s.Voice != "" {
+	if s.FatalError != "" {
+		audioDetail = "Unable to start: " + s.FatalError
+	} else if s.SpeechError != "" {
+		audioDetail = "Speech failed: " + s.SpeechError
+	} else if playing && s.Voice != "" {
 		audioDetail = s.Voice
 		if s.Queued > 0 {
 			audioDetail += fmt.Sprintf(" · %d queued", s.Queued)

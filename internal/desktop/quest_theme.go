@@ -81,6 +81,9 @@ func (t companionTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.
 		return soft
 	case theme.ColorNameInputBackground, theme.ColorNameButton:
 		return color.NRGBA{R: 194, G: 157, B: 94, A: 255}
+	case theme.ColorNameMenuBackground:
+		// Dropdown popups show ink text; keep them on a parchment tone.
+		return color.NRGBA{R: 220, G: 181, B: 119, A: 255}
 	case theme.ColorNameHover, theme.ColorNameFocus:
 		return color.NRGBA{R: 97, G: 57, B: 20, A: 40}
 	case theme.ColorNamePressed:

@@ -6,13 +6,14 @@ import (
 
 	"foreverdubbed/internal/appstate"
 	"foreverdubbed/internal/protocol"
+	"foreverdubbed/internal/speech"
 )
 
 func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func(context.Context, protocol.Message) error, state *appstate.State) {
 	var cancel context.CancelFunc
 	var finished chan error
 	var nextID uint64
-	var activeKind byte
+	var active protocol.Message
 	var pending []protocol.Message
 	updateQueue := func() { state.Update(func(v *appstate.Snapshot) { v.Queued = len(pending) }) }
 	stopCurrent := func() {
@@ -35,7 +36,7 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 				return
 			}
 		}
-		activeKind = message.Kind
+		active = message
 		nextID++
 		state.Update(func(v *appstate.Snapshot) {
 			v.Audio = "Preparing speech"
@@ -53,11 +54,13 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 		if ctx.Err() != nil {
 			return
 		}
-		// Remove disabled categories before starting any queued message.
+		// Remove disabled categories and silenced races before starting any
+		// queued message.
 		filters := state.Snapshot().Filters
+		choices := state.VoiceChoices()
 		kept := pending[:0]
 		for _, message := range pending {
-			if filters.Allows(message.Kind) {
+			if filters.Allows(message.Kind) && !speech.VoiceMuted(choices, message.Race, message.Gender) {
 				kept = append(kept, message)
 			}
 		}
@@ -66,7 +69,7 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 			pending = kept
 			updateQueue()
 		}
-		if finished != nil && !filters.Allows(activeKind) {
+		if finished != nil && (!filters.Allows(active.Kind) || speech.VoiceMuted(choices, active.Race, active.Gender)) {
 			stopCurrent()
 		}
 		// Switching back to interrupt mode keeps only the newest waiting message.
@@ -108,6 +111,9 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 				continue
 			}
 			if !state.Snapshot().Filters.Allows(message.Kind) {
+				continue
+			}
+			if speech.VoiceMuted(state.VoiceChoices(), message.Race, message.Gender) {
 				continue
 			}
 			if state.Snapshot().QueueSpeech && finished != nil {

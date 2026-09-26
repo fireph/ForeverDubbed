@@ -59,7 +59,7 @@ func TestResolutionAndVoiceSelection(t *testing.T) {
 				t.Fatalf("got %+v", got)
 			}
 			if got.Race == "Skyborne" {
-				voice, err := voices.Voice(got, "")
+				voice, err := voices.Voice(got, "", nil)
 				want := "skyborne_male"
 				if got.Gender == "female" {
 					want = "skyborne_female"

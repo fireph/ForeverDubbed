@@ -114,7 +114,34 @@ func raceKey(race string) string {
 	return s
 }
 
-func (c *Config) Voice(m protocol.Message, override string) (string, error) {
+// Per race/gender voice selections made in the desktop Voices tab. An absent
+// map entry keeps the voices.json default.
+const (
+	VoiceNarrator = "narrator"
+	VoiceNone     = "none"
+)
+
+// choiceKey mirrors the unknown→male voice fallback: messages without a known
+// gender follow the male selection.
+func choiceKey(race, gender string) string {
+	if gender = strings.ToLower(gender); gender != "female" {
+		gender = "male"
+	}
+	return raceKey(race) + ":" + gender
+}
+
+// VoiceMuted reports whether the user silenced this race/gender combination.
+func VoiceMuted(choices map[string]string, race, gender string) bool {
+	return choices[choiceKey(race, gender)] == VoiceNone
+}
+
+// Voice resolves the profile for a message. An empty voice with a nil error
+// means the user silenced this race/gender in the desktop Voices tab.
+func (c *Config) Voice(m protocol.Message, override string, choices map[string]string) (string, error) {
+	// None is a mute policy, including explicit voice and NPC overrides.
+	if VoiceMuted(choices, m.Race, m.Gender) {
+		return "", nil
+	}
 	voice := override
 	if voice == "" {
 		voice = c.NPCOverrides[m.NPCID]
@@ -122,6 +149,12 @@ func (c *Config) Voice(m protocol.Message, override string) (string, error) {
 	gender := strings.ToLower(m.Gender)
 	if gender != "male" && gender != "female" {
 		gender = "unknown"
+	}
+	if voice == "" {
+		switch choices[choiceKey(m.Race, gender)] {
+		case VoiceNarrator:
+			voice = c.Default[gender]
+		}
 	}
 	if voice == "" {
 		mapping := c.Races[raceKey(m.Race)]

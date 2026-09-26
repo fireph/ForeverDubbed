@@ -54,16 +54,6 @@
       "male": "goblin_male",
       "female": "goblin_female",
       "unknown": "goblin_male"
-    },
-    "bloodelf": {
-      "male": "bloodelf_male",
-      "female": "bloodelf_female",
-      "unknown": "bloodelf_male"
-    },
-    "draenei": {
-      "male": "draenei_male",
-      "female": "draenei_female",
-      "unknown": "draenei_male"
     }
   },
   "npc_overrides": {},
@@ -146,18 +136,6 @@
     "goblin_female": {
       "voice": "custom/goblin_female.safetensors",
       "decode_steps": 4
-    },
-    "bloodelf_male": {
-      "voice": "charles"
-    },
-    "bloodelf_female": {
-      "voice": "fantine"
-    },
-    "draenei_male": {
-      "voice": "jean"
-    },
-    "draenei_female": {
-      "voice": "mary"
     },
     "narrator_male": {
       "voice": "custom/narrator_male.safetensors",

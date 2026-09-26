@@ -19,8 +19,8 @@ func TestVoiceSelection(t *testing.T) {
 		{"Skyborne Elf", "female", "", "", "skyborne_female"},
 		{"Goblin", "male", "", "", "goblin_male"},
 		{"Goblin", "female", "", "", "goblin_female"},
-		{"Blood Elf", "female", "", "", "bloodelf_female"},
-		{"Draenei", "male", "", "", "draenei_male"},
+		{"Blood Elf", "female", "", "", "narrator_male"},
+		{"Draenei", "male", "", "", "narrator_male"},
 		{"Night Elf", "female", "", "", "nightelf_female"},
 		{"Scourge", "male", "", "", "undead_male"},
 		{"Orc", "", "", "", "orc_male"},
@@ -34,13 +34,57 @@ func TestVoiceSelection(t *testing.T) {
 		{"Human", "female", "4949", "", "orc_male"},
 		{"Human", "female", "4949", "gnome_female", "gnome_female"},
 	} {
-		got, err := c.Voice(protocol.Message{Race: tc.race, Gender: tc.gender, NPCID: tc.npc}, tc.override)
+		got, err := c.Voice(protocol.Message{Race: tc.race, Gender: tc.gender, NPCID: tc.npc}, tc.override, nil)
 		if err != nil || got != tc.want {
 			t.Fatalf("%+v: %s %v", tc, got, err)
 		}
 	}
-	if _, err := c.Voice(protocol.Message{}, "missing"); err == nil {
+	if _, err := c.Voice(protocol.Message{}, "missing", nil); err == nil {
 		t.Fatal("accepted unknown voice")
+	}
+}
+
+func TestVoiceChoices(t *testing.T) {
+	c, err := Load("../../tts/voices.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.NPCOverrides["4949"] = "orc_male"
+	choices := map[string]string{"human:male": VoiceNarrator, "orc:female": VoiceNone, "gnome:male": VoiceNone, "undead:female": VoiceNone}
+	for _, tc := range []struct {
+		name, race, gender, npc, override, want string
+	}{
+		{"narrator replaces race voice", "Human", "male", "", "", "narrator_male"},
+		{"other gender keeps race voice", "Human", "female", "", "", "human_female"},
+		{"none silences", "Orc", "female", "", "", ""},
+		{"unknown gender follows male choice", "Gnome", "", "", "", ""},
+		{"scourge follows undead choice", "Scourge", "female", "", "", ""},
+		{"npc override beats choice", "Human", "male", "4949", "", "orc_male"},
+		{"voice flag beats choice", "Human", "male", "", "troll_male", "troll_male"},
+		{"none beats npc override", "Orc", "female", "4949", "", ""},
+		{"none beats voice flag", "Orc", "female", "", "troll_male", ""},
+		{"none beats both overrides", "Orc", "female", "4949", "troll_male", ""},
+		{"none with unknown gender beats override", "Gnome", "unknown", "", "troll_male", ""},
+	} {
+		got, err := c.Voice(protocol.Message{Race: tc.race, Gender: tc.gender, NPCID: tc.npc}, tc.override, choices)
+		if err != nil || got != tc.want {
+			t.Fatalf("%s: got %q, %v; want %q", tc.name, got, err, tc.want)
+		}
+	}
+	for _, tc := range []struct {
+		race, gender string
+		muted        bool
+	}{
+		{"Orc", "female", true},
+		{"Orc", "male", false},
+		{"Gnome", "female", false},
+		{"Gnome", "unknown", true},
+		{"Scourge", "Female", true},
+		{"", "", false},
+	} {
+		if got := VoiceMuted(choices, tc.race, tc.gender); got != tc.muted {
+			t.Fatalf("VoiceMuted(%q, %q) = %v, want %v", tc.race, tc.gender, got, tc.muted)
+		}
 	}
 }
 

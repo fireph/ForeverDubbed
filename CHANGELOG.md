@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add a desktop **Voices** tab with a Male and Female dropdown for every race: Default (the `tts/voices.json` mapping), Narrator, or None. Selections persist in the desktop preferences and apply immediately, including stopping and pruning silenced active and queued speech. None also silences explicit voice and NPC overrides, and applies to the system speech backend.
+- Remove Blood Elf and Draenei voice profiles; neither race is in classic WoW. `tts/voices.json` now ships 21 profiles (10 races × 2 genders plus the narrator), all custom voice states.
+
 ## 0.6.7
 
 - Check GitHub releases at desktop startup on Windows and macOS. Confirm updates with OK, show download and installation progress, then restart automatically. Verify release checksums, reject unsafe archives, preserve macOS signing identity, and roll back failed file replacements.

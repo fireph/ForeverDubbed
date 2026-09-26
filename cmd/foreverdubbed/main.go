@@ -101,14 +101,29 @@ func run() error {
 		return decodeImages(files, identities, os.Stdout)
 	}
 	guiMode := desktopEnabled && !headless && !list && testText == "" && snapshot == ""
+	// The desktop Voices tab lists races from the voice config, so GUI mode
+	// needs it loaded before the window opens.
+	var config *speech.Config
+	var configErr error
+	if guiMode {
+		config, configErr = speech.Load(configPath)
+	}
 	state := appstate.New(captureApp, backend, mute)
 	work := func() error {
+		// Report configuration failures inside the window, like other startup
+		// errors. Capture-only mode can still run without a voice configuration.
+		if configErr != nil && !mute && backend != "system" {
+			return fmt.Errorf("voice config: %w", configErr)
+		}
 		var speak func(context.Context, protocol.Message) error
 		if !mute && snapshot == "" || list || testText != "" {
 			if backend != "system" {
-				config, err := speech.Load(configPath)
-				if err != nil {
-					return fmt.Errorf("voice config: %w", err)
+				if config == nil {
+					loaded, err := speech.Load(configPath)
+					if err != nil {
+						return fmt.Errorf("voice config: %w", err)
+					}
+					config = loaded
 				}
 				if list {
 					ids := make([]string, 0, len(config.Profiles))
@@ -126,14 +141,13 @@ func run() error {
 					return err
 				}
 				defer local.Close()
-				log.Print("PocketTTS.cpp: native CPU streaming ready")
-				speak = func(ctx context.Context, m protocol.Message) error {
-					id, err := config.Voice(m, voice)
-					if err != nil {
-						return err
-					}
+				local.ChoiceSource = state.VoiceChoices
+				local.OnVoice = func(m protocol.Message, id string) {
 					log.Printf("Voice %s (race=%q gender=%q NPC=%q)", id, m.Race, m.Gender, m.NPCID)
 					state.Update(func(v *appstate.Snapshot) { v.Voice = id })
+				}
+				log.Print("PocketTTS.cpp: native CPU streaming ready")
+				speak = func(ctx context.Context, m protocol.Message) error {
 					ctx = platform.WithPlaybackObserver(ctx, func() { state.Audio("Playing audio") })
 					ctx = platform.WithPlaybackProgress(ctx, func(played, total time.Duration, known bool) {
 						state.Update(func(v *appstate.Snapshot) { v.Played, v.Duration, v.DurationKnown = played, total, known })
@@ -142,6 +156,9 @@ func run() error {
 				}
 			} else {
 				speak = func(ctx context.Context, m protocol.Message) error {
+					if speech.VoiceMuted(state.VoiceChoices(), m.Race, m.Gender) {
+						return nil
+					}
 					state.Audio("Speaking (system voice)")
 					return platform.Speak(ctx, m.Speech(), voice, rate)
 				}
@@ -169,7 +186,14 @@ func run() error {
 		return captureLoop(ctx, captureSettings{poll: poll, scan: scan, emitJSON: !guiMode, mute: mute}, state, identities, speak)
 	}
 	if guiMode {
-		return runDesktop(ctx, stop, state, work)
+		var races []string
+		if config != nil {
+			for race := range config.Races {
+				races = append(races, race)
+			}
+			sort.Strings(races)
+		}
+		return runDesktop(ctx, stop, state, races, work)
 	}
 	return work()
 }

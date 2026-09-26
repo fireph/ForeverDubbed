@@ -20,8 +20,13 @@ type Synthesizer interface {
 	Close() error
 }
 type Local struct {
-	Config     *Config
-	Override   string
+	Config   *Config
+	Override string
+	// ChoiceSource returns the user's per race/gender voice selections at speak
+	// time, so desktop changes apply without restarting. Nil means defaults.
+	ChoiceSource func() map[string]string
+	// OnVoice reports the resolved profile used for this utterance, once.
+	OnVoice    func(protocol.Message, string)
 	PresetsDir string
 	Engine     Synthesizer
 	Play       func(context.Context, int, <-chan []byte) error
@@ -78,9 +83,19 @@ func (l *Local) voiceFile(name string) (string, int, error) {
 // Speak starts one continuous PCM playback queue while native inference produces
 // short chunks. Both native generation and playback stop on cancellation.
 func (l *Local) Speak(parent context.Context, m protocol.Message) error {
-	name, err := l.Config.Voice(m, l.Override)
+	var choices map[string]string
+	if l.ChoiceSource != nil {
+		choices = l.ChoiceSource()
+	}
+	name, err := l.Config.Voice(m, l.Override, choices)
 	if err != nil {
 		return err
+	}
+	if name == "" {
+		return nil // Silenced by the user's race/gender voice selection.
+	}
+	if l.OnVoice != nil {
+		l.OnVoice(m, name)
 	}
 	voice, steps, err := l.voiceFile(name)
 	if err != nil {

@@ -46,6 +46,31 @@ func TestConcurrentStatusKeepsLastDialogue(t *testing.T) {
 	}
 }
 
+func TestVoiceChoicesNotifyAndCopy(t *testing.T) {
+	s := New("game", "pocket", false)
+	if got := s.VoiceChoices(); got != nil {
+		t.Fatal("choices should start empty", got)
+	}
+	s.SetVoiceChoices(map[string]string{"orc:male": "none"})
+	select {
+	case <-s.SpeechChanges():
+	default:
+		t.Fatal("voice choice change did not wake the speech worker")
+	}
+	got := s.VoiceChoices()
+	if got["orc:male"] != "none" {
+		t.Fatal("choice not stored", got)
+	}
+	got["orc:male"] = "mutated"
+	if s.VoiceChoices()["orc:male"] != "none" {
+		t.Fatal("caller mutated shared state")
+	}
+	s.SetVoiceChoices(map[string]string{"human:female": "narrator"})
+	if s.VoiceChoices()["orc:male"] != "" {
+		t.Fatal("stale choice survived replacement")
+	}
+}
+
 func TestSpeechCategoryMapping(t *testing.T) {
 	for _, tc := range []struct {
 		filters SpeechFilters

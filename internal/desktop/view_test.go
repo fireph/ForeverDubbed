@@ -21,7 +21,9 @@ func TestDashboardLiveStates(t *testing.T) {
 	stops := 0
 	queued := false
 	var filters appstate.SpeechFilters
-	d := newDashboard("0.5.0", func() {}, func() {}, func() { stops++ }, func(enabled bool) { queued = enabled }, func(f appstate.SpeechFilters) { filters = f })
+	var choices map[string]string
+	d := newDashboard("0.5.0", func() {}, func() {}, func() { stops++ }, func(enabled bool) { queued = enabled }, func(f appstate.SpeechFilters) { filters = f },
+		[]string{"human", "nightelf", "orc"}, map[string]string{"nightelf:female": "narrator"}, func(c map[string]string) { choices = c })
 	w := a.NewWindow("ForeverDubbed")
 	defer w.Close()
 	w.SetContent(d.root)
@@ -30,9 +32,6 @@ func TestDashboardLiveStates(t *testing.T) {
 	d.render(state.Snapshot())
 	if d.skipControl.Visible() || !d.skip.Disabled() {
 		t.Fatal("skip available without queue mode")
-	}
-	if d.headline.Text != "Starting your companion" {
-		t.Fatal(d.headline.Text)
 	}
 	if !d.quests.Checked || !d.conversations.Checked || !d.npcSpeech.Checked {
 		t.Fatal("filters should default on")
@@ -172,5 +171,60 @@ func TestDashboardLiveStates(t *testing.T) {
 	d.render(state.Snapshot())
 	if d.window.value.Text != "Stopped" || d.audio.value.Text != "Stopped" {
 		t.Fatal("stale running status after stop")
+	}
+	// Voices tab: saved selections render, and edits report compact maps.
+	if len(d.voiceSelects) != 6 {
+		t.Fatal("missing race/gender dropdowns", len(d.voiceSelects))
+	}
+	if d.tabSettings.Disabled() == d.tabVoices.Disabled() {
+		t.Fatal("exactly one tab button must start disabled")
+	}
+	test.Tap(d.tabVoices)
+	if !d.tabVoices.Disabled() || d.tabSettings.Disabled() {
+		t.Fatal("Voices tab did not activate")
+	}
+	test.Tap(d.tabSettings)
+	if !d.tabSettings.Disabled() || d.tabVoices.Disabled() {
+		t.Fatal("Settings tab did not activate")
+	}
+	for key, want := range map[string]string{
+		"human:male": "Default", "human:female": "Default",
+		"orc:male": "Default", "orc:female": "Default",
+		"nightelf:male": "Default", "nightelf:female": "Narrator",
+	} {
+		if d.voiceSelects[key].Selected != want {
+			t.Fatalf("%s shows %q, want %q", key, d.voiceSelects[key].Selected, want)
+		}
+	}
+	if choices != nil {
+		t.Fatal("building the tab must not replay saved choices", choices)
+	}
+	d.voiceSelects["orc:male"].SetSelected("None")
+	if choices["orc:male"] != "none" || choices["nightelf:female"] != "narrator" {
+		t.Fatal("dropdown did not report selection", choices)
+	}
+	d.voiceSelects["nightelf:female"].SetSelected("Default")
+	if _, ok := choices["nightelf:female"]; ok || len(choices) != 1 {
+		t.Fatal("default selection must drop the stored entry", choices)
+	}
+	d.voiceSelects["orc:female"].SetSelected("Narrator")
+	if choices["orc:female"] != "narrator" || choices["orc:male"] != "none" {
+		t.Fatal("selections are not per race/gender", choices)
+	}
+}
+
+func TestDashboardSavedVoicesWithoutConfig(t *testing.T) {
+	a := test.NewApp()
+	defer a.Quit()
+	var choices map[string]string
+	d := newDashboard("test", func() {}, func() {}, func() {}, func(bool) {}, func(appstate.SpeechFilters) {},
+		nil, map[string]string{"orc:male": "none", "human:female": "obsolete"}, func(c map[string]string) { choices = c })
+	d.render(appstate.New("game", "system", false).Snapshot())
+	if d.voiceSelects["orc:male"].Selected != "None" || d.voiceSelects["human:female"].Selected != "Default" {
+		t.Fatal("saved choices are not editable without race mappings")
+	}
+	d.voiceSelects["orc:male"].SetSelected("Default")
+	if len(choices) != 0 {
+		t.Fatal("could not clear saved mute choice", choices)
 	}
 }
