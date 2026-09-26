@@ -5,6 +5,7 @@ package desktop
 import (
 	"foreverdubbed/internal/update"
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"testing"
@@ -19,17 +20,38 @@ func TestUpdatePromptRequiresConfirmation(t *testing.T) {
 	accepted := 0
 	prompt := updatePrompt(w, "v1.2.3", "1.2.2", func() { accepted++ })
 	prompt.Show()
-	content := prompt.Content.(*fyne.Container)
-	buttons := content.Objects[2].(*fyne.Container)
-	test.Tap(buttons.Objects[0].(*widget.Button))
+	later, ok := dialogButton(prompt.Content, "Later"), dialogButton(prompt.Content, "OK")
+	if later == nil || ok == nil {
+		t.Fatal("prompt must offer Later and OK actions")
+	}
+	test.Tap(later)
 	if accepted != 0 || prompt.Visible() {
 		t.Fatal("Later must dismiss without downloading")
 	}
 	prompt.Show()
-	test.Tap(buttons.Objects[1].(*widget.Button))
+	test.Tap(ok)
 	if accepted != 1 || prompt.Visible() {
 		t.Fatal("OK must start exactly one update")
 	}
+}
+
+// Look buttons up by label so the tests do not depend on decorative layering.
+func dialogButton(root fyne.CanvasObject, label string) *widget.Button {
+	switch o := root.(type) {
+	case *widget.Button:
+		if o.Text == label {
+			return o
+		}
+	case *fyne.Container:
+		for _, child := range o.Objects {
+			if button := dialogButton(child, label); button != nil {
+				return button
+			}
+		}
+	case *container.ThemeOverride:
+		return dialogButton(o.Content, label)
+	}
+	return nil
 }
 func TestUpdateProgressStages(t *testing.T) {
 	a := test.NewApp()

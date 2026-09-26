@@ -16,9 +16,26 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
+
+// The opaque frame covers the popup background Fyne draws behind the content.
+// The body takes the stretch area of a border layout so wrapped text can never
+// displace the heading or the action row when the dialog size is fixed.
+func updateDialog(title string, body fyne.CanvasObject, actions ...fyne.CanvasObject) fyne.CanvasObject {
+	heading := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	top := container.NewVBox(heading, questRule())
+	var bottom fyne.CanvasObject
+	if len(actions) > 0 {
+		row := make([]fyne.CanvasObject, 0, len(actions)+1)
+		row = append(row, layout.NewSpacer())
+		row = append(row, actions...)
+		bottom = container.NewHBox(row...)
+	}
+	return questFrame(parchment(container.NewBorder(top, bottom, nil, nil, inset(5, body))))
+}
 
 type updateProgress struct {
 	root  fyne.CanvasObject
@@ -27,10 +44,11 @@ type updateProgress struct {
 }
 
 func newUpdateProgress() *updateProgress {
+	// Stage lines stay single-line so the label keeps a constant minimum
+	// height in fixed-size dialogs.
 	label := widget.NewLabel("Preparing update…")
-	label.Wrapping = fyne.TextWrapWord
 	bar := widget.NewProgressBar()
-	return &updateProgress{container.NewVBox(label, bar), label, bar}
+	return &updateProgress{inset(5, container.NewVBox(label, bar)), label, bar}
 }
 func (v *updateProgress) render(p update.Progress) {
 	text := p.Stage
@@ -80,8 +98,8 @@ func downloadUpdate(ctx context.Context, w fyne.Window, stop context.CancelFunc,
 	view := newUpdateProgress()
 	progress := widget.NewModalPopUp(container.NewVBox(), w.Canvas())
 	cancelButton := widget.NewButton("Cancel", func() { cancel(); progress.Hide() })
-	progress.Content = container.NewVBox(widget.NewLabelWithStyle("Updating ForeverDubbed", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), view.root, cancelButton)
-	progress.Resize(fyne.NewSize(440, 180))
+	progress.Content = updateDialog("Updating ForeverDubbed", view.root, questButtonWidget(cancelButton))
+	progress.Resize(fyne.NewSize(460, 240))
 	progress.Show()
 	go func() {
 		defer cancel()
@@ -132,8 +150,8 @@ func RunUpdater(planPath string) error {
 	a.Settings().SetTheme(companionTheme{theme.DefaultTheme()})
 	w := a.NewWindow("Updating ForeverDubbed")
 	view := newUpdateProgress()
-	w.SetContent(container.NewPadded(view.root))
-	w.Resize(fyne.NewSize(460, 150))
+	w.SetContent(updateDialog("Updating ForeverDubbed", view.root))
+	w.Resize(fyne.NewSize(480, 240))
 	w.CenterOnScreen()
 	// Replacement must finish or roll back before this window can be closed.
 	w.SetCloseIntercept(func() {})
@@ -163,8 +181,8 @@ func RunUpdater(planPath string) error {
 				w.SetCloseIntercept(a.Quit)
 				message := widget.NewLabel(fmt.Sprintf("%v\n\nUpdate files and logs: %s", err, filepath.Dir(planPath)))
 				message.Wrapping = fyne.TextWrapWord
-				w.SetContent(container.NewVBox(message, widget.NewButton("Close", a.Quit)))
-				w.Resize(fyne.NewSize(520, 280))
+				w.SetContent(updateDialog("Update failed", message, questButton("Close", a.Quit)))
+				w.Resize(fyne.NewSize(560, 340))
 			})
 			return
 		}
@@ -178,18 +196,17 @@ func updatePrompt(w fyne.Window, available, current string, accept func()) *widg
 	text := widget.NewLabel(fmt.Sprintf("ForeverDubbed %s is available (you have %s).\n\nPress OK to download and install it. The app will restart when the update is ready.", available, current))
 	text.Wrapping = fyne.TextWrapWord
 	popup := widget.NewModalPopUp(container.NewVBox(), w.Canvas())
-	later := widget.NewButton("Later", popup.Hide)
-	ok := widget.NewButton("OK", func() { popup.Hide(); accept() })
-	ok.Importance = widget.HighImportance
-	popup.Content = container.NewVBox(widget.NewLabelWithStyle("Update available", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), text, container.NewHBox(later, ok))
-	popup.Resize(fyne.NewSize(440, 220))
+	popup.Content = updateDialog("Update available", text,
+		questButton("Later", popup.Hide),
+		questButton("OK", func() { popup.Hide(); accept() }))
+	popup.Resize(fyne.NewSize(460, 280))
 	return popup
 }
 func showUpdateError(err error, w fyne.Window) {
 	label := widget.NewLabel(err.Error())
 	label.Wrapping = fyne.TextWrapWord
 	popup := widget.NewModalPopUp(container.NewVBox(), w.Canvas())
-	popup.Content = container.NewVBox(widget.NewLabelWithStyle("Update failed", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), label, widget.NewButton("OK", popup.Hide))
-	popup.Resize(fyne.NewSize(480, 240))
+	popup.Content = updateDialog("Update failed", label, questButton("OK", popup.Hide))
+	popup.Resize(fyne.NewSize(500, 300))
 	popup.Show()
 }
