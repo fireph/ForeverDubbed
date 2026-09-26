@@ -1,12 +1,77 @@
 # Changelog
 
+## 0.9.1
+
+- Enable **Queue new dialogue** by default when no preference has been saved. Preserve existing queue settings.
+- Refresh the README with current setup instructions and playback controls.
+
+## 0.9.0
+
+- Read text enclosed in `<...>` with the narrator voice, omitting the brackets from speech. Resume the NPC's voice for surrounding dialogue.
+- Support multiple and multiline narrator passages in the same utterance while keeping playback continuous.
+
+## 0.8.9
+
+- Fix **Stop all audio** acting like Skip: Stop now cancels the current line and clears queued dialogue; Skip cancels only the current line and advances the queue.
+- Apply the distinction to desktop buttons, WoW slash commands, minimap clicks, and keybindings. New dialogue can still play after Stop.
+
+## 0.8.8
+
+- Use dedicated addon logo artwork for the minimap button.
+- Enlarge the minimap icon from 20×20 to 26×26 and add a circular mask to fill the border without showing square corners.
+
+## 0.8.7
+
+- Replace the generic book minimap icon with Forever Dubbed artwork, bundled as a transparent TGA texture.
+
+## 0.8.6
+
+- Regenerate the Windows executable's compiled icon resource to match the updated artwork.
+- Add a build test that detects an outdated compiled icon after the source ICO changes.
+
+## 0.8.5
+
+- Replace `%s` placeholders in world emotes with the speaker's name, fixing narration such as “Percent attempts to run away in fear.” Read emotes with the narrator voice.
+- Add narrator introductions such as “Thrall says,” “yells,” or “whispers” before NPC dialogue. Keep the NPC's resolved voice for the dialogue itself and avoid repeating names in system speech.
+- Add a saved **Voice volume** slider below Read aloud, from 0–100%. Apply changes during native playback; system speech uses the selected level for the next utterance.
+
+## 0.8.4
+
+- Bundle the addon with the desktop app and automatically install or update it in the selected game's `Interface/AddOns` directory. Preserve newer addon versions and unrelated files.
+- Discover WoW Forever in standard Windows locations and the macOS Applications folder. Add a prominent **Locate WoW…** button and native file picker when the game cannot be found.
+- Report the loaded addon version through the data square, exposed as the compact `v` JSON field. Extend FDB5 with flags 4 while retaining support for older messages.
+- Announce installation and update instructions with the narrator voice. Show Restart only for a fresh installation and `/reload` for an existing addon update; clear the notice when the current version is received.
+- Check installed files even while WoW is closed, avoiding stale reload notices when the addon is already current. Show permission recovery instructions with the destination folder and Windows administrator guidance.
+- Improve addon notices with readable text and a red information icon. Rename status labels to **Game capture working**, **To reposition: /fdb unlock**, and **Non-quest dialog**.
+- Restore automatic hiding of the locked data square after dialogue or startup version reporting expires. Keep the unlocked square visible for positioning.
+
+## 0.8.2
+
+- Restyle update prompts, progress displays, and error dialogs to match the desktop theme, with readable text and consistently positioned action buttons.
+
+## 0.8.1
+
+- Fix the WoW Forever Key Bindings section header displaying `HEADER_FOREVERDUBBED`; use the modern Category attribute while retaining the legacy header for older clients.
+- Label addon actions **Skip current audio** and **Stop all audio** in Key Bindings and the minimap tooltip.
+- Refine the application icon and desktop banner sizing, and improve build caching.
+
 ## 0.8.0
 
-- Fix the binding section header showing a raw `HEADER_FOREVERDUBBED` entry in WoW Forever's Key Bindings UI: the bindings now use the modern `Category` attribute resolved through the existing `BINDING_HEADER_FOREVERDUBBED` text, keeping the legacy `header` attribute for older clients.
-- Rename the two actions to **Skip current audio** and **Stop all audio** in the Key Bindings UI and the minimap button tooltip.
 - Use the new Forever Dubbed banner for the centered desktop header and the square logo for window/tray icons, the Windows executable icon, and the macOS app bundle icon.
 - Add a desktop **Voices** tab with a Male and Female dropdown for every race: Default (the `tts/voices.json` mapping), Narrator, or None. Selections persist in the desktop preferences and apply immediately, including stopping and pruning silenced active and queued speech. None also silences explicit voice and NPC overrides, and applies to the system speech backend.
 - Remove Blood Elf and Draenei voice profiles; neither race is in classic WoW. `tts/voices.json` now ships 21 profiles (10 races × 2 genders plus the narrator), all custom voice states.
+
+## 0.7.1
+
+- Fix release packaging still requiring the removed Windows `.cmd` launcher. Launch the portable app directly with `foreverdubbed.exe`.
+
+## 0.7.0
+
+- Add Windows installer packaging and reorganize build tools, runtime files, and voice assets.
+- Use addon metadata as the development version source and release tags for packaged builds. Generate release notes from commits since the previous release.
+- Improve native speech generation to prevent short utterances ending before speech begins, and normalize sentence endings around punctuation.
+- Improve voice cloning tools and handling of short voice references; standardize asset paths and strengthen update package validation.
+- Refresh Night Elf voice states.
 
 ## 0.6.7
 
