@@ -85,7 +85,8 @@
       "voice": "custom/dwarf_male.safetensors"
     },
     "dwarf_female": {
-      "voice": "custom/dwarf_female.safetensors"
+      "voice": "custom/dwarf_female.safetensors",
+      "decode_steps": 2
     },
     "nightelf_male": {
       "voice": "custom/nightelf_male.safetensors"
