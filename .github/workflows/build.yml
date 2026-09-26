@@ -12,8 +12,8 @@ jobs:
     name: Build macOS (arm64)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.27.1'
           cache: false
@@ -24,7 +24,7 @@ jobs:
           llvm-config-18 --bindir >> "$GITHUB_PATH"
       - name: Cache OSXCross
         id: cross
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .runtime/osxcross
           key: osxcross-llvm18-ubuntu24-27d21e49-sdk14.5-v2
@@ -71,7 +71,7 @@ jobs:
         run: |
           source scripts/macos-cross-env.sh "$TARGET_ARCH"
           go run ./tools/build -target darwin -arch "$TARGET_ARCH" -native-dir ".runtime/native-darwin-$TARGET_ARCH" -mac-unsigned
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-bundle-arm64${{ github.event_name == 'pull_request' && '-unsigned' || '' }}
           path: dist/ForeverDubbed-mac-arm64.zip
@@ -82,8 +82,8 @@ jobs:
     name: Build Windows (amd64)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.27.1'
           cache: false
@@ -97,7 +97,7 @@ jobs:
           go run ./tools/models -out .runtime/native-windows
       - name: Build Windows release
         run: go run ./tools/build -target windows -arch amd64 -native-dir .runtime/native-windows -windows-installer
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-windows-amd64
           path: |
@@ -112,7 +112,7 @@ jobs:
     needs: macos-build
     runs-on: macos-14
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: macos-bundle-arm64${{ github.event_name == 'pull_request' && '-unsigned' || '' }}
           path: incoming
@@ -156,7 +156,7 @@ jobs:
             echo "DMG creation is busy (attempt $attempt/5); retrying in $delay seconds." >&2
             sleep "$delay"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-mac-arm64${{ github.event_name == 'pull_request' && '-unsigned' || '' }}
           path: |
@@ -181,7 +181,7 @@ jobs:
             echo 'Release tags must use vMAJOR.MINOR.PATCH, for example v0.5.1.' >&2
             exit 1
           fi
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: release-*
           merge-multiple: true
