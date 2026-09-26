@@ -34,7 +34,7 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 		}
 	}
 	state.SetVolume(a.Preferences().FloatWithFallback("voiceVolume", 1))
-	state.SetQueueSpeech(a.Preferences().Bool("queueSpeech"))
+	state.SetQueueSpeech(a.Preferences().BoolWithFallback("queueSpeech", true))
 	state.SetSpeechFilters(loadSpeechFilters(a.Preferences()))
 	state.SetVoiceChoices(loadVoiceChoices(a.Preferences()))
 	d := newDashboard(version, hide, quit, state.StopAudio, state.SkipAudio, func(enabled bool) {
