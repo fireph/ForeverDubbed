@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -175,6 +176,57 @@ func TestNativeCancellationAndErrors(t *testing.T) {
 			}
 			if !errors.Is(err, want) {
 				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestWorldChatNarration(t *testing.T) {
+	c, err := Load("../../tts/voices.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	type utterance struct{ text, voice string }
+	for _, tc := range []struct {
+		name, title, text string
+		muted             bool
+		want              []utterance
+	}{
+		{"say", "Thrall says", "Hello there.", false, []utterance{{"Thrall says.", "narrator_male.safetensors"}, {"Hello there.", "orc_male.safetensors"}}},
+		{"emote", "", "Al'aketh Stormcaller attempts to run away in fear.", false, []utterance{{"Al'aketh Stormcaller attempts to run away in fear.", "narrator_male.safetensors"}}},
+		{"muted", "Thrall says", "Hello there.", true, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []utterance
+			plays := 0
+			local := Local{Config: c, Override: "orc_male", Engine: fakeEngine{func(_ context.Context, text, voice string, _ pocket.StreamOptions, emit func([]byte) error) error {
+				got = append(got, utterance{text, filepath.Base(voice)})
+				return emit([]byte{0, 0})
+			}}, Play: func(_ context.Context, _ int, chunks <-chan []byte) error {
+				plays++
+				for range chunks {
+				}
+				return nil
+			}}
+			if tc.muted {
+				local.ChoiceSource = func() map[string]string { return map[string]string{"orc:male": VoiceNone} }
+			}
+			m := protocol.Message{Kind: 5, Speaker: "Thrall", Race: "Orc", Gender: "male", Title: tc.title, Text: tc.text}
+			if err := local.Speak(context.Background(), m); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("got %+v; want %+v", got, tc.want)
+			}
+			if !tc.muted && plays != 1 {
+				t.Fatalf("expected one continuous playback, got %d", plays)
+			}
+			wantSpeech := tc.text
+			if tc.title != "" {
+				wantSpeech = tc.title + ". " + tc.text
+			}
+			if m.Speech() != wantSpeech {
+				t.Fatalf("fallback speech = %q, want %q", m.Speech(), wantSpeech)
 			}
 		})
 	}

@@ -284,7 +284,20 @@ events:SetScript("OnEvent", function(_, event, ...)
         publish(6, "", read(ItemTextGetItem), read(ItemTextGetText))
     elseif event:match("^CHAT_MSG_") and ForeverDubbedDB.chat then
         local text, speaker = ...
-        publish(5, speaker, "", text, NS.Speakers.Chat(select(12, ...)))
+        text, speaker = clean(text), clean(speaker)
+        if text == "" then return end
+        local introduction = ""
+        if event:match("_EMOTE$") then
+            -- WoW supplies a name placeholder in monster emotes. Use a
+            -- function replacement so percent signs in names stay literal.
+            text = text:gsub("%%s", function() return speaker end)
+        elseif speaker ~= "" then
+            local verb = event:match("_YELL$") and "yells" or event:match("_WHISPER$") and "whispers" or "says"
+            introduction = speaker .. " " .. verb
+        end
+        -- For chat, title is the narrator introduction. An empty title
+        -- denotes an emote, which the narrator reads in full.
+        publish(5, speaker, introduction, text, NS.Speakers.Chat(select(12, ...)))
     end
 end)
 

@@ -92,7 +92,7 @@ func (m Message) DialogueText(includeTitle, includeObjectives bool) string {
 }
 
 func (m Message) Speech() string {
-	if m.IsQuest() {
+	if m.IsQuest() || m.Kind == 5 {
 		return m.DialogueText(false, false)
 	}
 	parts := []string{}

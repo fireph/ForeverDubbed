@@ -97,13 +97,19 @@ func (l *Local) Speak(parent context.Context, m protocol.Message) error {
 	if l.OnVoice != nil {
 		l.OnVoice(m, name)
 	}
-	voice, steps, err := l.voiceFile(name)
-	if err != nil {
-		return err
+	type segment struct{ text, name string }
+	segments := []segment{{m.DialogueText(false, false), name}}
+	if m.Kind == 5 {
+		narrator, err := l.Config.Voice(protocol.Message{Announcement: true}, "", nil)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(m.Title) == "" {
+			segments = []segment{{m.Text, narrator}}
+		} else {
+			segments = []segment{{m.Title + ".", narrator}, {m.Text, name}}
+		}
 	}
-	gain := math.Pow(10, l.Config.Profiles[name].GainDB/20)
-	profile := l.Config.Profiles[name]
-	options := pocket.StreamOptions{DecodeSteps: steps, FadeInMS: profile.FadeInMS, FadeOutMS: profile.FadeOutMS}
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	chunks := make(chan []byte, platform.PCMQueueDepth)
@@ -112,20 +118,30 @@ func (l *Local) Speak(parent context.Context, m protocol.Message) error {
 	go func() {
 		defer close(done)
 		defer close(chunks)
-		text := m.DialogueText(false, false)
-		for _, text := range Chunks(text, 180) {
-			streamErr = l.Engine.Stream(ctx, text, voice, options, func(pcm []byte) error {
-				pcm = amplifyPCM(pcm, gain)
-				select {
-				case chunks <- pcm:
-					return nil
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			})
-			if streamErr != nil {
+		for _, segment := range segments {
+			voice, steps, err := l.voiceFile(segment.name)
+			if err != nil {
+				streamErr = err
 				cancel()
 				return
+			}
+			profile := l.Config.Profiles[segment.name]
+			gain := math.Pow(10, profile.GainDB/20)
+			options := pocket.StreamOptions{DecodeSteps: steps, FadeInMS: profile.FadeInMS, FadeOutMS: profile.FadeOutMS}
+			for _, text := range Chunks(segment.text, 180) {
+				streamErr = l.Engine.Stream(ctx, text, voice, options, func(pcm []byte) error {
+					pcm = amplifyPCM(pcm, gain)
+					select {
+					case chunks <- pcm:
+						return nil
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				})
+				if streamErr != nil {
+					cancel()
+					return
+				}
 			}
 		}
 	}()

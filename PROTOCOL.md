@@ -137,7 +137,7 @@ embedded NULs in fields are not. Byte chunks may split UTF-8 characters. Decode
 text only after concatenating and validating every page. WoW formatting escapes
 are removed before encoding.
 
-Kinds: 0=test, 1=gossip/greeting, 2=quest offer, 3=quest progress, 4=quest completion, 5=NPC chat, 6=item/book text. Pocket TTS speaks title and text using the metadata-selected voice. The SAPI fallback joins nonempty speaker, title, and text fields. Metadata is never spoken.
+Kinds: 0=test, 1=gossip/greeting, 2=quest offer, 3=quest progress, 4=quest completion, 5=NPC chat, 6=item/book text. For NPC chat (kind 5), title contains the narrator introduction (for example, "Thrall says"); text contains dialogue spoken with the NPC voice. An empty chat title denotes an emote, whose full text is spoken by the narrator. The addon expands emote `%s` placeholders to the speaker name before encoding. Quest titles and objectives are omitted from default speech. The SAPI fallback reads chat title and text without repeating the speaker. Race and identity metadata are never spoken.
 
 ## Delivery
 

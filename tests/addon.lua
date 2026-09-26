@@ -144,6 +144,28 @@ assert(calls[4][7]=="Orc" and calls[4][8]=="male" and calls[4][9]=="4949")
 assert(calls[4][6] == "Quest body" and calls[4][13] == "Quest objectives")
 events.scripts.OnEvent(events,"CHAT_MSG_MONSTER_SAY","|cffffffffHello|r |Hitem:1|hfriend|h |Ticon:16|t","NPC")
 assert(calls[#calls][6] == "Hello friend")
+assert(calls[#calls][5] == "NPC says")
+now = now + 1
+events.scripts.OnEvent(events, "CHAT_MSG_MONSTER_SAY", "hello there", "Thrall",
+    nil, nil, nil, nil, nil, nil, nil, nil, nil, "Creature-0-1-2-3-4949-12345")
+assert(calls[#calls][5] == "Thrall says" and calls[#calls][6] == "hello there")
+assert(calls[#calls][7] == "Orc" and calls[#calls][8] == "male" and calls[#calls][9] == "4949",
+    "world chat must preserve NPC identity for the dialogue voice")
+for _, case in ipairs({
+    {"CHAT_MSG_MONSTER_SAY", "hello there", "Thrall", "Thrall says", "hello there"},
+    {"CHAT_MSG_MONSTER_YELL", "Run!", "Thrall", "Thrall yells", "Run!"},
+    {"CHAT_MSG_MONSTER_WHISPER", "Quiet.", "Thrall", "Thrall whispers", "Quiet."},
+    {"CHAT_MSG_RAID_BOSS_WHISPER", "Beware.", "Boss", "Boss whispers", "Beware."},
+    {"CHAT_MSG_MONSTER_EMOTE", "%s attempts to run away in fear", "Al'aketh Stormcaller", "", "Al'aketh Stormcaller attempts to run away in fear"},
+    {"CHAT_MSG_RAID_BOSS_EMOTE", "%s roars at 50% health!", "Boss", "", "Boss roars at 50% health!"},
+    {"CHAT_MSG_MONSTER_EMOTE", "Thrall waves.", "Thrall", "", "Thrall waves."},
+    {"CHAT_MSG_MONSTER_EMOTE", "%s cheers.", "100% NPC", "", "100% NPC cheers."},
+}) do
+    now = now + 1
+    events.scripts.OnEvent(events, case[1], case[2], case[3])
+    local sent = calls[#calls]
+    assert(sent[3] == 5 and sent[4] == case[3] and sent[5] == case[4] and sent[6] == case[5], case[1])
+end
 SlashCmdList.FOREVERDUBBED("cell 2")
 assert(ForeverDubbedDB.cell == 2)
 SlashCmdList.FOREVERDUBBED("cell 1")
