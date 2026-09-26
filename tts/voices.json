@@ -120,7 +120,8 @@
       "voice": "custom/gnome_male.safetensors"
     },
     "gnome_female": {
-      "voice": "custom/gnome_female.safetensors"
+      "voice": "custom/gnome_female.safetensors",
+      "decode_steps": 4
     },
     "troll_male": {
       "voice": "custom/troll_male.safetensors",
