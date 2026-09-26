@@ -11,6 +11,7 @@ function methods:CreateTexture()
     self.textures[#self.textures+1] = t
     return t
 end
+methods.CreateMaskTexture = methods.CreateTexture
 function methods:SetPoint(...) self.point={...} end
 function methods:ClearAllPoints() self.point=nil end
 function methods:SetSize(w,h) self.width, self.height = w,h end
