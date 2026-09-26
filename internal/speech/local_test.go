@@ -3,11 +3,12 @@ package speech
 import (
 	"context"
 	"errors"
-	"foreverdubbed/internal/pocket"
-	"foreverdubbed/internal/protocol"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"foreverdubbed/internal/pocket"
+	"foreverdubbed/internal/protocol"
 )
 
 type fakeEngine struct {

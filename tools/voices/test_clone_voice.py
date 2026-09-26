@@ -64,6 +64,16 @@ class ReferenceTests(unittest.TestCase):
         self.assertLessEqual(last-first, 30)
         self.assertGreater(np.sqrt(np.mean(clip**2)), 0.1)
 
+    def test_automatic_selection_preserves_minimum_duration(self):
+        rate = 24000
+        for seconds in (3, 5):
+            with self.subTest(seconds=seconds):
+                audio = 0.3 * np.sin(2*np.pi*220*np.arange(rate*seconds)/rate)
+                clip, first, last = excerpt(audio, rate, 3)
+                self.assertGreaterEqual(last-first, 3)
+                self.assertGreaterEqual(len(clip), 3*24000)
+                self.assertTrue(np.isfinite(clip).all())
+
     def test_prepare_only_preserves_existing_voice_and_config(self):
         # Exercise the real CLI from outside the repo: source paths are relative
         # to the caller, while outputs follow the selected configuration file.
@@ -108,6 +118,23 @@ class ReferenceTests(unittest.TestCase):
             excerpt(np.zeros(24000*5), 24000, 3, start=0)
         with self.assertRaises(ValueError):
             excerpt(np.ones(24000*5), 24000, 3, start=6)
+
+    def test_backslash_config_rejected_before_preparation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "voices.json"
+            original = json.dumps({"profiles": {"test": {"voice": r"custom\test.safetensors"}}})
+            config.write_text(original, encoding="utf-8")
+            script = Path(__file__).with_name("clone_voice.py").resolve()
+            result = subprocess.run(
+                [sys.executable, str(script), "--config", str(config),
+                 "--voice", "test=missing.wav", "--prepare-only"],
+                cwd=root, capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("forward slashes (/)", result.stderr)
+            self.assertEqual(config.read_text(encoding="utf-8"), original)
+            self.assertFalse((root / "custom").exists())
 
 
 if __name__ == "__main__":

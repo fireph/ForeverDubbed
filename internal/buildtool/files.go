@@ -33,11 +33,19 @@ func CopyFile(source, destination string) error {
 	if err != nil {
 		return err
 	}
+	if existing, err := os.Stat(destination); err == nil && os.SameFile(info, existing) {
+		return fmt.Errorf("copy source and destination are the same file: %s", source)
+	}
 	out, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode().Perm())
 	if err != nil {
 		return err
 	}
 	_, err = io.Copy(out, in)
+	if err == nil {
+		// OpenFile applies the mode only when creating a file, and the umask
+		// can remove executable bits even then.
+		err = out.Chmod(info.Mode().Perm())
+	}
 	closeErr := out.Close()
 	if err != nil {
 		return err

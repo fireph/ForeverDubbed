@@ -19,7 +19,7 @@ Prepare a 20-second reference without downloading or loading a model:
 uv run --project tools/voices --locked tools/voices/clone_voice.py --voice undead_male=audio_clips/undead-male.wav --seconds 20 --prepare-only
 ```
 
-Listen to `tts/custom/undead_male.reference.wav`. Add `--start 10` to select a particular excerpt. Input paths are relative to your current directory; quote the whole `PROFILE=AUDIO` argument when the path contains spaces. Reference preparation leaves existing exported voices and configuration intact.
+Listen to `tts/custom/undead_male.reference.wav`. Add `--start 10` to select a particular excerpt. `--seconds` accepts 3–30 seconds; automatic selection may adjust the boundaries to quieter spots within that duration range. Manual selection requires at least three seconds remaining after `--start`. Input paths are relative to your current directory; quote the whole `PROFILE=AUDIO` argument when the path contains spaces. Reference preparation leaves existing exported voices and configuration intact.
 
 For cloning, accept access to the [Kyutai model](https://huggingface.co/kyutai/pocket-tts) if required, then authenticate interactively:
 
@@ -42,6 +42,8 @@ uv run --project tools/voices --locked tools/voices/clone_voice.py --voice undea
 `--force` allows replacing the existing saved voice. Omit `--activate` to export without changing the profile assignment. After the model is cached, omit `--online` to keep model loading offline. See [the export guide](../../docs/VOICE_CLONING.md) for native playback validation and output details.
 
 Model downloads and the setup sample live in `.runtime/pocket`; reference audio, previews, and saved states live in `tts/custom` (or beside a custom `--config`). Existing Hugging Face CLI credentials are reused; login tokens are not included in releases. `uv sync` installs Python packages only and does not download model weights.
+
+Voice paths inside `voices.json` must use `/` on every OS, such as `custom/undead_male.safetensors`. The tools reject backslashes in the configuration. Paths passed through command-line arguments use the host OS's normal syntax.
 
 ## Tests and dependencies
 

@@ -12,7 +12,7 @@ import soundfile as sf
 from scipy.io import wavfile
 from scipy.signal import resample_poly
 
-from runtime import LANGUAGE, ROOT, load_model, synthesis_options, synthesis_settings
+from runtime import LANGUAGE, ROOT, load_model, synthesis_options, synthesis_settings, voice_source
 
 SAMPLE_TEXT = (
     "Welcome, traveler. The road to the village is dangerous after sunset. "
@@ -63,11 +63,17 @@ def excerpt(audio, rate, seconds, start=None):
         best = np.flatnonzero(scores >= scores.max() - 1)
         index = min(best, key=lambda i: rms[i] + rms[min(i + width - 1, len(rms)-1)])
         first, last = int(index * hop), min(int(index * hop) + length, len(audio))
-        # Find a quieter nearby start/end without extending beyond 30 seconds.
+        # Quiet boundaries must keep the excerpt within the supported duration.
         for edge in ("start", "end"):
             center = first if edge == "start" else last
             lo, hi = max(0, center-rate), min(len(audio), center+rate)
             candidates = list(range(lo, max(lo+1, hi-hop), hop))
+            if edge == "start":
+                candidates = [i for i in candidates if 3*rate <= last-i <= 30*rate]
+            else:
+                candidates = [i for i in candidates if 3*rate <= i+hop-first <= 30*rate]
+            if not candidates:
+                continue
             point = min(candidates, key=lambda i: (np.mean(audio[i:i+hop] ** 2), abs(i-center)))
             if edge == "start":
                 first = point
@@ -82,8 +88,9 @@ def excerpt(audio, rate, seconds, start=None):
         raise ValueError("Selected excerpt is silent; choose another start time")
     clip *= min(4.0, 0.9 / peak)
     fade = min(round(rate * 0.005), len(clip)//2)
-    clip[:fade] *= np.linspace(0, 1, fade)
-    clip[-fade:] *= np.linspace(1, 0, fade)
+    if fade:
+        clip[:fade] *= np.linspace(0, 1, fade)
+        clip[-fade:] *= np.linspace(1, 0, fade)
     divisor = math.gcd(rate, 24000)
     clip = resample_poly(clip, 24000 // divisor, rate // divisor)
     return clip, first / rate, last / rate
@@ -111,6 +118,11 @@ def main():
         parser.error("--activate requires export; remove --prepare-only")
     original = args.config.read_bytes()
     config = json.loads(original)
+    try:
+        for profile in config["profiles"].values():
+            voice_source(args.config, profile)
+    except ValueError as exc:
+        parser.error(str(exc))
     output = args.config.resolve().parent / "custom"
     jobs, names = [], set()
     for item in args.voice:

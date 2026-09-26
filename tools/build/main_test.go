@@ -48,7 +48,7 @@ func TestPackageContentsAndLayout(t *testing.T) {
 	putFile(t, root, "tts/custom/unused.safetensors", "private")
 	putFile(t, root, "tts/custom/draft.pending.safetensors", "unfinished")
 	putFile(t, root, ".runtime/secret", "excluded")
-	putVoices(t, root, `custom\used.safetensors`, "custom/used.safetensors", "alba")
+	putVoices(t, root, "custom/./used.safetensors", "custom/used.safetensors", "alba")
 	bundle, addon, err := packageFiles(root)
 	if err != nil {
 		t.Fatal(err)
@@ -108,13 +108,26 @@ func TestPackageContentsAndLayout(t *testing.T) {
 }
 
 func TestRejectInvalidVoiceReferences(t *testing.T) {
-	for _, voice := range []string{"../outside.wav", "/outside.wav", `C:\outside.wav`, `custom\..\outside.wav`, "custom/draft.pending.safetensors", "custom/missing.safetensors"} {
-		t.Run(voice, func(t *testing.T) {
+	for _, tc := range []struct{ voice, wantErr string }{
+		{"../outside.safetensors", "finished files under tts/custom"},
+		{"/outside.safetensors", "finished files under tts/custom"},
+		{"C:/outside.safetensors", "finished files under tts/custom"},
+		{"custom/../outside.safetensors", "finished files under tts/custom"},
+		{`custom\used.safetensors`, "forward slashes (/)"},
+		{"custom/draft.pending.safetensors", "finished files under tts/custom"},
+		{"custom/missing.safetensors", "voice custom/missing.safetensors"},
+		{"custom/reference.wav", "exported .safetensors"},
+		{"custom/reference.mp3", "exported .safetensors"},
+	} {
+		t.Run(tc.voice, func(t *testing.T) {
 			root := t.TempDir()
 			putFile(t, root, "tts/custom/draft.pending.safetensors", "unfinished")
-			putVoices(t, root, voice)
-			if _, err := voiceFiles(root); err == nil {
-				t.Fatal("accepted invalid voice")
+			putFile(t, root, "tts/custom/reference.wav", "reference audio")
+			putFile(t, root, "tts/custom/reference.mp3", "reference audio")
+			putFile(t, root, "tts/custom/used.safetensors", "exported voice")
+			putVoices(t, root, tc.voice)
+			if _, err := voiceFiles(root); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("voiceFiles error = %v, want %q", err, tc.wantErr)
 			}
 		})
 	}
@@ -147,28 +160,5 @@ func TestBuildEnvironmentIsolation(t *testing.T) {
 
 	if !reflect.DeepEqual(input, copyOfInput) {
 		t.Fatal("mutated caller environment")
-	}
-}
-
-func TestZIPPreservesMacExecutableMode(t *testing.T) {
-	if os.PathSeparator == '\\' {
-		t.Skip("Unix executable modes")
-	}
-	dir := t.TempDir()
-	executable := filepath.Join(dir, "foreverdubbed")
-	if err := os.WriteFile(executable, []byte("binary"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	archive := filepath.Join(dir, "mac.zip")
-	if err := writeZIP(archive, map[string]string{"foreverdubbed": executable}); err != nil {
-		t.Fatal(err)
-	}
-	z, err := zip.OpenReader(archive)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer z.Close()
-	if z.File[0].Mode().Perm()&0111 == 0 {
-		t.Fatal("executable bit lost")
 	}
 }

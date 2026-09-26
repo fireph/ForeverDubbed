@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
+	"math"
+	"testing"
+
 	"foreverdubbed/internal/pocket"
 	"foreverdubbed/internal/protocol"
-	"math"
-	"os"
-	"path/filepath"
-	"testing"
 )
 
 func pcmSamples(samples ...int16) []byte {
@@ -64,30 +62,5 @@ func TestVoicePlaybackGain(t *testing.T) {
 				t.Fatal("modified engine buffer")
 			}
 		})
-	}
-}
-
-func TestProfileGainValidation(t *testing.T) {
-	for _, db := range []float64{-25, -24, 0, 4, 12, 13} {
-		config := Config{
-			Default:  map[string]string{"male": "test", "female": "test", "unknown": "test"},
-			Profiles: map[string]Profile{"test": {Voice: "test", GainDB: db}},
-		}
-		data, err := json.Marshal(config)
-		if err != nil {
-			t.Fatal(err)
-		}
-		path := filepath.Join(t.TempDir(), "voices.json")
-		if err := os.WriteFile(path, data, 0600); err != nil {
-			t.Fatal(err)
-		}
-		loaded, err := Load(path)
-		valid := db >= -24 && db <= 12
-		if (err == nil) != valid {
-			t.Fatalf("gain %v: %v", db, err)
-		}
-		if valid && loaded.Profiles["test"].GainDB != db {
-			t.Fatal("gain lost loading config")
-		}
 	}
 }

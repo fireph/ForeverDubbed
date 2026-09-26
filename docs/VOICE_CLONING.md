@@ -37,6 +37,6 @@ Exports go to `tts/custom/<profile>.safetensors`. The tool checks a Python previ
 go run -tags pocket_native ./tools/voicecheck -voice undead_male
 ```
 
-The native test creates `.runtime/voice-samples/undead_male.wav`. Listen to it before distributing the voice. `tts/voices.json` stores custom paths relative to itself; source recordings, reference WAVs, previews, and backups are not needed for runtime playback and are excluded from release packages.
+The native test creates `.runtime/voice-samples/undead_male.wav`. Listen to it before distributing the voice. `tts/voices.json` stores custom paths relative to itself and requires forward slashes on every platform, for example `custom/undead_male.safetensors`. Backslashes are rejected by the app, release builder, and Python tools. Runtime profiles must reference preset names or exported `.safetensors` files. The release builder rejects profiles still pointing to WAV/MP3 references. Source recordings, reference WAVs, previews, and backups are excluded from release packages.
 
 Do not load states from another checkpoint. April-model exported states include BOS-before-voice conditioning; the native adapter restores them directly. See [native runtime/model details](../native/README.md) for ONNX exports and upstream issue #12.

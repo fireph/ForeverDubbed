@@ -78,11 +78,16 @@ func voiceFiles(root string) (map[string]string, error) {
 	files := map[string]string{}
 	custom := filepath.Join(root, "tts", "custom")
 	for _, profile := range config.Profiles {
-		// Parse Windows-style references the same way on every build host.
-		name := path.Clean(strings.ReplaceAll(profile.Voice, "\\", "/"))
+		if strings.ContainsRune(profile.Voice, '\\') {
+			return nil, fmt.Errorf("bundle voice path %q must use forward slashes (/)", profile.Voice)
+		}
+		name := path.Clean(profile.Voice)
 		ext := strings.ToLower(path.Ext(name))
-		if ext != ".safetensors" && ext != ".wav" {
+		if ext == "" {
 			continue
+		}
+		if ext != ".safetensors" {
+			return nil, fmt.Errorf("bundle voice %q needs an exported .safetensors state", profile.Voice)
 		}
 		if !strings.HasPrefix(name, "custom/") || strings.Contains(name, ":") || strings.HasSuffix(strings.ToLower(name), ".pending.safetensors") {
 			return nil, fmt.Errorf("bundle voice references must be finished files under tts/custom: %s", profile.Voice)

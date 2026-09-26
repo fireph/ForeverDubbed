@@ -58,7 +58,7 @@ func (l *Local) voiceFile(name string) (string, int, error) {
 	if steps == 0 {
 		steps = 1
 	}
-	path := p.Voice
+	path := filepath.FromSlash(p.Voice)
 	if filepath.Ext(path) == "" {
 		if strings.ContainsAny(path, "/\\:") || path == "." || path == ".." {
 			return "", 0, fmt.Errorf("invalid preset %q", path)
