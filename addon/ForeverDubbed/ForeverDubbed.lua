@@ -18,6 +18,7 @@ local WAVE_SECONDS = 1 / 15
 local wavePhase, waveElapsed = 0, 0
 local getMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
 local VERSION = getMetadata and getMetadata(addonName, "Version") or "unknown"
+local WIRE_VERSION = VERSION:sub(1, 1) == "v" and VERSION or "v" .. VERSION
 local requestID, lastSpeaker = 0, nil
 local controlUntil, deferredDialogue = 0, nil
 local drawnColors, pageValues = {}, {}
@@ -125,6 +126,14 @@ local function draw()
     frame:Show()
 end
 
+local function publishVersion()
+    if not ready or not ForeverDubbedDB.enabled then return end
+    sequence = (sequence + 1) % 4294967296
+    pages = Codec.Encode(session, sequence, 9, "", "", "", nil, nil, nil, nil, nil, nil, nil, WIRE_VERSION)
+    page, elapsed, expires = 1, 0, GetTime() + 15
+    draw()
+end
+
 local function publishReady(kind, speaker, title, text, info, objectives)
     if not ready or not ForeverDubbedDB.enabled then return end
     if GetTime() < controlUntil then
@@ -146,7 +155,7 @@ local function publishReady(kind, speaker, title, text, info, objectives)
     if key == lastBody and GetTime() - lastAt < 0.75 then return end
     lastBody, lastAt = key, GetTime()
     sequence = (sequence + 1) % 4294967296
-    local encoded, err = Codec.Encode(session, sequence, kind, speaker, title, text, race, gender, npcID, displayID, modelID, raceOverride, objectives)
+    local encoded, err = Codec.Encode(session, sequence, kind, speaker, title, text, race, gender, npcID, displayID, modelID, raceOverride, objectives, WIRE_VERSION)
     if not encoded then printStatus(err); return end
     pages, page, elapsed = encoded, 1, 0
     -- Keep sending after a dialog closes so slow captures can finish. New text
@@ -163,7 +172,7 @@ function NS.Control(action)
     requestID = requestID + 1 -- cancel unresolved older NPC identities
     deferredDialogue = nil
     sequence = (sequence + 1) % 4294967296
-    pages = Codec.Encode(session, sequence, action == "stop" and 7 or 8, "", "", "")
+    pages = Codec.Encode(session, sequence, action == "stop" and 7 or 8, "", "", "", nil, nil, nil, nil, nil, nil, nil, WIRE_VERSION)
     page, elapsed = 1, 0
     controlUntil, expires = now + 1.5, now + 15
     draw()
@@ -251,6 +260,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         ready = true
         place()
         NS.Controls.Init(db)
+        publishVersion()
         for _, e in ipairs({"GOSSIP_SHOW", "QUEST_GREETING", "QUEST_DETAIL", "QUEST_PROGRESS", "QUEST_COMPLETE",
             "ITEM_TEXT_READY", "CHAT_MSG_MONSTER_SAY", "CHAT_MSG_MONSTER_YELL", "CHAT_MSG_MONSTER_WHISPER",
             "CHAT_MSG_MONSTER_EMOTE", "CHAT_MSG_RAID_BOSS_EMOTE", "CHAT_MSG_RAID_BOSS_WHISPER",
@@ -300,6 +310,7 @@ SlashCmdList.FOREVERDUBBED = function(input)
     elseif cmd == "on" or cmd == "off" then
         db.enabled = cmd == "on"
         if not db.enabled then requestID = requestID + 1; deferredDialogue = nil; pages = nil; frame:Hide() end
+        if db.enabled then publishVersion() end
         printStatus("Enabled: " .. tostring(db.enabled))
     elseif cmd == "chat" then
         db.chat = not db.chat; printStatus("NPC chat: " .. tostring(db.chat))

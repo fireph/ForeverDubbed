@@ -14,6 +14,7 @@ import (
 
 const (
 	// Control kinds carry empty text and must never enter the speech queue.
+	KindVersion  byte = 9
 	KindStop     byte = 7
 	KindSkip     byte = 8
 	Grid              = 50
@@ -46,6 +47,8 @@ type Packet struct {
 }
 
 type Message struct {
+	AddonVersion string `json:"v,omitempty"`
+	Announcement bool   `json:"-"` // Desktop-only narrator notification.
 	Session      uint32 `json:"session"`
 	Sequence     uint32 `json:"sequence"`
 	Kind         byte   `json:"kind"`
@@ -102,24 +105,28 @@ func (m Message) Speech() string {
 }
 
 func Encode(m Message) ([][]byte, error) {
-	for _, s := range []string{m.Speaker, m.Title, m.Text, m.Race, m.Gender, m.NPCID, m.DisplayID, m.ModelID, m.RaceOverride, m.Objectives} {
+	for _, s := range []string{m.Speaker, m.Title, m.Text, m.Race, m.Gender, m.NPCID, m.DisplayID, m.ModelID, m.RaceOverride, m.Objectives, m.AddonVersion} {
 		if !utf8.ValidString(s) || strings.ContainsRune(s, 0) {
 			return nil, errors.New("fields must be UTF-8 without NUL")
 		}
 	}
 	body := []byte(m.Speaker + "\x00" + m.Title + "\x00" + m.Text)
 	flags := byte(0)
-	if m.Race != "" || m.Gender != "" || m.NPCID != "" || m.DisplayID != "" || m.ModelID != "" || m.RaceOverride != "" || m.Objectives != "" {
+	if m.Race != "" || m.Gender != "" || m.NPCID != "" || m.DisplayID != "" || m.ModelID != "" || m.RaceOverride != "" || m.Objectives != "" || m.AddonVersion != "" {
 		body = append(body, []byte("\x00"+m.Race+"\x00"+m.Gender+"\x00"+m.NPCID)...)
 		flags = 1
 	}
-	if m.DisplayID != "" || m.ModelID != "" || m.RaceOverride != "" || m.Objectives != "" {
+	if m.DisplayID != "" || m.ModelID != "" || m.RaceOverride != "" || m.Objectives != "" || m.AddonVersion != "" {
 		body = append(body, []byte("\x00"+m.DisplayID+"\x00"+m.ModelID+"\x00"+m.RaceOverride)...)
 		flags = 2
 	}
-	if m.Objectives != "" {
+	if m.Objectives != "" || m.AddonVersion != "" {
 		body = append(body, []byte("\x00"+m.Objectives)...)
 		flags = 3
+	}
+	if m.AddonVersion != "" {
+		body = append(body, []byte("\x00"+m.AddonVersion)...)
+		flags = 4
 	}
 	capacity := PayloadBytes
 	count := (len(body) + capacity - 1) / capacity
@@ -151,7 +158,7 @@ func Encode(m Message) ([][]byte, error) {
 
 func Parse(b []byte) (Packet, error) {
 	p := Packet{}
-	if len(b) != FrameBytes || string(b[:4]) != "FDB5" || b[23] > 3 {
+	if len(b) != FrameBytes || string(b[:4]) != "FDB5" || b[23] > 4 {
 		return p, errors.New("invalid frame header")
 	}
 	checksumAt := len(b) - 4
@@ -234,10 +241,13 @@ func (a *Assembler) Add(p Packet, now time.Time) (*Message, error) {
 	fields := bytes.Split(body, []byte{0})
 	expected := 3
 	expected += 3 * int(min(p.Flags, 2))
-	if p.Flags == 3 {
+	if p.Flags >= 3 {
 		expected++
 	}
-	if p.Flags > 3 || len(fields) != expected || !utf8.Valid(body) {
+	if p.Flags == 4 {
+		expected++
+	}
+	if p.Flags > 4 || len(fields) != expected || !utf8.Valid(body) {
 		return nil, fmt.Errorf("invalid UTF-8 message fields")
 	}
 	a.done = true
@@ -252,8 +262,11 @@ func (a *Assembler) Add(p Packet, now time.Time) (*Message, error) {
 		m.ModelID = string(fields[7])
 		m.RaceOverride = string(fields[8])
 	}
-	if p.Flags == 3 {
+	if p.Flags >= 3 {
 		m.Objectives = string(fields[9])
+	}
+	if p.Flags == 4 {
+		m.AddonVersion = string(fields[10])
 	}
 	return m, nil
 }

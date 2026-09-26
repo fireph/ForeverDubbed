@@ -138,6 +138,13 @@ func VoiceMuted(choices map[string]string, race, gender string) bool {
 // Voice resolves the profile for a message. An empty voice with a nil error
 // means the user silenced this race/gender in the desktop Voices tab.
 func (c *Config) Voice(m protocol.Message, override string, choices map[string]string) (string, error) {
+	if m.Announcement {
+		voice := c.Default["unknown"]
+		if _, ok := c.Profiles[voice]; !ok {
+			return "", fmt.Errorf("unknown narrator voice %q", voice)
+		}
+		return voice, nil
+	}
 	// None is a mute policy, including explicit voice and NPC overrides.
 	if VoiceMuted(choices, m.Race, m.Gender) {
 		return "", nil

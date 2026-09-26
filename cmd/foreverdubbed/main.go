@@ -156,7 +156,7 @@ func run() error {
 				}
 			} else {
 				speak = func(ctx context.Context, m protocol.Message) error {
-					if speech.VoiceMuted(state.VoiceChoices(), m.Race, m.Gender) {
+					if !m.Announcement && speech.VoiceMuted(state.VoiceChoices(), m.Race, m.Gender) {
 						return nil
 					}
 					state.Audio("Speaking (system voice)")

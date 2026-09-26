@@ -29,6 +29,18 @@ func TestDashboardLiveStates(t *testing.T) {
 	w.SetContent(d.root)
 	w.Resize(fyne.NewSize(760, 740))
 	state := appstate.New("World of Warcraft Beta.app", "pocket", false)
+	state.Update(func(s *appstate.Snapshot) {
+		s.AddonBanner = "Restart World of Warcraft to install Forever Dubbed addon"
+	})
+	d.render(state.Snapshot())
+	if !d.addonNotice.Visible() || d.addonHeading.Text != "Restart World of Warcraft" {
+		t.Fatal("installation banner missing")
+	}
+	state.Update(func(s *appstate.Snapshot) { s.AddonBanner = "" })
+	d.render(state.Snapshot())
+	if d.addonNotice.Visible() {
+		t.Fatal("confirmed addon banner still visible")
+	}
 	d.render(state.Snapshot())
 	if d.skipControl.Visible() || !d.skip.Disabled() {
 		t.Fatal("skip available without queue mode")
@@ -132,6 +144,10 @@ func TestDashboardLiveStates(t *testing.T) {
 	d.render(state.Snapshot())
 	if os.Getenv("FDB_UI_SCREENSHOT_IDLE") != "" {
 		state.ResetPlayback()
+		d.render(state.Snapshot())
+	}
+	if notice := os.Getenv("FDB_UI_SCREENSHOT_ADDON"); notice != "" {
+		state.Update(func(s *appstate.Snapshot) { s.AddonBanner = notice })
 		d.render(state.Snapshot())
 	}
 	if name := os.Getenv("FDB_UI_SCREENSHOT"); name != "" {

@@ -80,6 +80,11 @@ assert(loadfile("addon/ForeverDubbed/ForeverDubbed.lua"))("ForeverDubbed", ns)
 local events, tile = objects[#objects], ForeverDubbedTile
 ForeverDubbedDB = {cell=3, x=20, y=900, chat=false}
 events.scripts.OnEvent(events, "ADDON_LOADED", "ForeverDubbed")
+assert(calls[#calls][3] == 9 and calls[#calls][14] == "v" .. metadataVersion)
+local startupCalls = #calls
+now = now + 16
+tile.scripts.OnUpdate(tile, 0.1)
+assert(not tile.visible and #calls == startupCalls, "startup version must expire without an idle replacement")
 assert(ForeverDubbedDB.cell==2 and ForeverDubbedDB.locked)
 assert(ForeverDubbedDB.x==38 and ForeverDubbedDB.y==1688 and not ForeverDubbedDB.chat)
 assert(ForeverDubbedDB.positionVersion==2)
@@ -135,8 +140,8 @@ end
 local beforeWrites = colorWrites
 tile.scripts.OnUpdate(tile, ns.Codec.WAVE_PHASES / 15)
 assert(colorWrites==beforeWrites, "redrew an identical page and wave phase")
-assert(calls[3][7]=="Orc" and calls[3][8]=="male" and calls[3][9]=="4949")
-assert(calls[3][6] == "Quest body" and calls[3][13] == "Quest objectives")
+assert(calls[4][7]=="Orc" and calls[4][8]=="male" and calls[4][9]=="4949")
+assert(calls[4][6] == "Quest body" and calls[4][13] == "Quest objectives")
 events.scripts.OnEvent(events,"CHAT_MSG_MONSTER_SAY","|cffffffffHello|r |Hitem:1|hfriend|h |Ticon:16|t","NPC")
 assert(calls[#calls][6] == "Hello friend")
 SlashCmdList.FOREVERDUBBED("cell 2")
@@ -152,7 +157,7 @@ tile.scripts.OnUpdate(tile,0.3)
 assert(tile.visible)
 SlashCmdList.FOREVERDUBBED("lock")
 tile.scripts.OnUpdate(tile,0.3)
-assert(not tile.visible)
+assert(not tile.visible, "locked square must hide after the dialogue expires")
 SlashCmdList.FOREVERDUBBED("off")
 local before = #calls
 events.scripts.OnEvent(events,"QUEST_DETAIL")

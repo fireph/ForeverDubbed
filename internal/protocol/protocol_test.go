@@ -263,6 +263,7 @@ func TestLuaCompatibility(t *testing.T) {
 	m.Race, m.Gender, m.NPCID = "Orc", "male", "4949"
 	m.DisplayID, m.ModelID, m.RaceOverride = "115", "7478487", "Skyborne"
 	m.Objectives = "Bring supplies.\nReturn to Thrall."
+	m.AddonVersion = "v0.8.3"
 	want := framesFor(t, m)
 	if len(lines) != len(want)*(WavePhases+1)+2 {
 		t.Fatalf("unexpected Lua output: %s", out)
@@ -411,12 +412,12 @@ func TestExtendedMetadataValidation(t *testing.T) {
 		}
 	}
 	// Valid checksum does not make an unsupported or mismatched layout valid.
-	for _, flag := range []byte{2, 3, 4} {
+	for _, flag := range []byte{2, 3, 4, 5} {
 		frame := framesFor(t, Message{Text: "hello"})[0]
 		frame[23] = flag
 		binary.BigEndian.PutUint32(frame[len(frame)-4:], adler32.Checksum(frame[:len(frame)-4]))
 		p, err := Parse(frame)
-		if flag == 4 {
+		if flag == 5 {
 			if err == nil {
 				t.Fatal("accepted unsupported flags")
 			}

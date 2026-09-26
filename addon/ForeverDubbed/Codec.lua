@@ -85,23 +85,28 @@ function Codec.Border(x, y)
     return (y * 5 + 4) % 8
 end
 
-function Codec.Encode(session, sequence, kind, speaker, title, text, race, gender, npcID, displayID, modelID, raceOverride, objectives)
+function Codec.Encode(session, sequence, kind, speaker, title, text, race, gender, npcID, displayID, modelID, raceOverride, objectives, addonVersion)
     local body = speaker .. "\0" .. title .. "\0" .. text
     race, gender, npcID = race or "", gender or "", npcID or ""
     displayID, modelID, raceOverride = displayID or "", modelID or "", raceOverride or ""
     objectives = objectives or ""
+    addonVersion = addonVersion or ""
     local flags = 0
-    if race ~= "" or gender ~= "" or npcID ~= "" or displayID ~= "" or modelID ~= "" or raceOverride ~= "" or objectives ~= "" then
+    if race ~= "" or gender ~= "" or npcID ~= "" or displayID ~= "" or modelID ~= "" or raceOverride ~= "" or objectives ~= "" or addonVersion ~= "" then
         body = body .. "\0" .. race .. "\0" .. gender .. "\0" .. npcID
         flags = 1
     end
-    if displayID ~= "" or modelID ~= "" or raceOverride ~= "" or objectives ~= "" then
+    if displayID ~= "" or modelID ~= "" or raceOverride ~= "" or objectives ~= "" or addonVersion ~= "" then
         body = body .. "\0" .. displayID .. "\0" .. modelID .. "\0" .. raceOverride
         flags = 2
     end
-    if objectives ~= "" then
+    if objectives ~= "" or addonVersion ~= "" then
         body = body .. "\0" .. objectives
         flags = 3
+    end
+    if addonVersion ~= "" then
+        body = body .. "\0" .. addonVersion
+        flags = 4
     end
     local count = math.ceil(#body / Codec.PAYLOAD)
     if count > 256 then return nil, "Text exceeds the 270,336-byte transport limit." end

@@ -30,12 +30,14 @@ Both downloads include the addon. You can also [download the addon separately](h
 
 ## Connect to WoW
 
-1. Copy the **ForeverDubbed** addon folder into your Forever client’s `Interface/AddOns` folder. Restart WoW if it was open, and enable the addon in the AddOns list.
-2. Open the companion and keep WoW in **windowed or borderless mode**.
+1. Open ForeverDubbed. It finds WoW Forever in the usual Windows locations or `/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app` on macOS and installs or updates its bundled addon automatically. If needed, select `WowB.exe` (Windows) or `World of Warcraft Beta.app` (macOS) in the native file picker. Your selection is remembered.
+2. Follow the narrator and banner: restart WoW for a fresh install, or type **`/reload`** for an update. Enable the addon in WoW’s AddOns list and keep WoW in **windowed or borderless mode**. After an install or update, the banner clears when the square reports the current addon version. On app startup, current addon files on disk need no notice, even with WoW closed.
 3. Type **`/fdb test`** in WoW. The companion should show **Connected** and read the test aloud.
 4. Use **`/fdb unlock`** to drag the small data square somewhere unobstructed, then **`/fdb lock`** to finish.
 
-The square passes dialogue to the companion. Keep its entire border visible and your pointer off it; it hides automatically after sending text.
+The square passes dialogue to the companion. Keep its entire border visible and your pointer off it; it hides after sending text (normally after 15 seconds). While unlocked for positioning, it stays visible until you lock it again.
+
+Use **Locate WoW…** to change the installation or retry. If access is denied, run the Windows companion as administrator and retry, or manually copy the bundled **ForeverDubbed** addon folder into the exact `Interface/AddOns` location shown in the error banner. The bundled folder is beside the Windows executable under `addon`; on macOS, use **Show Package Contents → Contents/Resources/addon** in Finder. Installation errors do not trigger a success announcement.
 
 ## Make it yours
 

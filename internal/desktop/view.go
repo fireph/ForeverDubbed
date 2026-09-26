@@ -4,6 +4,8 @@ package desktop
 
 import (
 	"fmt"
+	"foreverdubbed/addon"
+	"image/color"
 	"maps"
 	"sort"
 	"strings"
@@ -11,10 +13,12 @@ import (
 
 	"foreverdubbed/internal/appstate"
 	"foreverdubbed/internal/speech"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -50,6 +54,10 @@ func (c *statusCard) set(value, detail string, active bool) {
 }
 
 type dashboard struct {
+	addonBanner                      *widget.Label
+	addonHeading                     *widget.Label
+	addonNotice                      fyne.CanvasObject
+	locateWoW                        *widget.Button
 	queue                            *widget.Check
 	quests, conversations, npcSpeech *widget.Check
 	questObjectives                  *widget.Check
@@ -75,6 +83,21 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool), fil
 	headerImage.FillMode = canvas.ImageFillContain
 	headerImage.SetMinSize(fyne.NewSize(390, 130))
 	banner := container.NewCenter(headerImage)
+	d.addonBanner = widget.NewLabel("")
+	d.addonBanner.Wrapping = fyne.TextWrapWord
+	d.addonHeading = widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	d.addonHeading.Wrapping = fyne.TextWrapWord
+	noticeBackground := canvas.NewRectangle(color.NRGBA{R: 242, G: 224, B: 187, A: 255})
+	noticeBackground.CornerRadius = 6
+	noticeBackground.StrokeColor = gold
+	noticeBackground.StrokeWidth = 1
+	noticeIcon := canvas.NewImageFromResource(theme.NewColoredResource(theme.InfoIcon(), theme.ColorNameError))
+	noticeIcon.FillMode = canvas.ImageFillContain
+	noticeIcon.SetMinSize(fyne.NewSize(28, 28))
+	iconColumn := container.NewVBox(inset(5, container.NewGridWrap(fyne.NewSize(28, 28), noticeIcon)), layout.NewSpacer())
+	d.addonNotice = inset(5, container.NewStack(noticeBackground,
+		inset(10, container.NewBorder(nil, nil, iconColumn, nil, container.NewVBox(d.addonHeading, d.addonBanner)))))
+	d.addonNotice.Hide()
 	d.stop = widget.NewButton("Stop", stop)
 	d.stop.Disable()
 	// The speech worker already advances the queue after cancelling the current
@@ -89,7 +112,7 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool), fil
 		filters(appstate.SpeechFilters{Quests: d.quests.Checked, Conversations: d.conversations.Checked, NPCSpeech: d.npcSpeech.Checked, QuestObjectives: d.questObjectives.Checked, QuestTitle: d.questTitle.Checked})
 	}
 	d.quests = widget.NewCheck("Quest dialogue", updateFilters)
-	d.conversations = widget.NewCheck("NPC conversations", updateFilters)
+	d.conversations = widget.NewCheck("Non-quest dialog", updateFilters)
 	d.npcSpeech = widget.NewCheck("NPC speech", updateFilters)
 	d.questObjectives = widget.NewCheck("Quest objectives", updateFilters)
 	d.questTitle = widget.NewCheck("Quest title", updateFilters)
@@ -121,7 +144,9 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool), fil
 		d.tabSettings.Enable()
 	})
 	d.tabSettings.Disable()
-	tabBar := container.NewGridWithColumns(2, questButtonWidget(d.tabSettings), questButtonWidget(d.tabVoices))
+	d.locateWoW = widget.NewButtonWithIcon("Locate WoW…", theme.FolderOpenIcon(), nil)
+	tabBar := container.NewBorder(nil, nil, nil, questButtonWidget(d.locateWoW),
+		container.NewGridWithColumns(2, questButtonWidget(d.tabSettings), questButtonWidget(d.tabVoices)))
 	panels := container.NewStack(paper, voices)
 	privacy := canvas.NewText("Only your game window is captured. Speech stays on this computer.", gold)
 	privacy.TextSize = 12
@@ -130,7 +155,7 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool), fil
 	versionLabel.TextSize = 13
 	privacyNote := container.New(layout.NewCustomPaddedLayout(0, 10, 0, 0), container.NewCenter(privacy))
 	footer := container.NewVBox(privacyNote, container.NewHBox(container.NewCenter(versionLabel), layout.NewSpacer(), questButton("Minimize to tray", hide), questButton("Quit", quit)))
-	d.root = questFrame(container.NewBorder(container.NewVBox(inset(5, banner), inset(2, tabBar)), inset(5, footer), nil, nil, panels))
+	d.root = questFrame(container.NewBorder(container.NewVBox(inset(5, banner), d.addonNotice, inset(2, tabBar)), inset(5, footer), nil, nil, panels))
 	// Set only after the selects above restored their saved selections, so
 	// building the tab never persists or replays user choices.
 	d.onVoiceChoices = onVoiceChoices
@@ -229,6 +254,14 @@ func (d *dashboard) showQuestOptions() {
 }
 
 func (d *dashboard) render(s appstate.Snapshot) {
+	heading, detail := addonNoticeText(s.AddonBanner)
+	d.addonHeading.SetText(heading)
+	d.addonBanner.SetText(detail)
+	if s.AddonBanner == "" {
+		d.addonNotice.Hide()
+	} else {
+		d.addonNotice.Show()
+	}
 	// Reflect saved preferences without firing the user's change callbacks.
 	for check, enabled := range map[*widget.Check]bool{
 		d.quests: s.Filters.Quests, d.conversations: s.Filters.Conversations, d.npcSpeech: s.Filters.NPCSpeech,
@@ -246,12 +279,15 @@ func (d *dashboard) render(s appstate.Snapshot) {
 		d.queue.Refresh()
 	}
 	win, winDetail := "Waiting", "No game frames available"
-	tile, tileDetail := "Searching", "In WoW, use /fdb unlock"
+	tile, tileDetail := "Searching", "To reposition: /fdb unlock"
 	if s.Window {
-		win, winDetail = "Detected", "Receiving game-window frames"
+		win, winDetail = "Detected", "Game capture working"
 	}
 	if s.Tile {
 		tile, tileDetail = "Connected", "Reading dialogue from the addon"
+		if s.AddonVersion != "" {
+			tileDetail = "Addon " + s.AddonVersion
+		}
 	}
 	if s.Stopped {
 		win, tile = "Stopped", "Stopped"
@@ -292,4 +328,18 @@ func (d *dashboard) render(s appstate.Snapshot) {
 	}
 	// Wrapped status text can change child minimum sizes.
 	d.root.Refresh()
+}
+
+func addonNoticeText(message string) (string, string) {
+	switch message {
+	case addon.Restart:
+		return "Restart World of Warcraft", "ForeverDubbed addon has been installed. Restart the game to enable it."
+	case addon.Reload:
+		return "Reload the addon", "Type /reload in World of Warcraft to update ForeverDubbed addon."
+	default:
+		if detail, ok := strings.CutPrefix(message, "Permission denied. "); ok {
+			return "Addon installation needs permission", detail
+		}
+		return "ForeverDubbed addon", message
+	}
 }

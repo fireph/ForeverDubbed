@@ -16,7 +16,8 @@ import (
 )
 
 // macApp stages a Finder-launchable bundle before replacing the previous build.
-// Documentation and the addon stay beside it in the release ZIP.
+// Documentation and the addon stay beside it in the release ZIP. The addon
+// also lives in Resources for manual installation from a standalone app.
 func macApp(dist string, files map[string]string, sign func(string) error) (map[string]string, error) {
 	staging, err := os.MkdirTemp(dist, ".foreverdubbed-app-")
 	if err != nil {
@@ -32,6 +33,9 @@ func macApp(dist string, files map[string]string, sign func(string) error) (map[
 		case name == "foreverdubbed" || name == "foreverdubbed-updater":
 			target = "Contents/MacOS/" + name
 		case name == update.ManifestName:
+			target = "Contents/Resources/" + name
+		case strings.HasPrefix(name, "addon/"):
+			result[name] = source
 			target = "Contents/Resources/" + name
 		case strings.HasPrefix(name, "docs/licenses/"):
 			// Keep redistributable font notices with the standalone app too.

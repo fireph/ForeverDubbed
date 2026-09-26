@@ -2,6 +2,7 @@ package speech
 
 import (
 	"encoding/json"
+	"foreverdubbed/internal/protocol"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,5 +58,13 @@ func TestProfileValidation(t *testing.T) {
 				t.Fatalf("profile = %+v, want %+v", got, tc.profile)
 			}
 		})
+	}
+}
+
+func TestInstallationAnnouncementUsesNarrator(t *testing.T) {
+	c := Config{Default: map[string]string{"unknown": "narrator"}, Profiles: map[string]Profile{"narrator": {Voice: "alba"}}}
+	got, err := c.Voice(protocol.Message{Announcement: true}, "other", map[string]string{":unknown": VoiceNone})
+	if err != nil || got != "narrator" {
+		t.Fatalf("got %q, %v", got, err)
 	}
 }

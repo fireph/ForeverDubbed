@@ -75,7 +75,7 @@ Interior cells are read row by row, skipping the wave mask. Each palette index e
 | 18 | 2 | Total page count, 1..256 |
 | 20 | 2 | Payload length, 1..1056 |
 | 22 | 1 | Message kind |
-| 23 | 1 | Flags: 0 = text only, 1 = legacy speaker metadata, 2 = appearance/override metadata (0.6.0+), 3 = separate objectives (0.6.5+) |
+| 23 | 1 | Flags: 0 = text only, 1 = legacy speaker metadata, 2 = appearance/override metadata (0.6.0+), 3 = separate objectives (0.6.5+), 4 = addon version (0.8.3+) |
 | 24 | 1056 | Payload followed by cosmetic noise padding (legacy encoders use zeros) |
 | 1080 | 4 | Adler-32 of bytes 0..1079, including padding |
 
@@ -91,11 +91,23 @@ The complete message consists of NUL-separated UTF-8 fields:
 | 1 | Above, then `race`, `gender`, `npcID` |
 | 2 | Above, then `displayID`, `modelID`, `raceOverride` |
 | 3 | Above, then `objectives` |
+| 4 | Above, then `v` (loaded addon version, e.g. `v0.8.3`) |
+
+Version 0.8.3 sends flags 4 on every message, including controls. Only the
+version value is transmitted (not a JSON key); decoded JSON exposes it as `"v"`.
+Kind 9 is a silent version announcement, with empty dialogue/identity fields.
+It appears at addon startup and when re-enabled, then expires after 15 seconds.
+Version 0.8.4 restores automatic hiding after dialogue expires; unlocked tiles
+stay visible for positioning. A companion launched after the square hides gets
+the loaded version from the next dialogue or `/fdb test` message.
+The companion accepts flags 0–3 from old addons and treats their version as unknown;
+older companions cannot decode flags 4. Version announcements never enter speech
+or replace the last displayed dialogue. Reloading creates a new session.
 
 Quest offers send the full title in `title`, the main dialogue in `text`, and
 objective text in `objectives`. The desktop keeps all fields and includes titles
 and objectives in quest speech only when their separate saved options are enabled
-(both off by default). Flags 3 is used when objectives are nonempty, including empty
+(both off by default). In pre-0.8.3 addons, flags 3 is used when objectives are nonempty, including empty
 placeholders for missing identity fields. Quest progress/completion do not reuse
 objectives from previous offers.
 
@@ -106,7 +118,7 @@ Gender is `male`, `female`, or empty. Zero/unavailable display IDs are sent empt
 display IDs; only a successful prior explicit inspection for the same GUID can
 supply one.
 Race and override are English race names, for example `Orc` or `Skyborne`.
-When objectives are empty, flags 2 is used when any of its three extra fields is nonempty; otherwise the
+In pre-0.8.3 addons, when objectives are empty, flags 2 is used when any of its three extra fields is nonempty; otherwise the
 encoder uses flags 1 or 0 as appropriate. Legacy flags 1 race may already have
 been inferred by an older addon, so it is treated as an addon-supplied race.
 

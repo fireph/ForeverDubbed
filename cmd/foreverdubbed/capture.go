@@ -81,8 +81,9 @@ func captureLoop(ctx context.Context, settings captureSettings, state *appstate.
 				log.Printf("Discarding message: %v", assemblyErr)
 			}
 			if m != nil {
+				state.ObserveAddon(*m)
 				*m = identities.Resolve(*m)
-				if !m.IsControl() {
+				if !m.IsControl() && m.Kind != protocol.KindVersion {
 					state.Received(*m)
 				}
 				if settings.emitJSON {
@@ -90,7 +91,7 @@ func captureLoop(ctx context.Context, settings captureSettings, state *appstate.
 						return err
 					}
 				}
-				if !settings.mute {
+				if !settings.mute && m.Kind != protocol.KindVersion {
 					select {
 					case speech <- *m:
 					case <-ctx.Done():
@@ -106,6 +107,15 @@ func captureLoop(ctx context.Context, settings captureSettings, state *appstate.
 		select {
 		case <-ctx.Done():
 			timer.Stop()
+		case announcement := <-state.Announcements():
+			timer.Stop()
+			if !settings.mute {
+				select {
+				case speech <- announcement:
+				case <-ctx.Done():
+					return nil
+				}
+			}
 		case <-timer.C:
 		}
 	}

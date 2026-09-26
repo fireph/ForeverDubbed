@@ -30,6 +30,8 @@ func (f SpeechFilters) Allows(kind byte) bool {
 }
 
 type Snapshot struct {
+	AddonVersion, AddonBanner             string
+	AddonSession                          uint32
 	Filters                               SpeechFilters
 	Target, Backend                       string
 	Ready, Stopped                        bool
@@ -50,6 +52,7 @@ type Snapshot struct {
 type State struct {
 	mu            sync.RWMutex
 	value         Snapshot
+	announcements chan protocol.Message
 	stopAudio     chan uint64
 	speechChanges chan struct{}
 	// Voice choices stay outside Snapshot, which must remain comparable.
@@ -62,7 +65,7 @@ func New(target, backend string, muted bool) *State {
 	if muted {
 		audio = "Muted"
 	}
-	return &State{stopAudio: make(chan uint64, 1), speechChanges: make(chan struct{}, 1), value: Snapshot{Target: target, Backend: backend, Audio: audio, Filters: SpeechFilters{Quests: true, Conversations: true, NPCSpeech: true}}}
+	return &State{announcements: make(chan protocol.Message, 4), stopAudio: make(chan uint64, 1), speechChanges: make(chan struct{}, 1), value: Snapshot{Target: target, Backend: backend, Audio: audio, Filters: SpeechFilters{Quests: true, Conversations: true, NPCSpeech: true}}}
 }
 func (s *State) Snapshot() Snapshot {
 	s.mu.RLock()
@@ -161,4 +164,16 @@ func (s *State) VoiceChoices() map[string]string {
 	s.voiceMu.RLock()
 	defer s.voiceMu.RUnlock()
 	return maps.Clone(s.voiceChoices)
+}
+
+// Announce queues installation guidance even while the speech engine starts.
+func (s *State) Announce(text string) {
+	select {
+	case s.announcements <- protocol.Message{Text: text, Announcement: true}:
+	default:
+	}
+}
+func (s *State) Announcements() <-chan protocol.Message { return s.announcements }
+func (s *State) ObserveAddon(m protocol.Message) {
+	s.Update(func(v *Snapshot) { v.AddonVersion, v.AddonSession = m.AddonVersion, m.Session })
 }

@@ -60,7 +60,7 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 		choices := state.VoiceChoices()
 		kept := pending[:0]
 		for _, message := range pending {
-			if filters.Allows(message.Kind) && !speech.VoiceMuted(choices, message.Race, message.Gender) {
+			if filters.Allows(message.Kind) && (message.Announcement || !speech.VoiceMuted(choices, message.Race, message.Gender)) {
 				kept = append(kept, message)
 			}
 		}
@@ -69,7 +69,7 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 			pending = kept
 			updateQueue()
 		}
-		if finished != nil && (!filters.Allows(active.Kind) || speech.VoiceMuted(choices, active.Race, active.Gender)) {
+		if finished != nil && (!filters.Allows(active.Kind) || (!active.Announcement && speech.VoiceMuted(choices, active.Race, active.Gender))) {
 			stopCurrent()
 		}
 		// Switching back to interrupt mode keeps only the newest waiting message.
@@ -113,7 +113,7 @@ func speakLoop(ctx context.Context, requests <-chan protocol.Message, speak func
 			if !state.Snapshot().Filters.Allows(message.Kind) {
 				continue
 			}
-			if speech.VoiceMuted(state.VoiceChoices(), message.Race, message.Gender) {
+			if !message.Announcement && speech.VoiceMuted(state.VoiceChoices(), message.Race, message.Gender) {
 				continue
 			}
 			if state.Snapshot().QueueSpeech && finished != nil {

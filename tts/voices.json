@@ -124,7 +124,8 @@
       "gain_db": 2
     },
     "skyborne_male": {
-      "voice": "custom/skyborne_male.safetensors"
+      "voice": "custom/skyborne_male.safetensors",
+      "gain_db": -3
     },
     "skyborne_female": {
       "voice": "custom/skyborne_female.safetensors"

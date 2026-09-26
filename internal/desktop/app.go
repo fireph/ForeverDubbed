@@ -95,6 +95,7 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 			}
 		}
 	}()
+	d.locateWoW.OnTapped = manageAddon(ctx, a, w, state, version)
 	checkForUpdates(ctx, version, w, stop)
 	w.ShowAndRun()
 	stop()
