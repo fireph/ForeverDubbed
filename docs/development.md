@@ -15,6 +15,8 @@ go run ./tools/build
 
 Windows archives are named `ForeverDubbed-windows-amd64-portable.zip`; macOS archives use `ForeverDubbed-mac-<arch>.zip` (the compiler target remains `darwin`). To also create `ForeverDubbed-windows-amd64-setup.exe`, install [NSIS](https://nsis.sourceforge.io/Docs/) (`sudo apt-get install nsis` on Ubuntu) and run `go run ./tools/build -windows-installer`. GitHub Actions enables this flag. The installer uses the portable package's exact file manifest, installs under `%LOCALAPPDATA%\Programs\ForeverDubbed` by default without elevation, creates a Start menu shortcut, and registers an uninstaller. Quit the running app before upgrading; packaged files are replaced, so back up any edits to bundled configuration or voices first. Uninstall removes packaged files and empty directories, leaving additional user files and desktop preferences intact. The addon must still be copied into WoW separately.
 
+GitHub Actions caches Go modules and compiled packages separately for Windows/amd64 and macOS/arm64. Both builds run on Ubuntu, so explicit target keys prevent the faster macOS job from occupying the Windows cache. Each commit restores the latest cache for its target and saves updated compiled packages. Go version, dependency, and native library configuration changes select a new cache; native libraries and model downloads are not cached by these Go caches.
+
 Real native speech checks (no game or audio device required):
 
 ```sh
