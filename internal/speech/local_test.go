@@ -193,6 +193,7 @@ func TestWorldChatNarration(t *testing.T) {
 		want              []utterance
 	}{
 		{"say", "Thrall says", "Hello there.", false, []utterance{{"Thrall says.", "narrator_male.safetensors"}, {"Hello there.", "orc_male.safetensors"}}},
+		{"say with aside", "Thrall says", "Hello. <Thrall nods.> Come along.", false, []utterance{{"Thrall says.", "narrator_male.safetensors"}, {"Hello.", "orc_male.safetensors"}, {"Thrall nods.", "narrator_male.safetensors"}, {"Come along.", "orc_male.safetensors"}}},
 		{"emote", "", "Al'aketh Stormcaller attempts to run away in fear.", false, []utterance{{"Al'aketh Stormcaller attempts to run away in fear.", "narrator_male.safetensors"}}},
 		{"muted", "Thrall says", "Hello there.", true, nil},
 	} {
@@ -227,6 +228,46 @@ func TestWorldChatNarration(t *testing.T) {
 			}
 			if m.Speech() != wantSpeech {
 				t.Fatalf("fallback speech = %q, want %q", m.Speech(), wantSpeech)
+			}
+		})
+	}
+}
+
+func TestBracketedNarration(t *testing.T) {
+	c, err := Load("../../tts/voices.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, text string
+		want       []speechSegment
+	}{
+		{"mixed", "Welcome. <Thrall nods.> Follow me.", []speechSegment{{"Welcome.", "orc_male.safetensors"}, {"Thrall nods.", "narrator_male.safetensors"}, {"Follow me.", "orc_male.safetensors"}}},
+		{"multiple", "<He pauses.> Hello. <He waves.>", []speechSegment{{"He pauses.", "narrator_male.safetensors"}, {"Hello.", "orc_male.safetensors"}, {"He waves.", "narrator_male.safetensors"}}},
+		{"multiline", "<Thrall nods.\nHe smiles.>", []speechSegment{{"Thrall nods. He smiles.", "narrator_male.safetensors"}}},
+		{"empty", "<>Hello.< >", []speechSegment{{"Hello.", "orc_male.safetensors"}}},
+		{"unmatched", "Hello. <unfinished", []speechSegment{{"Hello. <unfinished", "orc_male.safetensors"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []speechSegment
+			plays := 0
+			local := Local{Config: c, Override: "orc_male", Engine: fakeEngine{func(_ context.Context, text, voice string, _ pocket.StreamOptions, emit func([]byte) error) error {
+				got = append(got, speechSegment{text, filepath.Base(voice)})
+				return emit([]byte{0, 0})
+			}}, Play: func(_ context.Context, _ int, chunks <-chan []byte) error {
+				plays++
+				for range chunks {
+				}
+				return nil
+			}}
+			if err := local.Speak(context.Background(), protocol.Message{Kind: 2, Text: tc.text, Race: "Orc", Gender: "male"}); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("got %+v, want %+v", got, tc.want)
+			}
+			if plays != 1 {
+				t.Fatalf("expected continuous playback, got %d queues", plays)
 			}
 		})
 	}

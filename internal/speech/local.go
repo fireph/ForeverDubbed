@@ -97,19 +97,26 @@ func (l *Local) Speak(parent context.Context, m protocol.Message) error {
 	if l.OnVoice != nil {
 		l.OnVoice(m, name)
 	}
-	type segment struct{ text, name string }
-	segments := []segment{{m.DialogueText(false, false), name}}
-	if m.Kind == 5 {
-		narrator, err := l.Config.Voice(protocol.Message{Announcement: true}, "", nil)
+	segments := []speechSegment{{m.DialogueText(false, false), name}}
+	var narrator string
+	if m.Kind == 5 || narratorAside.MatchString(segments[0].text) {
+		narrator, err = l.Config.Voice(protocol.Message{Announcement: true}, "", nil)
 		if err != nil {
 			return err
 		}
+	}
+	if m.Kind == 5 {
 		if strings.TrimSpace(m.Title) == "" {
-			segments = []segment{{m.Text, narrator}}
+			segments = []speechSegment{{m.Text, narrator}}
 		} else {
-			segments = []segment{{m.Title + ".", narrator}, {m.Text, name}}
+			segments = []speechSegment{{m.Title + ".", narrator}, {m.Text, name}}
 		}
 	}
+	var narrated []speechSegment
+	for _, segment := range segments {
+		narrated = append(narrated, splitNarration(segment, narrator)...)
+	}
+	segments = narrated
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	chunks := make(chan []byte, platform.PCMQueueDepth)
