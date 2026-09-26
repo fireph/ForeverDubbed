@@ -9,7 +9,11 @@
   <a href="https://github.com/fireph/ForeverDubbed/issues">Report a problem</a>
 </p>
 
-Hear quest dialogue, NPC conversations, ambient speech, and books read aloud with race and gender voices. Speech runs locally on your computer. The companion captures only your WoW game window.
+Have you always wondered what WoW would be like with full voice acting? Wonder no more! Using text-to-speed models that run locally on your computer, Forever Dubbed generates audio for any quest, conversation, or dialog in the game!
+
+Features unique voices for each race/gender and it will even will say your character's name.
+
+Try it out and experience Azeroth like never before!
 
 ## Install
 
