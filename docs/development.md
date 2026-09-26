@@ -63,6 +63,18 @@ GUI tests use Fyne's `ci` software driver, so Linux CI needs no display server o
 
 For runtime validation, check startup errors, game absent/present, tile found/lost, preparing/playing/idle speech, minimizing or closing to the tray, restoring from the tray, and quitting during playback. Unit tests and cross-compilation cannot validate native system-tray behavior.
 
+### Logo and application icons
+
+The original artwork lives in `internal/appicon/assets/`. `forever-dubbed-banner.png` is embedded for the centered desktop header. `forever-dubbed-logo.png` supplies the window and tray icons and is resized into the macOS bundle's `app.icns` during packaging. Images retain their transparent background.
+
+Windows executables include the ICO through `internal/appicon/icon_windows_amd64.syso`. Keep this generated resource in source control so direct `go build` commands also include the icon. After replacing the ICO, regenerate it with MinGW-w64 installed:
+
+```sh
+go generate ./internal/appicon
+```
+
+On a Windows MinGW installation whose resource compiler is named `windres`, run `windres --input assets/icon.rc --output icon_windows_amd64.syso --output-format coff --target pe-x86-64` from `internal/appicon/` instead. Rebuild the executable or macOS bundle after changing the artwork.
+
 ### Quest-dialog styling
 
 The desktop UI uses a parchment reading area, textured dark frame, gold headings, and red beveled controls inspired by the classic WoW quest dialog. The frame and paper are drawn locally and scale with the window; they do not use extracted game textures. The bundled regular, bold, and italic [Caudex fonts](https://github.com/google/fonts/tree/main/ofl/caudex) provide consistent serif typography on both platforms. Their [SIL Open Font License](licenses/Caudex-OFL.txt) ships with the release and inside the macOS app's `Contents/Resources/licenses` directory. Theme and decorative drawing code live in `internal/desktop/quest_theme.go`; state and interaction behavior remain in the existing dashboard and app controller.

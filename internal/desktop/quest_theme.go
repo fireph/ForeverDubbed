@@ -177,18 +177,6 @@ func questRule() fyne.CanvasObject {
 	line.SetMinSize(fyne.NewSize(1, 1))
 	return inset(3, line)
 }
-func questMedallion() fyne.CanvasObject {
-	outer := canvas.NewCircle(color.NRGBA{R: 94, G: 75, B: 38, A: 255})
-	outer.StrokeColor = gold
-	outer.StrokeWidth = 2
-	middle := canvas.NewCircle(color.NRGBA{R: 15, G: 18, B: 18, A: 255})
-	middle.StrokeColor = color.NRGBA{R: 180, G: 141, B: 61, A: 255}
-	middle.StrokeWidth = 1
-	mark := canvas.NewText("!", gold)
-	mark.TextSize = 46
-	mark.TextStyle.Bold = true
-	return container.NewGridWrap(fyne.NewSize(66, 66), container.NewStack(outer, inset(5, middle), container.NewCenter(mark)))
-}
 func questButton(label string, action func()) fyne.CanvasObject {
 	return questButtonWidget(widget.NewButton(label, action))
 }

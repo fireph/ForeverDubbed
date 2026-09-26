@@ -71,12 +71,10 @@ func newDashboard(version string, hide, quit, stop func(), queue func(bool), fil
 	if d.voiceChoices == nil {
 		d.voiceChoices = map[string]string{}
 	}
-	title := canvas.NewText("ForeverDubbed", gold)
-	title.TextSize = 27
-	title.TextStyle.Bold = true
-	subtitle := canvas.NewText("World of Warcraft companion", gold)
-	subtitle.TextSize = 14
-	banner := container.NewBorder(nil, nil, questMedallion(), nil, container.NewCenter(container.NewVBox(title, subtitle)))
+	headerImage := canvas.NewImageFromResource(Banner)
+	headerImage.FillMode = canvas.ImageFillContain
+	headerImage.SetMinSize(fyne.NewSize(390, 130))
+	banner := container.NewCenter(headerImage)
 	d.stop = widget.NewButton("Stop", stop)
 	d.stop.Disable()
 	// The speech worker already advances the queue after cancelling the current

@@ -22,7 +22,6 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 	a.SetIcon(Icon)
 	a.Settings().SetTheme(companionTheme{theme.DefaultTheme()})
 	w := a.NewWindow("ForeverDubbed")
-	// Tall enough for the Voices tab table to show all races without scrolling.
 	w.Resize(fyne.NewSize(760, 800))
 	w.CenterOnScreen()
 	quit := func() { stop() }
@@ -104,3 +103,4 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 }
 
 var Icon = fyne.NewStaticResource("foreverdubbed.png", appicon.PNG(256))
+var Banner = fyne.NewStaticResource("forever-dubbed-banner.png", appicon.Banner)
