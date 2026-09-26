@@ -29,7 +29,7 @@ Run from the repository root:
 uv run --project tools/voices --locked tools/voices/clone_voice.py --voice undead_male=audio_clips/undead-male.wav --seconds 20 --online --force --activate
 ```
 
-The example replaces the existing bundled voice with `--force`. Omit that flag when creating a new voice. Use `--start` to choose an excerpt, `--prepare-only` to inspect the reference first, and `--force` to intentionally replace an existing state. WAV and MP3 sources are supported. `--decode-steps 4` is retained in the profile and honored by native synthesis. `--cpu-threads` controls the Python preview only; the application's thread budget is set with its `-cpu-threads` flag.
+The example replaces the existing bundled voice with `--force`. Omit that flag when creating a new voice. By default a recording under 30 seconds is used whole; longer recordings are cut at the first quiet pause at/after `--seconds` (default 20). Use `--start` to choose a fixed excerpt, `--prepare-only` to inspect the reference first, and `--force` to intentionally replace an existing state. WAV and MP3 sources are supported. `--decode-steps 4` is retained in the profile and honored by native synthesis. Each export also writes comparison samples at 1, 2, and 4 decode steps to `.runtime/voice-samples/<profile>.preview-d<steps>.wav` to help choose that value. `--cpu-threads` controls the Python preview only; the application's thread budget is set with its `-cpu-threads` flag.
 
 Exports go to `tts/custom/<profile>.safetensors`. The tool checks a Python preview before activating a profile, but also validate the final native result:
 

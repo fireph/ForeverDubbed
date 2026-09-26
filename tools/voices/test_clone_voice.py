@@ -54,15 +54,40 @@ class ReferenceTests(unittest.TestCase):
         self.assertTrue(np.isfinite(clip).all())
         self.assertLessEqual(np.max(np.abs(clip)), 1)
 
-    def test_automatic_selection_prefers_active_audio(self):
+    def test_automatic_selection_starts_at_zero_and_ends_at_quiet_pause(self):
         rate = 1000
         audio = np.zeros(60*rate)
-        audio[30*rate:55*rate] = 0.3*np.sin(np.arange(25*rate))
+        audio[:20500] = 0.2*np.sin(np.arange(20500))
+        audio[20900:45*rate] = 0.4*np.sin(np.arange(45*rate-20900))  # louder later line
         clip, first, last = excerpt(audio, rate, 20)
-        self.assertGreaterEqual(first, 29)
-        self.assertLessEqual(last, 56)
-        self.assertLessEqual(last-first, 30)
+        self.assertEqual(first, 0)
+        self.assertGreaterEqual(last, 20)       # never before the minimum duration
+        self.assertLessEqual(last, 20.9)        # ends at the pause, before the next line
         self.assertGreater(np.sqrt(np.mean(clip**2)), 0.1)
+
+    def test_automatic_selection_extends_past_brief_gaps(self):
+        rate = 1000
+        audio = np.zeros(40*rate)
+        audio[:30*rate] = 0.2*np.sin(np.arange(30*rate))
+        audio[20100:20200] = 0                    # 0.1s stop-closure gap, not a pause
+        audio[25*rate:25600] = 0                  # first real pause >= 0.2s
+        _, first, last = excerpt(audio, rate, 20)
+        self.assertEqual((first, last), (0, 25))
+
+    def test_automatic_selection_uses_whole_recording_under_30s(self):
+        rate = 1000
+        audio = 0.2*np.sin(np.arange(25*rate))
+        audio[21*rate:21300] = 0  # pause the under-30s rule ignores
+        _, first, last = excerpt(audio, rate, 20)
+        self.assertEqual((first, last), (0, 25))
+        short = 0.3*np.sin(np.arange(16*rate))
+        _, first, last = excerpt(short, rate, 20)
+        self.assertEqual((first, last), (0, 16))  # shorter than the minimum too
+
+    def test_automatic_selection_without_pause_uses_quietest_fallback(self):
+        rate = 1000
+        _, first, last = excerpt(0.3 * np.ones(40*rate), rate, 20)
+        self.assertEqual((first, last), (0, 20))  # no pause: quietest hop in capped range
 
     def test_automatic_selection_preserves_minimum_duration(self):
         rate = 24000
