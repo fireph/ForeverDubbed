@@ -4,6 +4,11 @@
 // Embedded inference runtime; built through bridge.cpp by Go/cgo.
 // Upstream HTTP, command-line, and alternate FFI entry points are omitted.
 
+#pragma once
+
+// Model-free tests compile the same helpers without loading the inference SDK.
+#ifndef POCKET_TTS_HELPERS_ONLY
+
 // ── Platform filesystem and path support ────────────────────────────────────────────
 
 #ifdef _WIN32
@@ -27,7 +32,7 @@
 
 // ── External Libraries ──────────────────────────────────────────────────────
 
-#include "sentence_fade.hpp"
+#include <nlohmann/json.hpp>
 #include <onnxruntime_cxx_api.h>
 #include <sentencepiece_processor.h>
 
@@ -40,18 +45,24 @@
 #define DR_FLAC_IMPLEMENTATION
 #include "dr_flac.h"
 
+#endif // POCKET_TTS_HELPERS_ONLY
+
 // ── Standard Library ────────────────────────────────────────────────────────
 
 #include <algorithm>
+#include <cctype>
+#include <cstddef>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
 #include <cstdio>
 #include <cstring>
 #include <deque>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iomanip>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -59,11 +70,206 @@
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace pocket_tts {
+
+// ── Text preparation ──────────────────────────────────────────────────────
+
+namespace text_detail {
+// Match whole UTF-8 characters, never individual bytes of curly quotes or dashes.
+inline size_t suffix_length(std::string_view text,
+                            std::initializer_list<std::string_view> characters) {
+    for (auto character : characters) {
+        if (text.size() >= character.size() &&
+            text.substr(text.size() - character.size()) == character)
+            return character.size();
+    }
+    return 0;
+}
+
+inline std::string_view trim_end(std::string_view text,
+                                 std::initializer_list<std::string_view> characters) {
+    while (auto length = suffix_length(text, characters))
+        text.remove_suffix(length);
+    return text;
+}
+} // namespace text_detail
+
+inline std::string ensure_terminal_punctuation(const std::string &text) {
+    using text_detail::suffix_length;
+    using text_detail::trim_end;
+    auto core = trim_end(text, {"\"", "'", "\u201d", "\u2019", ")", "]", "\u00bb", " "});
+    if (core.empty() || suffix_length(core, {".", "!", "?", "\u2026"}))
+        return text;
+
+    // Weak endings can cause the final word to repeat or be mispronounced.
+    if (suffix_length(core, {",", ";", ":", "-", "\u2013", "\u2014"})) {
+        auto closers = std::string_view(text).substr(core.size());
+        while (!closers.empty() && closers.front() == ' ')
+            closers.remove_prefix(1);
+        closers = trim_end(closers, {" "});
+        core = trim_end(core, {",", ";", ":", "-", "\u2013", "\u2014", " "});
+        return std::string(core) + "." + std::string(closers);
+    }
+    // Keep the period after closing quotes/brackets, matching upstream tokenization.
+    return text + ".";
+}
+
+static int count_words(const std::string &text) {
+    int count = 0;
+    bool in_word = false;
+    for (char c : text) {
+        if (std::isspace((unsigned char)c)) {
+            in_word = false;
+        } else if (!in_word) {
+            in_word = true;
+            count++;
+        }
+    }
+    return count;
+}
+
+// Prepare text for synthesis and compute frames_after_eos.
+// Returns {prepared_text, eos_extra_frames}.
+static std::pair<std::string, int> prepare_text(const std::string &raw, int cfg_eos_extra) {
+    std::string text = raw;
+
+    // Strip characters the model can't speak
+    std::string cleaned;
+    cleaned.reserve(text.size());
+    for (char c : text) {
+        if (c == '"' || c == '`')
+            continue;
+        cleaned += c;
+    }
+    // Strip curly double quotes (UTF-8: " ")
+    auto stripUtf8 = [](std::string &s, const char *seq) {
+        size_t len = strlen(seq);
+        size_t pos;
+        while ((pos = s.find(seq)) != std::string::npos)
+            s.erase(pos, len);
+    };
+    stripUtf8(cleaned, "\xe2\x80\x9c"); // "
+    stripUtf8(cleaned, "\xe2\x80\x9d"); // "
+    text = cleaned;
+
+    // Strip apostrophes/quotes from edges only (preserve contractions like don't, it's)
+    while (!text.empty() && (text.front() == '\'' || text.front() == '`'))
+        text.erase(0, 1);
+    while (!text.empty() && (text.back() == '\'' || text.back() == '`'))
+        text.pop_back();
+    // Curly apostrophes at edges (UTF-8: ' ')
+    while (text.size() >= 3 && text.substr(0, 3) == "\xe2\x80\x98")
+        text.erase(0, 3);
+    while (text.size() >= 3 && text.substr(0, 3) == "\xe2\x80\x99")
+        text.erase(0, 3);
+    while (text.size() >= 3 && text.substr(text.size() - 3) == "\xe2\x80\x98")
+        text.erase(text.size() - 3);
+    while (text.size() >= 3 && text.substr(text.size() - 3) == "\xe2\x80\x99")
+        text.erase(text.size() - 3);
+
+    // Strip leading/trailing whitespace
+    size_t start = text.find_first_not_of(" \t\n\r");
+    size_t end = text.find_last_not_of(" \t\n\r");
+    if (start == std::string::npos)
+        return {"", cfg_eos_extra >= 0 ? cfg_eos_extra : 3};
+    text = text.substr(start, end - start + 1);
+
+    // Normalize whitespace
+    for (auto &c : text) {
+        if (c == '\n' || c == '\r')
+            c = ' ';
+    }
+
+    int nwords = count_words(text);
+    int eos_extra = cfg_eos_extra >= 0 ? cfg_eos_extra : ((nwords <= 4) ? 5 : 3);
+
+    // Capitalize first letter
+    if (!text.empty() && std::islower((unsigned char)text[0]))
+        text[0] = std::toupper((unsigned char)text[0]);
+
+    text = ensure_terminal_punctuation(text);
+
+    // Pad short text — model doesn't perform well with very few tokens
+    if (nwords < 5)
+        text = "        " + text; // 8 spaces, matching Python
+
+    return {text, eos_extra};
+}
+
+// ── Generation stopping ──────────────────────────────────────────────────
+
+class GenerationEnd {
+    int first_frame_ = -1;
+
+  public:
+    bool should_stop(int frame, float logit, float threshold, int frames_after_eos) {
+        // Some voices predict EOS during their leading pause. Ignore the first
+        // six frames (480 ms) so a short word has time to start. Frame is zero-based.
+        constexpr int min_frames_before_eos = 6;
+        if (first_frame_ < 0 && frame >= min_frames_before_eos && logit > threshold)
+            first_frame_ = frame;
+        // Preserve the configured tail after the first accepted EOS prediction.
+        return first_frame_ >= 0 && frame - first_frame_ >= frames_after_eos;
+    }
+
+    int first_frame() const {
+        return first_frame_;
+    }
+};
+
+// ── Sentence fades ───────────────────────────────────────────────────────
+
+// Retain only the fade-out tail. Decoder batch boundaries do not restart the
+// envelope; each generated sentence gets its own instance.
+class SentenceFade {
+    size_t fade_in_, fade_out_, seen_ = 0;
+    std::vector<float> tail_;
+
+public:
+    SentenceFade(size_t fade_in, size_t fade_out)
+        : fade_in_(fade_in), fade_out_(fade_out) {}
+
+    template<class Callback>
+    bool push(const float* data, size_t count, Callback&& emit) {
+        if (count == 0) return true;
+        if (fade_in_ == 0 && fade_out_ == 0) return emit(data, count);
+        const size_t offset = tail_.size();
+        tail_.insert(tail_.end(), data, data + count);
+        for (size_t i = 0; i < count && seen_ + i < fade_in_; ++i) {
+            const float gain = fade_in_ <= 1 ? 0.0f :
+                0.5f * (1.0f - std::cos(3.14159265358979323846 * (seen_ + i) / (fade_in_ - 1)));
+            tail_[offset + i] *= gain;
+        }
+        seen_ += count;
+        if (tail_.size() > fade_out_) {
+            const size_t ready = tail_.size() - fade_out_;
+            if (!emit(tail_.data(), ready)) return false;
+            tail_.erase(tail_.begin(), tail_.begin() + ready);
+        }
+        return true;
+    }
+
+    template<class Callback>
+    bool finish(Callback&& emit) {
+        if (tail_.empty()) return true;
+        for (size_t i = 0; i < tail_.size(); ++i) {
+            const float gain = tail_.size() <= 1 ? 0.0f :
+                0.5f * (1.0f + std::cos(3.14159265358979323846 * i / (tail_.size() - 1)));
+            tail_[i] *= gain;
+        }
+        const bool ok = emit(tail_.data(), tail_.size());
+        tail_.clear();
+        return ok;
+    }
+};
+
+#ifndef POCKET_TTS_HELPERS_ONLY
 
 // ════════════════════════════════════════════════════════════════════════════
 // Types
@@ -280,76 +486,6 @@ static std::vector<std::string> split_sentences(const std::string& text) {
     }
     
     return sentences;
-}
-
-// ── Text preparation (matches Python's prepare_text_prompt) ────────────────
-
-static int count_words(const std::string& text) {
-    int count = 0;
-    bool in_word = false;
-    for (char c : text) {
-        if (std::isspace((unsigned char)c)) { in_word = false; }
-        else if (!in_word) { in_word = true; count++; }
-    }
-    return count;
-}
-
-// Prepare text for synthesis and compute frames_after_eos.
-// Returns {prepared_text, eos_extra_frames}.
-static std::pair<std::string, int> prepare_text(const std::string& raw, int cfg_eos_extra) {
-    std::string text = raw;
-    
-    // Strip characters the model can't speak
-    std::string cleaned;
-    cleaned.reserve(text.size());
-    for (char c : text) {
-        if (c == '"' || c == '`') continue;
-        cleaned += c;
-    }
-    // Strip curly double quotes (UTF-8: " ")
-    auto stripUtf8 = [](std::string& s, const char* seq) {
-        size_t len = strlen(seq);
-        size_t pos;
-        while ((pos = s.find(seq)) != std::string::npos) s.erase(pos, len);
-    };
-    stripUtf8(cleaned, "\xe2\x80\x9c");  // "
-    stripUtf8(cleaned, "\xe2\x80\x9d");  // "
-    text = cleaned;
-    
-    // Strip apostrophes/quotes from edges only (preserve contractions like don't, it's)
-    while (!text.empty() && (text.front() == '\'' || text.front() == '`')) text.erase(0, 1);
-    while (!text.empty() && (text.back() == '\'' || text.back() == '`')) text.pop_back();
-    // Curly apostrophes at edges (UTF-8: ' ')
-    while (text.size() >= 3 && text.substr(0, 3) == "\xe2\x80\x98") text.erase(0, 3);
-    while (text.size() >= 3 && text.substr(0, 3) == "\xe2\x80\x99") text.erase(0, 3);
-    while (text.size() >= 3 && text.substr(text.size() - 3) == "\xe2\x80\x98") text.erase(text.size() - 3);
-    while (text.size() >= 3 && text.substr(text.size() - 3) == "\xe2\x80\x99") text.erase(text.size() - 3);
-    
-    // Strip leading/trailing whitespace
-    size_t start = text.find_first_not_of(" \t\n\r");
-    size_t end = text.find_last_not_of(" \t\n\r");
-    if (start == std::string::npos) return {"", cfg_eos_extra >= 0 ? cfg_eos_extra : 3};
-    text = text.substr(start, end - start + 1);
-    
-    // Normalize whitespace
-    for (auto& c : text) { if (c == '\n' || c == '\r') c = ' '; }
-    
-    int nwords = count_words(text);
-    int eos_extra = cfg_eos_extra >= 0 ? cfg_eos_extra : ((nwords <= 4) ? 5 : 3);
-    
-    // Capitalize first letter
-    if (!text.empty() && std::islower((unsigned char)text[0]))
-        text[0] = std::toupper((unsigned char)text[0]);
-    
-    // Ensure ends with punctuation
-    if (!text.empty() && std::isalnum((unsigned char)text.back()))
-        text += '.';
-    
-    // Pad short text — model doesn't perform well with very few tokens
-    if (nwords < 5)
-        text = "        " + text;  // 8 spaces, matching Python
-    
-    return {text, eos_extra};
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1380,7 +1516,6 @@ public:
 // ════════════════════════════════════════════════════════════════════════════
 
 class PocketTTS {
-    friend struct ForeverDubbedAccess;
 public:
     static constexpr int SR = 24000;
     
@@ -1603,6 +1738,12 @@ public:
     }
     
     AudioData generate(const std::string& text, const Tensor& voice, int max_frames = 500);
+    // Change voice/settings only when no synthesis is running on this instance.
+    // Saved states must match the April English model's six-layer cache layout.
+    void load_voice_state(const std::string& filename);
+    void set_decode_steps(int steps);
+    void set_sentence_fades(int fade_in_ms, int fade_out_ms);
+
     void stream(const std::string& text, const std::string& voice, StreamCallback cb, int max_frames = 500);
     void stream(const std::string& text, const Tensor& voice, StreamCallback cb, int max_frames = 500);
     const Config& config() const { return cfg_; }
@@ -1675,10 +1816,10 @@ private:
     
     class LatentGen {
         PocketTTS& tts;
-        int max_, idx_ = 0, extra_ = 0;
-        int eos_frame_ = -1;
+        int max_, idx_ = 0;
+        GenerationEnd ending_;
         int eos_extra_;  // frames to generate after EOS
-        bool done_ = false, eos_ = false;
+        bool done_ = false;
         float temp_;
         Ort::MemoryInfo m_;
         
@@ -1800,18 +1941,11 @@ private:
                 eos_logit = outputs[1].GetTensorData<float>()[0];
             }
             
-            if (!eos_ && eos_logit > tts.cfg_.eos_threshold) {
-                eos_ = true;
-                eos_frame_ = idx_;
+            if (ending_.should_stop(idx_, eos_logit, tts.cfg_.eos_threshold, eos_extra_)) {
+                done_ = true;
+                return Tensor();
             }
-            
-            if (eos_) {
-                if (++extra_ > eos_extra_) { 
-                    done_ = true; 
-                    return Tensor(); 
-                }
-            }
-            
+
             {
                 auto _ = g_prof.time("frame:rng");
                 if (temp_ > 0) {
@@ -1848,7 +1982,7 @@ private:
         }
         
         int frame_idx() const { return idx_; }
-        int eos_frame() const { return eos_frame_; }
+        int eos_frame() const { return ending_.first_frame(); }
     };
     
     friend class LatentGen;
@@ -2085,5 +2219,101 @@ void PocketTTS::stream(const std::string& text, const Tensor& voice, StreamCallb
         if (!fade.finish(cb)) return;
     }
 }
+
+// ── Saved voice states and synthesis settings ─────────────────────────────
+
+// The pinned April export stores six attention layers in safetensors files.
+// Validate their layout so a model change cannot silently reuse incompatible state.
+void PocketTTS::load_voice_state(const std::string &filename) {
+    std::ifstream input(std::filesystem::u8path(filename), std::ios::binary | std::ios::ate);
+    if (!input)
+        throw std::runtime_error("Cannot open voice: " + filename);
+    auto length = input.tellg();
+    if (length < 8 || length > 128 * 1024 * 1024)
+        throw std::runtime_error("Invalid voice file size");
+    input.seekg(0);
+    uint64_t header_size = 0;
+    input.read(reinterpret_cast<char *>(&header_size), 8);
+    if (header_size > 1024 * 1024 || header_size + 8 > uint64_t(length))
+        throw std::runtime_error("Invalid safetensors header");
+    std::string header(header_size, '\0');
+    input.read(header.data(), header.size());
+    auto tensors = nlohmann::json::parse(header);
+    auto read = [&](const std::string &key, const std::string &dtype,
+                    const std::vector<int64_t> &shape, void *dest, size_t bytes) {
+        const auto &tensor = tensors.at(key);
+        auto offsets = tensor.at("data_offsets").get<std::vector<uint64_t>>();
+        if (tensor.at("dtype") != dtype ||
+            tensor.at("shape").get<std::vector<int64_t>>() != shape || offsets.size() != 2 ||
+            offsets[1] < offsets[0] || offsets[1] - offsets[0] != bytes ||
+            offsets[1] > uint64_t(length) - 8 - header_size)
+            throw std::runtime_error("Incompatible voice tensor: " + key);
+        input.seekg(8 + header_size + offsets[0]);
+        input.read(static_cast<char *>(dest), bytes);
+        if (!input)
+            throw std::runtime_error("Truncated voice tensor: " + key);
+    };
+    main_runner_->reinit();
+    auto &state = main_runner_->state();
+    if (state.names.size() != 18)
+        throw std::runtime_error("Expected April English six-layer model state");
+    int64_t voice_length = -1;
+    for (size_t layer = 0; layer < 6; ++layer) {
+        std::string prefix = "transformer.layers." + std::to_string(layer) + ".self_attn/";
+        int64_t offset = 0, pad = 0;
+        read(prefix + "offset", "I64", {1}, &offset, 8);
+        if (tensors.contains(prefix + "pad"))
+            read(prefix + "pad", "I64", {1}, &pad, 8);
+        if (offset < 1 || offset > 500 || pad != 0 ||
+            (voice_length != -1 && offset != voice_length))
+            throw std::runtime_error("Unsupported voice offset/padding");
+        voice_length = offset;
+        size_t i = layer * 3;
+        if (state.init_shapes[i] != std::vector<int64_t>({2, 1, 1000, 16, 64}) ||
+            state.types[i] != ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT ||
+            state.types[i + 2] != ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64)
+            throw std::runtime_error("Incompatible ONNX state layout");
+        auto shape = tensors.at(prefix + "cache").at("shape").get<std::vector<int64_t>>();
+        if (shape.size() != 5 || shape[0] != 2 || shape[1] != 1 || shape[2] < offset ||
+            shape[2] > 1000 || shape[3] != 16 || shape[4] != 64)
+            throw std::runtime_error("Invalid voice cache shape");
+        std::vector<float> cache(2 * shape[2] * 1024);
+        read(prefix + "cache", "F32", shape, cache.data(), cache.size() * 4);
+        for (int kv = 0; kv < 2; ++kv) {
+            const float *begin = cache.data() + kv * shape[2] * 1024;
+            if (!std::all_of(begin, begin + offset * 1024,
+                             [](float v) { return std::isfinite(v); }))
+                throw std::runtime_error("Non-finite voice state");
+            std::copy(begin, begin + offset * 1024, state.f32[0][i].begin() + kv * 1000 * 1024);
+        }
+        // The exported current_end input is an unused, fixed empty tensor.
+        state.shapes[i + 1] = {0};
+        state.f32[0][i + 1].clear();
+        state.i64[0][i + 2] = {offset};
+    }
+    voice_kv_snap_ =
+        std::make_unique<VoiceKVSnapshot>(main_runner_->take_snapshot());
+    Tensor dummy({1, 1, 1024});
+    voice_kv_hash_ = voice_hash(dummy);
+}
+
+void PocketTTS::set_sentence_fades(int fade_in_ms, int fade_out_ms) {
+    if (fade_in_ms < 0 || fade_in_ms > 500 || fade_out_ms < 0 || fade_out_ms > 500)
+        throw std::runtime_error("Fade durations must be 0..500 milliseconds");
+    cfg_.fade_in_ms = fade_in_ms;
+    cfg_.fade_out_ms = fade_out_ms;
+}
+
+void PocketTTS::set_decode_steps(int steps) {
+    if (steps < 1 || steps > 64)
+        throw std::runtime_error("Decode steps must be 1..64");
+    cfg_.lsd_steps = steps;
+    dt_ = 1.0f / steps;
+    st_values_.clear();
+    for (int i = 0; i < steps; ++i)
+        st_values_.emplace_back(float(i) / steps, float(i + 1) / steps);
+}
+
+#endif // POCKET_TTS_HELPERS_ONLY
 
 } // namespace pocket_tts

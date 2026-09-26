@@ -1,7 +1,7 @@
 //go:build pocket_native && cgo && (windows || linux || darwin)
 
 // ForeverDubbed ABI around the pinned PocketTTS.cpp engine. No Python or HTTP.
-#include "voice_state.hpp"
+#include "pocket_tts.hpp"
 
 #include "bridge.h"
 #define FDB_EXPORT extern "C"
@@ -89,10 +89,10 @@ FDB_EXPORT int fdb_start(void *handle, const char *text, const char *voice, int 
         std::string prompt(text), filename(voice);
         e.worker = std::thread([&e, prompt, filename, steps, fade_in_ms, fade_out_ms] {
             try {
-                pocket_tts::ForeverDubbedAccess::steps(*e.tts, steps);
-                pocket_tts::ForeverDubbedAccess::fades(*e.tts, fade_in_ms, fade_out_ms);
+                e.tts->set_decode_steps(steps);
+                e.tts->set_sentence_fades(fade_in_ms, fade_out_ms);
                 if (e.last_voice != filename) {
-                    pocket_tts::ForeverDubbedAccess::voice(*e.tts, filename);
+                    e.tts->load_voice_state(filename);
                     e.last_voice = filename;
                 }
                 pocket_tts::Tensor dummy({1, 1, 1024});

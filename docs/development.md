@@ -39,14 +39,14 @@ Tests cover voice routing and overrides, cancellation, native voice selection an
 - `cmd/foreverdubbed`: startup/options in `main.go`, optical polling in `capture.go`, speech queue policy in `speech.go`, and offline image/snapshot commands in `images.go`.
 - `internal/platform`: native capture, audio devices, and system voices. OS-specific files stay in this package with `_windows`/`_darwin` suffixes and cgo build constraints. `capture_window.go`, `pcm.go`, and `playback_status.go` hold shared policy; fake-device tests run on any host.
 - `internal/desktop` and `internal/update`: platform-specific window and process integration stays with the feature that uses it, selected by filename suffixes/build constraints.
-- `internal/pocket`: the Go speech engine and C ABI; `bridge.cpp` owns streaming and worker shutdown, while `voice_state.hpp` validates and imports saved voice tensors. `pocket_tts.hpp` is the pinned, locally adapted upstream inference source.
+- `internal/pocket`: the Go speech engine and C ABI; `bridge.cpp` owns streaming and worker shutdown. `pocket_tts.hpp` contains the complete locally adapted PocketTTS implementation, including text preparation, generation stopping, sentence fades, and saved voice tensor validation/import. Model-free C++ tests include this same header with `POCKET_TTS_HELPERS_ONLY` to omit inference SDK dependencies.
 - `tools/build`: release orchestration, manifests, file selection, and ZIP output, with separate `macos_*` and `windows_*` files for target packaging. These names use OS prefixes rather than reserved suffixes because both targets must compile on every build host.
 
 Use `gofmt` for Go and the root `.clang-format` for maintained C++/Objective-C bridges. Keep formatting-only changes out of the pinned upstream `pocket_tts.hpp` so local inference fixes remain easy to compare with upstream:
 
 ```sh
 gofmt -w cmd internal tools
-clang-format -i internal/pocket/bridge.cpp internal/pocket/bridge.h internal/pocket/voice_state.hpp
+clang-format -i internal/pocket/bridge.cpp internal/pocket/bridge.h
 clang-format -i internal/platform/*.cpp internal/platform/*.h internal/platform/*.m internal/desktop/*.m
 go test -race ./...
 go test -race -tags "gui ci" ./internal/desktop ./cmd/foreverdubbed
