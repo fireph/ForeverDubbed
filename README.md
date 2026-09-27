@@ -64,3 +64,8 @@ Use **Minimize to tray** to keep listening in the background. Reopen the app fro
 More help: [Windows docs](docs/windows.md) · [macOS docs](docs/macos.md).
 
 The app checks for updates at startup and asks before installing. Your preferences are kept. **Update the WoW addon separately** by copying the new addon folder into `Interface/AddOns`; keep the app and addon up to date together.
+
+## License
+
+Copyright (c) 2026 fireph. All rights reserved. See [LICENSE](LICENSE).
+Third-party materials remain subject to their respective licenses and notices.
