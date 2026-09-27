@@ -157,6 +157,27 @@ p {
   color:var(--gold-light);
 }
 
+.nav-social-links {
+  display:flex;
+  align-items:center;
+  gap:4px;
+}
+
+.nav-social {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:32px;
+  height:32px;
+  flex-shrink:0;
+}
+
+.nav-social svg {
+  width:19px;
+  height:19px;
+  fill:currentColor;
+}
+
 .nav-download {
   border:1px solid #9d7c43;
   padding:8px 19px;
