@@ -17,6 +17,7 @@ import (
 	"foreverdubbed/internal/platform"
 	"foreverdubbed/internal/pocket"
 	"foreverdubbed/internal/protocol"
+	"foreverdubbed/internal/singleinstance"
 	"foreverdubbed/internal/speech"
 )
 
@@ -77,6 +78,14 @@ func run() error {
 	if snapshot != "" && files != "" {
 		return fmt.Errorf("use -snapshot or -image, not both")
 	}
+	instance, err := singleinstance.Start()
+	if err != nil {
+		return fmt.Errorf("single instance: %w", err)
+	}
+	if instance == nil {
+		return nil
+	}
+	defer instance.Close()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	if backend == "sapi" && runtime.GOOS != "windows" {

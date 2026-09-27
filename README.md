@@ -48,6 +48,8 @@ Use **Locate WoW…** to change the installation or retry. If access is denied, 
 - **Queue new dialogue:** finish each message before starting the next. When off, new dialogue interrupts the current line.
 - **Stop** cancels the current line and clears queued dialogue. **Skip** cancels the current line and plays the next queued message. New dialogue can still play after Stop. In WoW, use `/fdb stop` or `/fdb skip`, or the minimap button: **left-click to Skip**, **right-click to Stop**. Shortcuts can be assigned under **Key Bindings → ForeverDubbed**.
 
+Only one copy of ForeverDubbed runs per user, even across different installation folders. Additional launches exit immediately.
+
 Use **Minimize to tray** to keep listening in the background. Reopen the app from its Windows tray or macOS menu-bar icon; choose **Quit** to exit.
 
 ## Need help?
