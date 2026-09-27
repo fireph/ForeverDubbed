@@ -240,7 +240,6 @@ p {
   border:1px solid #a88b51;
   background:#171511;
   box-shadow:0 0 0 4px #393023,0 18px 70px #0008;
-  transform:rotate(1deg);
 }
 
 
@@ -376,7 +375,6 @@ code {
   background:#181410;
   border:1px solid #a88b51;
   box-shadow:0 0 0 4px #393023,0 18px 55px #0006;
-  transform:rotate(-1deg);
 }
 
 .feature-list {
