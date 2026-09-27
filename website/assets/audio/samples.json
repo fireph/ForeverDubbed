@@ -1,0 +1,64 @@
+[
+  {
+    "profile": "tauren_male",
+    "label": "Tauren",
+    "file": "tauren-male.mp3",
+    "text": "Walk with patience, traveler. The earth remembers every footstep, and the wind carries stories older than our people.",
+    "decode_steps": 4,
+    "gain_db": 6,
+    "duration_seconds": 6.56,
+    "bitrate_kbps": 128
+  },
+  {
+    "profile": "narrator_male",
+    "label": "Narrator",
+    "file": "narrator-male.mp3",
+    "text": "The old gate creaks open. Beyond it, a forgotten road disappears into the mist, and a single lantern flickers in the dark.",
+    "decode_steps": 2,
+    "gain_db": 0,
+    "duration_seconds": 8.64,
+    "bitrate_kbps": 128
+  },
+  {
+    "profile": "human_male",
+    "label": "Human",
+    "file": "human-male.mp3",
+    "text": "Good to see you, adventurer. Our scouts spotted trouble near the old watchtower. Gather your supplies, and meet me at the bridge.",
+    "decode_steps": 1,
+    "gain_db": 0,
+    "duration_seconds": 6.24,
+    "bitrate_kbps": 128
+  },
+  {
+    "profile": "undead_male",
+    "label": "Undead",
+    "file": "undead-male.mp3",
+    "text": "I used to fear this graveyard, but after spending a few quiet years beneath the soil, I have grown rather fond of the place.",
+    "decode_steps": 2,
+    "gain_db": 3,
+    "fade_in_ms": 50,
+    "fade_out_ms": 100,
+    "duration_seconds": 11.36,
+    "bitrate_kbps": 128
+  },
+  {
+    "profile": "gnome_male",
+    "label": "Gnome",
+    "file": "gnome-male.mp3",
+    "text": "You came at just the right time. I need a brave volunteer to test my new flying machine. You did bring a parachute, right?",
+    "decode_steps": 1,
+    "gain_db": 0,
+    "duration_seconds": 6.24,
+    "bitrate_kbps": 128
+  },
+  {
+    "profile": "troll_male",
+    "label": "Troll",
+    "file": "troll-male.mp3",
+    "text": "Stay close, friend. The jungle has many eyes, and not all of them are friendly. Follow my lead, and we will reach the village before nightfall.",
+    "decode_steps": 2,
+    "gain_db": 2,
+    "duration_seconds": 10.64,
+    "bitrate_kbps": 128
+  }
+]

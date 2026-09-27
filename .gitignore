@@ -21,6 +21,10 @@ __pycache__/
 *.pt
 *.pth
 
+# Website audio assets are versioned for deployment.
+!/website/assets/audio/
+!/website/assets/audio/**
+
 # Keep playable voice states; omit previews, references, metadata, experiments,
 # backups, and incomplete exports. These exceptions must follow *.safetensors.
 /tts/custom/*

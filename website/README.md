@@ -39,3 +39,28 @@ Forever Dubbed's claims follow the root README and `addon/ForeverDubbed/ForeverD
 `assets/settings.png` and `assets/voices.png` are captures of the actual Fyne widgets rendered by the desktop test driver using example connection state, not captures of a running WoW session. Replace or supplement these with live screenshots as needed. An in-game screenshot showing a quest and the data square would be useful for the how-it-works section.
 
 The Caudex fonts match the app and are served locally; their license is included in `assets/fonts/LICENSE.txt`. No external fonts, analytics, or JavaScript libraries are loaded by the site.
+
+## Audio examples
+
+`assets/audio/` contains six locally generated 24 kHz mono MP3 samples encoded at 128 kbps for Tauren male, Narrator male, Human male, Undead male, Gnome male, and Troll male. `samples.json` records the original dialogue, profile, decode steps, gain, and duration of each clip. The visible transcripts in `index.html` match those lines. The samples use the saved voices in `tts/voices.json` and the native speech engine; they are not captured game dialogue.
+
+To regenerate a clip, prepare the host native runtime as described in `native/README.md`, then run `tools/voicecheck` with the corresponding profile and transcript, for example on Linux:
+
+```sh
+LD_LIBRARY_PATH="$PWD/.runtime/native" CGO_ENABLED=1 go run -tags pocket_native ./tools/voicecheck \
+  -voice tauren_male \
+  -text 'Walk with patience, traveler. The earth remembers every footstep, and the wind carries stories older than our people.' \
+  -out .runtime/website-samples/tauren_male
+```
+
+`voicecheck` applies decode steps and fades, but not profile gain. Before publishing, apply the configured `gain_db` to the signed 16-bit PCM samples (multiply by `10^(gain_db/20)`, round, and clamp to the signed 16-bit range), matching app playback. These clips apply +6 dB for Tauren male, +2 dB for Troll male, +3 dB for Undead male, and 0 dB for the others. Encode the resulting WAV as a 128 kbps mono MP3 at 24 kHz, save it to its hyphenated filename under `assets/audio/` and update the manifest and transcript together if the dialogue changes. Generation may vary between runs.
+
+The players use native browser controls, load audio only on demand, and work without JavaScript. With JavaScript enabled, starting a sample pauses any other sample. Keep the MP3 files in the deployed website; playback needs no speech service or model download.
+
+Keep the original WAV masters alongside the MP3 files in `website/assets/audio/` for future re-encoding. Both formats are versioned; the website players load only the MP3 files. Convert from the WAV master, not an existing MP3. For example, with FFmpeg and its LAME encoder:
+
+```sh
+ffmpeg -i website/assets/audio/tauren-male.wav -c:a libmp3lame -b:a 128k -ac 1 -ar 24000 website/assets/audio/tauren-male.mp3
+```
+
+MP3 keeps playback compatible with older browsers, including older Safari versions. Audio is served as `audio/mpeg`.

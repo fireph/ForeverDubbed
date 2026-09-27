@@ -1,3 +1,12 @@
+// Keep voice samples from playing over one another.
+document.querySelectorAll('.audio-card audio').forEach((sample) => {
+  sample.addEventListener('play', () => {
+    document.querySelectorAll('.audio-card audio').forEach((other) => {
+      if (other !== sample) other.pause();
+    });
+  });
+});
+
 /* OS detection is a convenience, not an architecture check. Keep both downloads
    visible and show the Apple Silicon requirement even on detected Macs. */
 (() => {
