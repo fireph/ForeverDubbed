@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.2
+
+- Normalize all-caps words and remove matching stutter prefixes before PocketTTS synthesis (`GET OUT!` → `Get out!`, `T-That's` → `That's`). Preserve listed WoW acronyms, Roman numerals, identifiers, and ordinary hyphenated words.
+- Normalize curly quotes and apostrophes, convert `…` to `...`, and collapse repeated exclamation/question marks. Preserve mixed punctuation such as `?!` and keep ellipsis dots together.
+- Centralize speech text replacements and acronym exceptions in `internal/speech/normalize.go`; keep displayed dialogue unchanged. Add combined-dialogue, chunking, narrator-routing, and fuzz tests.
+
 ## 0.9.1
 
 - Enable **Queue new dialogue** by default when no preference has been saved. Preserve existing queue settings.

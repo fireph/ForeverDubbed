@@ -5,8 +5,10 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"foreverdubbed/internal/pocket"
 	"foreverdubbed/internal/protocol"
@@ -98,6 +100,82 @@ func TestQuestSynthesisOmitsTitle(t *testing.T) {
 		t.Fatalf("synthesized %q", got)
 	}
 }
+func TestSpeechNormalizationBeforeSynthesis(t *testing.T) {
+	c, err := Load("../../tts/voices.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spoken []string
+	local := Local{Config: c, Override: "orc_male", Engine: fakeEngine{func(_ context.Context, text, _ string, _ pocket.StreamOptions, emit func([]byte) error) error {
+		spoken = append(spoken, text)
+		return emit([]byte{0, 0})
+	}}, Play: func(_ context.Context, _ int, chunks <-chan []byte) error {
+		for range chunks {
+		}
+		return nil
+	}}
+	m := protocol.Message{Kind: 5, Title: "GET OUT", Text: "T-That’s AMAZING!!! <G-G-GASPS!!!> W-What??? SI:7?"}
+	original := m
+	if err := local.Speak(context.Background(), m); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"Get out.", "That's amazing!", "Gasps!", "What? SI:7?"}
+	if !reflect.DeepEqual(spoken, want) {
+		t.Fatalf("synthesized %q, want %q", spoken, want)
+	}
+	if m != original {
+		t.Fatal("modified original dialogue")
+	}
+}
+
+func TestNormalizationAcrossChunksAndNarratorVoices(t *testing.T) {
+	c, err := Load("../../tts/voices.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	narrator, err := c.Voice(protocol.Message{Announcement: true}, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spoken []speechSegment
+	var displayed protocol.Message
+	local := Local{
+		Config: c, Override: "orc_male",
+		OnVoice: func(m protocol.Message, _ string) { displayed = m },
+		Engine: fakeEngine{func(_ context.Context, text, voice string, _ pocket.StreamOptions, emit func([]byte) error) error {
+			spoken = append(spoken, speechSegment{text, filepath.Base(voice)})
+			return emit([]byte{0, 0})
+		}},
+		Play: func(_ context.Context, _ int, chunks <-chan []byte) error {
+			for range chunks {
+			}
+			return nil
+		},
+	}
+	m := protocol.Message{Kind: 5, Title: "THE KING’S ORDERS", Text: strings.Repeat("quietly ", 25) + "W-W-WAIT!!! <“I’M READY!!!”> SI:7 says… GO??!!"}
+	if err := local.Speak(context.Background(), m); err != nil {
+		t.Fatal(err)
+	}
+	want := []speechSegment{
+		{"The king's orders.", narrator + ".safetensors"},
+		{strings.TrimSpace(strings.Repeat("quietly ", 22)), "orc_male.safetensors"},
+		{strings.Repeat("quietly ", 3) + "wait!", "orc_male.safetensors"},
+		{"\"I'm ready!\"", narrator + ".safetensors"},
+		{"SI:7 says... Go?!", "orc_male.safetensors"},
+	}
+	if !reflect.DeepEqual(spoken, want) {
+		t.Fatalf("synthesis segments:\n got: %#v\nwant: %#v", spoken, want)
+	}
+	for _, segment := range spoken {
+		if !utf8.ValidString(segment.text) || utf8.RuneCountInString(segment.text) > 180 {
+			t.Errorf("invalid or oversized synthesis chunk: %q", segment.text)
+		}
+	}
+	if displayed != m {
+		t.Fatalf("display callback received modified dialogue: %+v", displayed)
+	}
+}
+
 func TestNativeStreamingAndVoiceOptions(t *testing.T) {
 	c, err := Load("../../tts/voices.json")
 	if err != nil {

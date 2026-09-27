@@ -135,7 +135,7 @@ func (l *Local) Speak(parent context.Context, m protocol.Message) error {
 			profile := l.Config.Profiles[segment.name]
 			gain := math.Pow(10, profile.GainDB/20)
 			options := pocket.StreamOptions{DecodeSteps: steps, FadeInMS: profile.FadeInMS, FadeOutMS: profile.FadeOutMS}
-			for _, text := range Chunks(segment.text, 180) {
+			for _, text := range Chunks(normalizeSpeechText(segment.text), 180) {
 				streamErr = l.Engine.Stream(ctx, text, voice, options, func(pcm []byte) error {
 					pcm = amplifyPCM(pcm, gain)
 					select {

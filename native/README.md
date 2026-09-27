@@ -1,5 +1,14 @@
 # Native speech runtime
 
+Application text replacements live in [`internal/speech/normalize.go`](../internal/speech/normalize.go), alongside the acronym exceptions and an index of the text-processing stages. Before chunking:
+
+- Curly apostrophes/single quotes (`‘ ’`) become straight apostrophes, curly double quotes (`“ ”`) become straight double quotes, and `…` becomes `...`.
+- Repeated identical exclamation/question marks collapse (`!!!` → `!`, `???` → `?`). Mixed marks such as `?!` and `!?` remain; ellipses and dashes are preserved.
+- Ordinary all-caps words become normal case (`GET OUT!` → `Get out!`).
+- Matching single-letter stutter prefixes are removed (`T-That's` → `That's`, `W-W-What?` → `What?`).
+
+Listed WoW-related acronyms and Roman numerals, identifiers such as `SI:7`, and ordinary hyphenated words are preserved. Unknown all-caps acronyms may need an entry in the exception list. These replacements affect speech only; the original dialogue remains available for display. Native text preparation subsequently strips double quotes while preserving apostrophes within words.
+
 PocketTTS.cpp and our C wrapper are compiled by `go build` through cgo and linked into the application executable. No PocketTTS DLL, `.so`, or `.dylib` is loaded or distributed. ONNX Runtime remains a separate shared library. No Python interpreter, subprocess, HTTP server, or network access is used during synthesis.
 
 `internal/pocket/pocket_tts.hpp` is VolgaGerm/PocketTTS.cpp at commit `e801e7d6c2692121a39e80ae525cb5265174a495`, under `native/vendor/LICENSE`. The source uses a header extension so cgo compiles it once through `internal/pocket/bridge.cpp` and tracks changes for rebuilds. Local changes:
