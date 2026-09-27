@@ -98,6 +98,6 @@
     });
   });
   document.querySelector('#hero-platform').textContent = os === 'windows'
-    ? 'Windows 10 (1903+) / 11 · 64-bit · Addon included'
+    ? 'Windows 10/11 · 64-bit · Addon included'
     : 'macOS 14+ · Apple Silicon only · Addon included';
 })();

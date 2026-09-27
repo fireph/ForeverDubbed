@@ -19,7 +19,7 @@ Try it out and experience Azeroth like never before!
 
 | Platform | Download | Requirements |
 | --- | --- | --- |
-| Windows | [Installer](https://github.com/fireph/ForeverDubbed/releases/latest/download/ForeverDubbed-windows-amd64-setup.exe) | Windows 10 (1903+) or Windows 11, 64-bit |
+| Windows | [Installer](https://github.com/fireph/ForeverDubbed/releases/latest/download/ForeverDubbed-windows-amd64-setup.exe) | Windows 10/11, 64-bit |
 | macOS | [DMG](https://github.com/fireph/ForeverDubbed/releases/latest/download/ForeverDubbed-mac-arm64.dmg) | macOS 14+, Apple Silicon |
 
 **Windows:** run the installer, then launch ForeverDubbed from the Start menu.
