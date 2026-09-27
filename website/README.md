@@ -38,6 +38,15 @@ Forever Dubbed's claims follow the root README and `addon/ForeverDubbed/ForeverD
 
 `assets/settings.png` and `assets/voices.png` are captures of the actual Fyne widgets rendered by the desktop test driver using example connection state, not captures of a running WoW session. Replace or supplement these with live screenshots as needed. An in-game screenshot showing a quest and the data square would be useful for the how-it-works section.
 
+Regenerate both screenshots from the repository root after desktop UI changes:
+
+```sh
+FDB_WEBSITE_SCREENSHOTS_DIR="$PWD/website/assets" \
+  go test -tags 'gui ci' ./internal/desktop -run '^TestWebsiteScreenshots$' -count=1
+```
+
+This uses the app's default window size, bundled version and race list, and a sample Windows game path. Keep the screenshot dimensions in `index.html` aligned with the generated images (currently 760 × 860).
+
 The Caudex fonts match the app and are served locally; their license is included in `assets/fonts/LICENSE.txt`. No external fonts, analytics, or JavaScript libraries are loaded by the site.
 
 ## Audio examples
