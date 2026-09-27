@@ -63,21 +63,13 @@ func packageFiles(root string) (map[string]string, map[string]string, error) {
 }
 
 func voiceFiles(root string) (map[string]string, error) {
-	data, err := os.ReadFile(filepath.Join(root, "tts", "voices.json"))
+	profiles, err := voiceProfiles(filepath.Join(root, "tts", "voices.json"))
 	if err != nil {
-		return nil, err
-	}
-	var config struct {
-		Profiles map[string]struct {
-			Voice string `json:"voice"`
-		} `json:"profiles"`
-	}
-	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
 	files := map[string]string{}
 	custom := filepath.Join(root, "tts", "custom")
-	for _, profile := range config.Profiles {
+	for _, profile := range profiles {
 		if strings.ContainsRune(profile.Voice, '\\') {
 			return nil, fmt.Errorf("bundle voice path %q must use forward slashes (/)", profile.Voice)
 		}
@@ -112,4 +104,23 @@ func voiceFiles(root string) (map[string]string, error) {
 		files["tts/"+name] = resolved
 	}
 	return files, nil
+}
+
+// Shared by custom voice collection and native preset selection.
+func voiceProfiles(filename string) (map[string]struct {
+	Voice string `json:"voice"`
+}, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	var config struct {
+		Profiles map[string]struct {
+			Voice string `json:"voice"`
+		} `json:"profiles"`
+	}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+	return config.Profiles, nil
 }

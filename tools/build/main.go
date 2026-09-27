@@ -78,6 +78,16 @@ func build() error {
 	if err := addTargetNativeFiles(bundle, *nativeDir, spec); err != nil {
 		return err
 	}
+	if targetOS == "darwin" {
+		staging, err := os.MkdirTemp("", "foreverdubbed-libraries-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(staging)
+		if err := thinMacLibraries(bundle, staging, targetArch); err != nil {
+			return err
+		}
+	}
 	hostCGO := runtime.GOOS == "darwin" && targetOS == "darwin" && targetArch == runtime.GOARCH
 	hostEnv := buildEnv(os.Environ(), runtime.GOOS, runtime.GOARCH, hostCGO)
 	if err := run(root, hostEnv, "test", "./..."); err != nil {
@@ -130,7 +140,7 @@ func build() error {
 		buildArgs = append(buildArgs, "-ldflags", versionFlag+" -s -w -extldflags=-Wl,-rpath,@executable_path/../Resources/native,-rpath,@executable_path/native,-rpath,@executable_path/../.runtime/native")
 	}
 	if targetOS == "windows" {
-		buildArgs = append(buildArgs, "-ldflags", versionFlag+" -H=windowsgui")
+		buildArgs = append(buildArgs, "-ldflags", versionFlag+" -s -w -H=windowsgui")
 	}
 	buildArgs = append(buildArgs, "-o", binary, "./cmd/foreverdubbed")
 	if err := run(root, nativeEnv, buildArgs...); err != nil {
