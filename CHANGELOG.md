@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.5
+
+- Give the Windows updater executable and native dialogs the same application icon as the main app.
+- Replace the standalone updater's themed UI with native progress and error dialogs, removing its Fyne dependency. Preserve update validation, rollback, and restart; closing progress does not interrupt installation.
+
 ## 0.9.4
 
 - Omit the unused Mimi reference-audio encoder from release packages, saving approximately 38 MiB of installed space. Load it only when encoding reference audio; saved voice playback requires no encoder.

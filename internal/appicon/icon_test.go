@@ -14,7 +14,7 @@ func TestWindowsIconResourceMatchesArtwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resource, err := os.ReadFile("icon_windows_amd64.syso")
+	resource, err := os.ReadFile("windowsresource/icon_windows_amd64.syso")
 	if err != nil {
 		t.Fatal(err)
 	}

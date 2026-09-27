@@ -1,6 +1,6 @@
-//go:build gui && windows
+//go:build windows
 
-package desktop
+package console
 
 import (
 	"os"
@@ -11,7 +11,7 @@ import (
 // Windows releases use the GUI subsystem to avoid a console on double-click.
 // Explicit terminal operations attach to the parent's console, preserving any
 // redirected stdout/stderr handles supplied by the caller.
-func PrepareConsole() {
+func Prepare() {
 	terminal := false
 	for _, arg := range os.Args[1:] {
 		name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")

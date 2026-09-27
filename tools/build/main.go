@@ -129,7 +129,7 @@ func build() error {
 		helperFlags += " -H=windowsgui"
 	}
 	helperPath := filepath.Join(dist, helperName)
-	if err := run(root, nativeEnv, "build", "-tags", "gui", "-buildvcs=false", "-trimpath", "-ldflags", helperFlags, "-o", helperPath, "./cmd/foreverdubbed-updater"); err != nil {
+	if err := run(root, buildEnv(os.Environ(), targetOS, targetArch, false), "build", "-buildvcs=false", "-trimpath", "-ldflags", helperFlags, "-o", helperPath, "./cmd/foreverdubbed-updater"); err != nil {
 		return err
 	}
 	bundle[helperName] = helperPath

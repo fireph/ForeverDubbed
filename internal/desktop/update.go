@@ -8,16 +8,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
-	"foreverdubbed/internal/buildinfo"
 	"foreverdubbed/internal/update"
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -132,64 +128,6 @@ func downloadUpdate(ctx context.Context, w fyne.Window, stop context.CancelFunc,
 		// waiting for this process to release its executable, runtime DLLs and audio.
 		stop()
 	}()
-}
-
-// RunUpdater runs in a separate, self-contained executable without PocketTTS
-// DLL dependencies, so it can replace the full app after the parent exits.
-func RunUpdater(planPath string) error {
-	plan, err := update.LoadPlan(planPath)
-	if err != nil {
-		return err
-	}
-	if plan.Install.OS != runtime.GOOS {
-		return fmt.Errorf("update target does not match this operating system")
-	}
-	app.SetMetadata(fyne.AppMetadata{ID: "io.foreverdubbed.updater", Name: "ForeverDubbed updater", Version: buildinfo.Version})
-	a := app.NewWithID("io.foreverdubbed.updater")
-	a.SetIcon(Icon)
-	a.Settings().SetTheme(companionTheme{theme.DefaultTheme()})
-	w := a.NewWindow("Updating ForeverDubbed")
-	view := newUpdateProgress()
-	w.SetContent(updateDialog("Updating ForeverDubbed", view.root))
-	w.Resize(fyne.NewSize(480, 240))
-	w.CenterOnScreen()
-	// Replacement must finish or roll back before this window can be closed.
-	w.SetCloseIntercept(func() {})
-	w.Show()
-	go func() {
-		progress := func(p update.Progress) { fyne.Do(func() { view.render(p) }) }
-		run := func() error {
-			if err := update.Ready(planPath); err != nil {
-				return err
-			}
-			progress(update.Progress{Stage: "Waiting for ForeverDubbed to close…"})
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			defer cancel()
-			if err := update.WaitForApp(ctx, plan); err != nil {
-				return fmt.Errorf("ForeverDubbed did not close: %w", err)
-			}
-			if err := update.Apply(planPath, progress); err != nil {
-				return err
-			}
-			progress(update.Progress{Stage: "Restarting ForeverDubbed…", Done: 1, Total: 1})
-			return update.Restart(planPath)
-		}
-		if err := run(); err != nil {
-			log.Printf("Update failed: %v", err)
-			fyne.Do(func() {
-				view.label.SetText("The update could not finish.")
-				w.SetCloseIntercept(a.Quit)
-				message := widget.NewLabel(fmt.Sprintf("%v\n\nUpdate files and logs: %s", err, filepath.Dir(planPath)))
-				message.Wrapping = fyne.TextWrapWord
-				w.SetContent(updateDialog("Update failed", message, questButton("Close", a.Quit)))
-				w.Resize(fyne.NewSize(560, 340))
-			})
-			return
-		}
-		fyne.Do(a.Quit)
-	}()
-	w.ShowAndRun()
-	return nil
 }
 
 func updatePrompt(w fyne.Window, available, current string, accept func()) *widget.PopUp {

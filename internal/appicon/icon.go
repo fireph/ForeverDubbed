@@ -8,6 +8,8 @@ import (
 	"image/png"
 	"sync"
 
+	_ "foreverdubbed/internal/appicon/windowsresource"
+
 	"golang.org/x/image/draw"
 )
 
@@ -23,7 +25,7 @@ var Banner []byte
 
 // Keep the Windows resource in source control so ordinary go builds include
 // the executable icon without requiring a resource compiler.
-//go:generate x86_64-w64-mingw32-windres --input assets/icon.rc --output icon_windows_amd64.syso --output-format coff --target pe-x86-64
+//go:generate x86_64-w64-mingw32-windres --input assets/icon.rc --output windowsresource/icon_windows_amd64.syso --output-format coff --target pe-x86-64
 
 var logoImage = sync.OnceValue(func() image.Image {
 	im, err := png.Decode(bytes.NewReader(Logo))

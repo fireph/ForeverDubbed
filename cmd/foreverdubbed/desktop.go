@@ -4,7 +4,9 @@ package main
 
 import (
 	"context"
+
 	"foreverdubbed/internal/appstate"
+	"foreverdubbed/internal/console"
 	"foreverdubbed/internal/desktop"
 )
 
@@ -14,4 +16,4 @@ func runDesktop(ctx context.Context, stop context.CancelFunc, state *appstate.St
 
 const desktopEnabled = true
 
-func prepareConsole() { desktop.PrepareConsole() }
+func prepareConsole() { console.Prepare() }
