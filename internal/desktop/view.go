@@ -7,6 +7,7 @@ import (
 	"foreverdubbed/addon"
 	"image/color"
 	"maps"
+	"net/url"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -72,7 +73,7 @@ type dashboard struct {
 	stop                             *widget.Button
 	skip                             *widget.Button
 	skipControl                      fyne.CanvasObject
-	tabSettings, tabVoices           *widget.Button
+	tabs                             *container.AppTabs
 	voiceSelects                     map[string]*widget.Select
 	voiceChoices                     map[string]string
 	onVoiceChoices                   func(map[string]string)
@@ -140,32 +141,42 @@ func newDashboard(version string, hide, quit, stop, skip func(), queue func(bool
 	gameLocation := container.NewBorder(nil, nil, nil, container.NewCenter(questButtonWidget(d.locateWoW)),
 		container.NewVBox(widget.NewLabelWithStyle("WoW location", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), d.wowPath))
 	header := container.NewVBox(container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), questRule(), categories, volumeControl, d.queue, questRule(), gameLocation)
-	paper := parchment(container.NewVScroll(header))
-	voices := parchment(container.NewVScroll(d.voicePanel(races)))
-	voices.Hide()
-	d.tabSettings = widget.NewButton("Settings", func() {
-		paper.Show()
-		voices.Hide()
-		d.tabSettings.Disable()
-		d.tabVoices.Enable()
-	})
-	d.tabVoices = widget.NewButton("Voices", func() {
-		voices.Show()
-		paper.Hide()
-		d.tabVoices.Disable()
-		d.tabSettings.Enable()
-	})
-	d.tabSettings.Disable()
-	tabBar := container.NewGridWithColumns(2, questButtonWidget(d.tabSettings), questButtonWidget(d.tabVoices))
-	panels := container.NewStack(paper, voices)
-	versionLabel := canvas.NewText("v"+version, gold)
-	versionLabel.TextSize = 13
-	footer := container.NewHBox(container.NewCenter(versionLabel), layout.NewSpacer(), questButton("Minimize to tray", hide), questButton("Quit", quit))
-	d.root = questFrame(container.NewBorder(container.NewVBox(inset(5, banner), d.addonNotice, inset(2, tabBar)), inset(5, footer), nil, nil, panels))
+	d.tabs = container.NewAppTabs(
+		container.NewTabItem("Settings", container.NewVScroll(header)),
+		container.NewTabItem("Voices", container.NewVScroll(d.voicePanel(races))),
+		container.NewTabItem("About", container.NewVScroll(aboutPanel(version))),
+	)
+	footer := container.NewHBox(layout.NewSpacer(), questButton("Minimize to tray", hide), questButton("Quit", quit))
+	d.root = questFrame(container.NewBorder(container.NewVBox(inset(5, banner), d.addonNotice), inset(5, footer), nil, nil, parchment(d.tabs)))
 	// Set only after the selects above restored their saved selections, so
 	// building the tab never persists or replays user choices.
 	d.onVoiceChoices = onVoiceChoices
 	return d
+}
+
+// aboutPanel uses the same version supplied to the dashboard by the running build.
+func aboutPanel(version string) fyne.CanvasObject {
+	description := widget.NewLabel("NPC voices and quest narration for WoW Forever, generated locally on your computer.")
+	description.Wrapping = fyne.TextWrapWord
+	link := func(label, address string) fyne.CanvasObject {
+		target, err := url.Parse(address)
+		if err != nil {
+			panic(err)
+		} // All addresses below are fixed project links.
+		return widget.NewHyperlink(label, target)
+	}
+	return container.NewVBox(
+		widget.NewLabelWithStyle("ForeverDubbed", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabel("Version "+strings.TrimPrefix(version, "v")),
+		description,
+		questRule(),
+		link("Website", "https://www.foreverdubbed.com"),
+		link("Donate", "https://ko-fi.com/dungfu"),
+		link("Discord", "https://discord.gg/uNEe4yc9mV"),
+		link("Source code", "https://github.com/fireph/ForeverDubbed"),
+		link("Report a problem", "https://github.com/fireph/ForeverDubbed/issues"),
+		link("Release notes", "https://github.com/fireph/ForeverDubbed/blob/main/CHANGELOG.md"),
+	)
 }
 
 // voicePanel lists one dropdown pair (male/female) per race. "Default" keeps

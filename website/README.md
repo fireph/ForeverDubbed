@@ -36,9 +36,9 @@ Forever Dubbed's claims follow the root README and `addon/ForeverDubbed/ForeverD
 
 `site.js` recommends the Windows installer or macOS DMG using browser platform information. Both downloads remain accessible without JavaScript. Mobile visitors are not assigned a desktop download; the Mac requirement explicitly states Apple Silicon because browser OS detection cannot reliably determine the processor.
 
-`assets/settings.png` and `assets/voices.png` are captures of the actual Fyne widgets rendered by the desktop test driver using example connection state, not captures of a running WoW session. Replace or supplement these with live screenshots as needed. An in-game screenshot showing a quest and the data square would be useful for the how-it-works section.
+`assets/settings.png`, `assets/voices.png`, and `assets/about.png` are captures of the actual Fyne widgets rendered by the desktop test driver using example connection state, not captures of a running WoW session. Replace or supplement these with live screenshots as needed. An in-game screenshot showing a quest and the data square would be useful for the how-it-works section.
 
-Regenerate both screenshots from the repository root after desktop UI changes:
+Regenerate all three screenshots from the repository root after desktop UI changes:
 
 ```sh
 FDB_WEBSITE_SCREENSHOTS_DIR="$PWD/website/assets" \

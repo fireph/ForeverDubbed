@@ -204,16 +204,19 @@ func TestDashboardLiveStates(t *testing.T) {
 	if len(d.voiceSelects) != 6 {
 		t.Fatal("missing race/gender dropdowns", len(d.voiceSelects))
 	}
-	if d.tabSettings.Disabled() == d.tabVoices.Disabled() {
-		t.Fatal("exactly one tab button must start disabled")
+	if d.tabs.SelectedIndex() != 0 {
+		t.Fatal("Settings tab must be selected initially")
 	}
-	test.Tap(d.tabVoices)
-	if !d.tabVoices.Disabled() || d.tabSettings.Disabled() {
-		t.Fatal("Voices tab did not activate")
-	}
-	test.Tap(d.tabSettings)
-	if !d.tabSettings.Disabled() || d.tabVoices.Disabled() {
-		t.Fatal("Settings tab did not activate")
+	for _, index := range []int{1, 2, 0} {
+		d.tabs.SelectIndex(index)
+		if d.tabs.SelectedIndex() != index || !d.tabs.Items[index].Content.Visible() {
+			t.Fatalf("tab %d did not activate", index)
+		}
+		for other, item := range d.tabs.Items {
+			if other != index && item.Content.Visible() {
+				t.Fatalf("tab %d remained visible after selecting %d", other, index)
+			}
+		}
 	}
 	for key, want := range map[string]string{
 		"human:male": "Default", "human:female": "Default",

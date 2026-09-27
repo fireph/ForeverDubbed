@@ -68,6 +68,8 @@ func TestWebsiteScreenshots(t *testing.T) {
 		}
 	}
 	capture("settings.png")
-	test.Tap(d.tabVoices)
+	d.tabs.SelectIndex(1)
 	capture("voices.png")
+	d.tabs.SelectIndex(2)
+	capture("about.png")
 }
