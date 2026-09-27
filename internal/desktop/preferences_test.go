@@ -68,7 +68,10 @@ func TestCaptureTargetPreferences(t *testing.T) {
 	defer a.Quit()
 	p := a.Preferences()
 	root := t.TempDir()
-	game := filepath.Join(root, "WowB.exe")
+	game := filepath.Join(root, "RenamedWoW.exe")
+	if err := os.Mkdir(filepath.Join(root, "Data"), 0755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(game, nil, 0600); err != nil {
 		t.Fatal(err)
 	}

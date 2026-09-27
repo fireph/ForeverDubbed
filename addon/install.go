@@ -25,13 +25,30 @@ func GameDirectory(path, platform string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	name := filepath.Base(path)
-	valid := platform == "windows" && strings.EqualFold(name, "WowB.exe") && !info.IsDir()
-	valid = valid || platform == "darwin" && name == "World of Warcraft Beta.app" && info.IsDir()
+	ext := filepath.Ext(path)
+	valid := platform == "windows" && strings.EqualFold(ext, ".exe") && info.Mode().IsRegular()
+	valid = valid || platform == "darwin" && strings.EqualFold(ext, ".app") && info.IsDir()
 	if !valid {
-		return "", fmt.Errorf("select WowB.exe or World of Warcraft Beta.app for WoW Forever")
+		return "", fmt.Errorf("select the WoW executable (.exe) or application bundle (.app)")
 	}
-	return filepath.Dir(path), nil
+	dir := filepath.Dir(path)
+	isDir := func(path string) bool {
+		info, err := os.Stat(path)
+		return err == nil && info.IsDir()
+	}
+	// Older clients keep Data beside the executable; launched clients also
+	// have Interface and WTF. Modern installations share Data and .build.info
+	// in the parent directory, even before their first launch.
+	if isDir(filepath.Join(dir, "Data")) ||
+		(isDir(filepath.Join(dir, "Interface")) && isDir(filepath.Join(dir, "WTF"))) {
+		return dir, nil
+	}
+	parent := filepath.Dir(dir)
+	build, err := os.Stat(filepath.Join(parent, ".build.info"))
+	if err == nil && build.Mode().IsRegular() && isDir(filepath.Join(parent, "Data")) {
+		return dir, nil
+	}
+	return "", fmt.Errorf("no WoW installation found beside %s; select the game client in its installation folder", filepath.Base(path))
 }
 
 func Candidates(platform string, getenv func(string) string) []string {

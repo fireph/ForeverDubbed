@@ -14,10 +14,11 @@ import (
 )
 
 func wowPickerOptions(ctx context.Context, w fyne.Window, previous string) []zenity.Option {
-	options := []zenity.Option{zenity.Context(ctx), zenity.Title("Locate WoW Forever — select WowB.exe"),
-		zenity.FileFilter{Name: "WoW Forever (WowB.exe)", Patterns: []string{"WowB.exe"}, CaseFold: true}}
+	options := []zenity.Option{zenity.Context(ctx), zenity.Title("Locate WoW Forever — select your WoW executable"),
+		zenity.FileFilter{Name: "WoW Forever (WowB.exe)", Patterns: []string{"WowB.exe"}, CaseFold: true},
+		zenity.FileFilter{Name: "All executables (*.exe)", Patterns: []string{"*.exe"}, CaseFold: true}}
 	if runtime.GOOS == "darwin" {
-		options = []zenity.Option{zenity.Context(ctx), zenity.Title("Locate WoW Forever — select World of Warcraft Beta.app"),
+		options = []zenity.Option{zenity.Context(ctx), zenity.Title("Locate WoW Forever — select your WoW application"),
 			zenity.FileFilter{Name: "Applications", Patterns: []string{"*.app"}}}
 		// chooseFile treats application bundles as files, not navigable folders.
 	} else if native, ok := w.(driver.NativeWindow); ok {

@@ -30,7 +30,7 @@ The application will install the WoW addon automatically.
 
 ## Connect to WoW
 
-1. Open ForeverDubbed. It finds WoW Forever in the usual Windows locations or `/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app` on macOS and installs or updates its bundled addon automatically. If needed, select `WowB.exe` (Windows) or `World of Warcraft Beta.app` (macOS) in the file picker.
+1. Open ForeverDubbed. It finds WoW Forever in the usual Windows locations or `/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app` on macOS and installs or updates its bundled addon automatically. If needed, select your WoW client with **Locate WoW…**: usually `WowB.exe` (Windows) or `World of Warcraft Beta.app` (macOS). Renamed clients are supported; on Windows, switch the picker to **All executables**. The selected client must be inside its WoW installation, and capture uses that exact path.
 2. Follow the narrator and banner: restart WoW for a fresh install, or type **`/reload`** for an update. Enable the addon in WoW’s AddOns list and keep WoW in **windowed or borderless mode**.
 3. Type **`/fdb test`** in WoW. The companion should show **Connected** and read the test aloud.
 4. Use **`/fdb unlock`** to drag the small data square somewhere unobstructed, then **`/fdb lock`** to finish.
