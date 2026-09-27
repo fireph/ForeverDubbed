@@ -4,6 +4,7 @@
 
 <p align="center">
   <strong>NPC voices and quest narration for WoW Forever.</strong><br>
+  <a href="https://www.foreverdubbed.com/">Website</a> ·
   <a href="CHANGELOG.md">What’s new</a> ·
   <a href="https://github.com/fireph/ForeverDubbed/issues">Report a problem</a>
 </p>
