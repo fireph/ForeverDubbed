@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -65,7 +66,7 @@ func TestInstallerManifest(t *testing.T) {
 	}
 }
 
-// Runs in the Windows CI build on Linux, where NSIS is installed before go test.
+// Runs on Windows CI, and on Linux when NSIS is installed.
 func TestWindowsInstallerCompile(t *testing.T) {
 	if _, err := exec.LookPath("makensis"); err != nil {
 		t.Skip("NSIS/makensis is not installed")
@@ -93,5 +94,44 @@ func TestWindowsInstallerCompile(t *testing.T) {
 	defer installer.Close()
 	if installer.FileHeader.Characteristics&pe.IMAGE_FILE_EXECUTABLE_IMAGE == 0 {
 		t.Fatal("installer is not an executable PE image")
+	}
+}
+
+// Exercise NSIS's compile-time callback without an Azure account. The stand-in
+// validates that NSIS has produced a PE uninstaller and propagates failures.
+func TestUninstallerSigningHook(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix shell stand-in for pwsh")
+	}
+	if _, err := exec.LookPath("makensis"); err != nil {
+		t.Skip("NSIS/makensis is not installed")
+	}
+	root := t.TempDir()
+	putFile(t, root, "app.exe", "fixture")
+	putFile(t, root, "pwsh", "#!/bin/sh\nfor arg; do last=\"$arg\"; done\n[ \"$(head -c 2 \"$last\")\" = MZ ] || exit 9\nprintf called > \"$FDB_TEST_SIGN_LOG\"\nexit \"$FDB_TEST_SIGN_EXIT\"\n")
+	if err := os.Chmod(filepath.Join(root, "pwsh"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", root+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FDB_TEST_SIGN_LOG", filepath.Join(root, "called"))
+	files := map[string]string{"foreverdubbed.exe": filepath.Join(root, "app.exe")}
+	for _, code := range []string{"0", "7"} {
+		t.Setenv("FDB_TEST_SIGN_EXIT", code)
+		output := filepath.Join(root, "setup-"+code+".exe")
+		err := writeWindowsInstallerWithSigner(output, files, filepath.Join(root, "sign script.ps1"))
+		if code == "0" && err != nil {
+			t.Fatal(err)
+		}
+		if code != "0" {
+			if err == nil {
+				t.Fatal("ignored uninstaller signing failure")
+			}
+			if _, err := os.Stat(output); !os.IsNotExist(err) {
+				t.Fatal("published installer after signing failure")
+			}
+		}
+	}
+	if data, err := os.ReadFile(filepath.Join(root, "called")); err != nil || string(data) != "called" {
+		t.Fatalf("uninstaller signer was not called: %s, %v", data, err)
 	}
 }

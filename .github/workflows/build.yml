@@ -97,39 +97,81 @@ jobs:
           compression-level: 0
 
   windows-build:
-    name: Build Windows (amd64)
-    runs-on: ubuntu-24.04
+    name: Build and sign Windows (amd64)
+    runs-on: windows-2025
+    # Only this environment is trusted by the Azure federated credential.
+    environment: ${{ github.event_name == 'pull_request' && 'windows-testing' || 'windows-signing' }}
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CC: gcc
+      CXX: g++
+      FDB_SIGNING_ENDPOINT: ${{ vars.FDB_SIGNING_ENDPOINT }}
+      FDB_SIGNING_ACCOUNT: ${{ vars.FDB_SIGNING_ACCOUNT }}
+      FDB_SIGNING_PROFILE: ${{ vars.FDB_SIGNING_PROFILE }}
     steps:
       - uses: actions/checkout@v7
+      - name: Check signing configuration
+        if: github.event_name != 'pull_request'
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          foreach ($name in @('AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID', 'FDB_SIGNING_ENDPOINT', 'FDB_SIGNING_ACCOUNT', 'FDB_SIGNING_PROFILE')) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "Missing $name. Configure the windows-signing environment; see docs/windows-signing.md."
+            }
+          }
       - uses: actions/setup-go@v7
-        id: go
         with:
           go-version: '1.27.1'
-          # Both jobs run on Ubuntu; setup-go's default key omits the build target.
-          cache: false
-      - name: Cache Go modules and build outputs (Windows amd64)
-        uses: actions/cache@v6
+          cache: true
+      - name: Install MinGW compiler and make
+        uses: msys2/setup-msys2@v2
+        id: msys2
         with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          # Refresh compiled packages per commit and restore only this target.
-          key: go-v1-${{ runner.os }}-ubuntu24-${{ runner.arch }}-windows-amd64-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum', 'native/CMakeLists.txt') }}-${{ github.sha }}
-          restore-keys: |
-            go-v1-${{ runner.os }}-ubuntu24-${{ runner.arch }}-windows-amd64-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum', 'native/CMakeLists.txt') }}-
-      - name: Windows cross-compiler prerequisites
+          msystem: MINGW64
+          path-type: minimal
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+      - name: Configure native Windows build tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake git build-essential g++-mingw-w64-x86-64-posix nsis
+          # Use native MinGW tools from PowerShell, without MSYS shell wrappers.
+          "${{ steps.msys2.outputs.msys2-location }}\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          choco install nsis --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' }
+          "${env:ProgramFiles(x86)}\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append
       - name: Prepare Windows dependencies
         run: |
           go run ./tools/native -target windows -arch amd64 -out .runtime/native-windows
+          if ($LASTEXITCODE -ne 0) { throw 'Native dependency preparation failed' }
           go run ./tools/models -out .runtime/native-windows
-      - name: Build Windows release
+          if ($LASTEXITCODE -ne 0) { throw 'Model preparation failed' }
+      - name: Install Azure signing module
+        if: github.event_name != 'pull_request'
+        run: Install-Module -Name ArtifactSigning -RequiredVersion 0.1.8 -Scope CurrentUser -Force -Repository PSGallery
+      - name: Azure login using GitHub OIDC
+        if: github.event_name != 'pull_request'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Build signed Windows release
+        if: github.event_name != 'pull_request'
+        run: go run ./tools/build -target windows -arch amd64 -native-dir .runtime/native-windows -windows-installer -windows-sign
+      - name: Build unsigned Windows test release
+        if: github.event_name == 'pull_request'
         run: go run ./tools/build -target windows -arch amd64 -native-dir .runtime/native-windows -windows-installer
       - uses: actions/upload-artifact@v7
         with:
-          name: release-windows-amd64
+          name: release-windows-amd64${{ github.event_name == 'pull_request' && '-unsigned' || '' }}
           path: |
             dist/ForeverDubbed-windows-amd64-setup.exe
             dist/ForeverDubbed-windows-amd64-portable.zip

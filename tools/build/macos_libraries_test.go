@@ -101,7 +101,9 @@ func TestThinMacLibraries(t *testing.T) {
 			}
 		})
 	}
-	if _, err := macho.OpenFat(source); err != nil {
+	fat, err := macho.OpenFat(source)
+	if err != nil {
 		t.Fatalf("source was modified: %v", err)
 	}
+	fat.Close()
 }

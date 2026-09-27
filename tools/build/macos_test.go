@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -74,7 +75,7 @@ func TestMacAppLayoutAndExecutablePermissions(t *testing.T) {
 	}
 	defer archive.Close()
 	for _, f := range archive.File {
-		if strings.HasPrefix(f.Name, "ForeverDubbed.app/Contents/MacOS/") && f.Mode().Perm()&0111 == 0 {
+		if runtime.GOOS != "windows" && strings.HasPrefix(f.Name, "ForeverDubbed.app/Contents/MacOS/") && f.Mode().Perm()&0111 == 0 {
 			t.Fatal("ZIP lost executable permission")
 		}
 	}
@@ -83,6 +84,9 @@ func TestMacAppLayoutAndExecutablePermissions(t *testing.T) {
 // Run a copied test executable from a Finder-style app layout with an unrelated
 // working directory. This checks actual os.Executable-based resource discovery.
 func TestMacAppResourceDiscovery(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("macOS app resource discovery requires a Unix executable layout")
+	}
 	if os.Getenv("FDB_TEST_APP_PROBE") == "1" {
 		exe, err := os.Executable()
 		if err != nil {

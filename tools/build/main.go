@@ -29,11 +29,12 @@ func build() error {
 	nativeDir := flag.String("native-dir", ".runtime/native", "target ONNX Runtime, models, and presets directory")
 	target := flag.String("target", "windows", "release target: windows or darwin")
 	windowsInstaller := flag.Bool("windows-installer", false, "also build a Windows amd64 installer (requires NSIS/makensis)")
+	windowsSign := flag.Bool("windows-sign", false, "sign Windows executables and installer with Azure Artifact Signing (Windows host required)")
 	macUnsigned := flag.Bool("mac-unsigned", false, "explicitly skip macOS certificate signing (test builds only)")
 	arch := flag.String("arch", "", "target architecture: amd64 or arm64")
 	flag.Parse()
 	if flag.NArg() != 0 {
-		return fmt.Errorf("usage: go run ./tools/build [-target windows|darwin] [-arch amd64|arm64] [-native-dir path] [-windows-installer]")
+		return fmt.Errorf("usage: go run ./tools/build [-target windows|darwin] [-arch amd64|arm64] [-native-dir path] [-windows-installer] [-windows-sign]")
 	}
 	release, err := releaseVersion()
 	if err != nil {
@@ -52,6 +53,18 @@ func build() error {
 		return fmt.Errorf("release target must be windows or darwin")
 	}
 	targetOS, targetArch := spec.OS, spec.Arch
+	var signWindows func(string) error
+	windowsSignScript := ""
+	if *windowsSign {
+		if targetOS != "windows" || runtime.GOOS != "windows" {
+			return fmt.Errorf("-windows-sign requires a Windows target and Windows host")
+		}
+		windowsSignScript = filepath.Join(root, "scripts", "sign-windows.ps1")
+		if err := runWindowsSigner(windowsSignScript, "-CheckOnly"); err != nil {
+			return err
+		}
+		signWindows = func(filename string) error { return runWindowsSigner(windowsSignScript, "-File", filename) }
+	}
 	if *windowsInstaller {
 		if targetOS != "windows" || targetArch != "amd64" {
 			return fmt.Errorf("-windows-installer requires -target windows -arch amd64")
@@ -147,6 +160,9 @@ func build() error {
 		return err
 	}
 	bundle[binaryName] = binary
+	if err := signWindowsPayload(bundle, signWindows); err != nil {
+		return err
+	}
 	if err := addReleaseManifest(dist, bundle); err != nil {
 		return err
 	}
@@ -164,8 +180,13 @@ func build() error {
 	}
 	if *windowsInstaller {
 		installer := filepath.Join(dist, "ForeverDubbed-windows-"+targetArch+"-setup.exe")
-		if err := writeWindowsInstaller(installer, bundle); err != nil {
+		if err := writeWindowsInstallerWithSigner(installer, bundle, windowsSignScript); err != nil {
 			return err
+		}
+		if signWindows != nil {
+			if err := signWindows(installer); err != nil {
+				return err
+			}
 		}
 		fmt.Println("Built", installer)
 	}

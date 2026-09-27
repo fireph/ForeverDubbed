@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -67,6 +68,10 @@ func nsisQuote(value string) string { return "\"" + nsisEscape(value) + "\"" }
 
 // writeWindowsInstaller compiles the exact portable file manifest into an NSIS installer.
 func writeWindowsInstaller(destination string, files map[string]string) error {
+	return writeWindowsInstallerWithSigner(destination, files, "")
+}
+
+func writeWindowsInstallerWithSigner(destination string, files map[string]string, signScript string) error {
 	stage, err := os.MkdirTemp(filepath.Dir(destination), ".foreverdubbed-installer-")
 	if err != nil {
 		return err
@@ -80,11 +85,20 @@ func writeWindowsInstaller(destination string, files map[string]string) error {
 	if err != nil {
 		return err
 	}
+	if signScript != "" {
+		// NSIS produces the uninstaller at compile time, signs it, and embeds
+		// those exact bytes. A nonzero signing exit code aborts compilation.
+		script = "!uninstfinalize " + nsisQuote(`pwsh -NoProfile -NonInteractive -File "`+signScript+`" -File "%1"`) + " = 0\n" + script
+	}
 	scriptPath := filepath.Join(stage, "installer.nsi")
 	if err := os.WriteFile(scriptPath, []byte(script), 0600); err != nil {
 		return err
 	}
-	cmd := exec.Command("makensis", "-NOCD", "-V2", "-WX", scriptPath)
+	prefix := "-"
+	if runtime.GOOS == "windows" {
+		prefix = "/"
+	}
+	cmd := exec.Command("makensis", prefix+"NOCD", prefix+"V2", prefix+"WX", scriptPath)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("build Windows installer (requires NSIS/makensis): %w", err)
