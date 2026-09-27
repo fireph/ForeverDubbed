@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"compress/flate"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,6 +17,10 @@ func writeZIP(destination string, files map[string]string) (err error) {
 	defer os.Remove(output.Name())
 	defer output.Close()
 	archive := zip.NewWriter(output)
+	// Spend more time packaging while retaining standard ZIP compatibility.
+	archive.RegisterCompressor(zip.Deflate, func(out io.Writer) (io.WriteCloser, error) {
+		return flate.NewWriter(out, flate.BestCompression)
+	})
 	names := make([]string, 0, len(files))
 	for name := range files {
 		names = append(names, name)

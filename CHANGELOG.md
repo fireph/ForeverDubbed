@@ -3,7 +3,7 @@
 ## 0.9.4
 
 - Omit the unused Mimi reference-audio encoder from release packages, saving approximately 38 MiB of installed space. Load it only when encoding reference audio; saved voice playback requires no encoder.
-
+- Use maximum DEFLATE compression for release ZIPs, including portable packages, while retaining standard ZIP and updater compatibility.
 - Reduce release size by including only PocketTTS preset voices referenced by `tts/voices.json`. The current custom-only configuration excludes all eight default presets, saving approximately 52 MiB of installed space.
 - Strip debug information and symbol tables from the Windows release executable.
 - Reduce macOS runtime libraries to the release's target architecture before signing, preserving library loader names and updater compatibility.
