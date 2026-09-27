@@ -10,7 +10,7 @@
 </p>
 
 > [!IMPORTANT]
-> **The addon requires the ForeverDubbed companion app to work.** The addon cannot generate or play voices on its own. [Install the companion app](#install) to use ForeverDubbed.
+> **The addon requires the ForeverDubbed companion app to work.** The addon cannot generate or play voices on its own.
 
 Have you always wondered what WoW would be like with full voice acting? Wonder no more! Using text-to-speed models that run locally on your computer, Forever Dubbed generates audio for any quest, conversation, or dialog in the game!
 
