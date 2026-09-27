@@ -55,7 +55,7 @@ LD_LIBRARY_PATH="$PWD/.runtime/native" CGO_ENABLED=1 go run -tags pocket_native 
 
 `voicecheck` applies decode steps and fades, but not profile gain. Before publishing, apply the configured `gain_db` to the signed 16-bit PCM samples (multiply by `10^(gain_db/20)`, round, and clamp to the signed 16-bit range), matching app playback. These clips apply +6 dB for Tauren male, +2 dB for Troll male, +3 dB for Undead male, and 0 dB for the others. Encode the resulting WAV as a 128 kbps mono MP3 at 24 kHz, save it to its hyphenated filename under `assets/audio/` and update the manifest and transcript together if the dialogue changes. Generation may vary between runs.
 
-The players use native browser controls, load audio only on demand, and work without JavaScript. With JavaScript enabled, starting a sample pauses any other sample. Keep the MP3 files in the deployed website; playback needs no speech service or model download.
+The players use custom rounded controls with subtle gold accents with play/pause, keyboard-accessible seeking and elapsed time. Audio loads only on demand; native browser controls remain available without JavaScript. Starting a sample pauses any other sample. Playback failures show a retry message and download link. Keep the MP3 files in the deployed website; playback needs no speech service or model download.
 
 Keep the original WAV masters alongside the MP3 files in `website/assets/audio/` for future re-encoding. Both formats are versioned; the website players load only the MP3 files. Convert from the WAV master, not an existing MP3. For example, with FFmpeg and its LAME encoder:
 
