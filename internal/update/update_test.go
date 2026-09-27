@@ -248,6 +248,55 @@ func TestApplyRollsBackOnPartialFailure(t *testing.T) {
 		}
 	}
 }
+func TestApplyRollsBackFileToDirectory(t *testing.T) {
+	install, plan := installFixture(t)
+	writeFixture(t, install.Root, "assets", "original asset file")
+	old := Manifest{Version: "0.9.0", Files: map[string]string{"assets": digest([]byte("original asset file"))}}
+	data, err := json.Marshal(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, install.Root, ManifestName, string(data))
+	payload := filepath.Join(filepath.Dir(plan), "payload")
+	incoming, err := readManifest(filepath.Join(payload, ManifestName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, payload, "assets/nested/data", "new nested data")
+	incoming.Files["assets/nested/data"] = digest([]byte("new nested data"))
+	// Fail after the old file has been replaced by nested directories and data.
+	incoming.Files["zzz-missing"] = digest([]byte("missing staged file"))
+	data, err = json.Marshal(incoming)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, payload, ManifestName, string(data))
+	if err := Apply(plan, nil); err == nil {
+		t.Fatal("expected installation failure")
+	}
+	restored, err := os.ReadFile(filepath.Join(install.Root, "assets"))
+	if err != nil || string(restored) != "original asset file" {
+		t.Fatalf("rollback did not restore original file: content=%q err=%v", restored, err)
+	}
+}
+
+func TestRollbackPreservesUnrelatedFilesInCreatedDirectories(t *testing.T) {
+	parent := filepath.Join(t.TempDir(), "new", "nested")
+	var entries []replacement
+	if err := createInstallParents(parent, &entries); err != nil {
+		t.Fatal(err)
+	}
+	// A file created by someone else after installation started must survive.
+	writeFixture(t, parent, "user.txt", "keep me")
+	if err := rollback(entries); err == nil {
+		t.Fatal("expected nonempty directory error")
+	}
+	got, err := os.ReadFile(filepath.Join(parent, "user.txt"))
+	if err != nil || string(got) != "keep me" {
+		t.Fatalf("unrelated file lost: %q, %v", got, err)
+	}
+}
+
 func TestApplyRejectsSymlinkParents(t *testing.T) {
 	install, plan := installFixture(t)
 	outside := t.TempDir()

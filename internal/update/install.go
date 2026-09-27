@@ -204,7 +204,7 @@ func rollback(entries []replacement) error {
 	for i := len(entries) - 1; i >= 0; i-- {
 		e := entries[i]
 		if e.installed {
-			if err := os.RemoveAll(e.target); err != nil {
+			if err := os.Remove(e.target); err != nil && !os.IsNotExist(err) {
 				errs = append(errs, err)
 				continue
 			}
@@ -217,6 +217,30 @@ func rollback(entries []replacement) error {
 	}
 	return errors.Join(errs...)
 }
+
+// Record each new directory so rollback removes children before their parents.
+// Existing directories are never added to the rollback log.
+func createInstallParents(dir string, entries *[]replacement) error {
+	info, err := os.Lstat(dir)
+	if err == nil {
+		if !info.IsDir() {
+			return fmt.Errorf("install parent is not a directory: %s", dir)
+		}
+		return nil
+	}
+	if !os.IsNotExist(err) {
+		return err
+	}
+	if err := createInstallParents(filepath.Dir(dir), entries); err != nil {
+		return err
+	}
+	if err := os.Mkdir(dir, 0755); err != nil {
+		return err
+	}
+	*entries = append(*entries, replacement{target: dir, installed: true})
+	return nil
+}
+
 func Apply(planPath string, progress Reporter) error {
 	p, err := LoadPlan(planPath)
 	if err != nil {
@@ -300,7 +324,7 @@ func Apply(planPath string, progress Reporter) error {
 			return fail(fmt.Errorf("installed path is not a regular file: %s", name))
 		}
 		e := replacement{target: destination, backup: filepath.Join(previous, filepath.FromSlash(name)), hadOld: statErr == nil}
-		if err = os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
+		if err = createInstallParents(filepath.Dir(destination), &entries); err != nil {
 			return fail(err)
 		}
 		if e.hadOld {
