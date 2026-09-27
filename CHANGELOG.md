@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.0.0
+
+- Add an **About** tab with the app version and links to the website, Ko-fi donations, Discord, source code, issue reporting, and release notes.
+- Replace the Settings and Voices navigation buttons with a tab bar inside the parchment panel, using an underline to identify the selected tab.
+- Refresh the website's Settings and Voices screenshots and add an About screenshot.
+- Improve failed-update rollback by removing newly created directories only when empty, preserving existing directories and unrelated files.
+- Add the project license and refresh the README with the banner, website, and Discord links.
+
+## 0.9.9
+
+- Allow only one running copy of ForeverDubbed per user, including across different installation folders. Additional launches exit immediately.
+
+## 0.9.8
+
+- Unify automatic WoW discovery, saved-path restoration, and manual selection. Discovered paths immediately become the capture target while respecting explicit command-line overrides.
+- Use shared strict version parsing for addon installation, application updates, and release packaging.
+- Correct playback-control documentation and installer guidance.
+
+## 0.9.7
+
+- Allow selecting renamed WoW executables and application bundles. Add an **All executables** filter to the Windows picker and validate the surrounding WoW installation before installing the addon.
+- Refresh the website screenshots.
+
+## 0.9.6
+
+- Make **Stop** and **Skip** available while speech is being prepared, before audio playback begins.
+- Restore the saved WoW executable as the capture target and show the actual detected executable path in the desktop app. Match explicitly selected executables by their full path.
+- Track installed release files during updates and uninstallation. Remove obsolete packaged files while preserving unrelated user files, and include file removals in update rollback.
+- Add website voice samples with custom playback controls and improve the comparison table on mobile.
+
 ## 0.9.5
 
 - Give the Windows updater executable and native dialogs the same application icon as the main app.
