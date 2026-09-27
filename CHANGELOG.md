@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1
+
+- Sign and timestamp the Windows app, updater, installer, and uninstaller with Azure Artifact Signing. Include the signed executables in both installed and portable releases.
+- Verify signatures before uploading Windows release artifacts, and generate update checksums from the signed files. Stop the build if signing or verification fails.
+- Build Windows releases on Windows with the MSYS2 UCRT64 toolchain. Keep pull-request builds unsigned for testing.
+
 ## 1.0.0
 
 - Add an **About** tab with the app version and links to the website, Ko-fi donations, Discord, source code, issue reporting, and release notes.
