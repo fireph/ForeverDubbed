@@ -24,10 +24,13 @@ type captureSettings struct {
 // The capture worker owns all backend calls, including target changes.
 type captureBackend interface {
 	Init(string) error
+	Executable() string
 	Desktop() image.Rectangle
 	Capture(image.Rectangle) (*image.RGBA, error)
 }
 type liveCapture struct{}
+
+func (liveCapture) Executable() string { return platform.CapturedExecutable() }
 
 func (liveCapture) Init(target string) error                          { return platform.Init(target) }
 func (liveCapture) Desktop() image.Rectangle                          { return platform.Desktop() }
@@ -108,6 +111,16 @@ func captureLoop(ctx context.Context, settings captureSettings, state *appstate.
 				failures = 0
 			}
 		}
+		// A picker change can arrive while a native capture is in progress.
+		if state.Snapshot().Target != settings.target {
+			continue
+		}
+		executable := backend.Executable()
+		state.Update(func(v *appstate.Snapshot) {
+			if v.Target == settings.target {
+				v.DetectedExecutable = executable
+			}
+		})
 		state.Capture(windowOK, tileOK, err)
 		if err == nil {
 			m, assemblyErr := assembler.Add(p, time.Now())

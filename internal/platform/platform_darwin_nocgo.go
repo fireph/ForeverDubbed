@@ -16,3 +16,5 @@ func openAudio(int) (pcmDevice, error)             { return nil, errMacCGO }
 
 // CloseCapture releases platform capture resources at shutdown.
 func CloseCapture() {}
+
+func CapturedExecutable() string { return "" }

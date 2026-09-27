@@ -154,3 +154,5 @@ func (d *winWindowDriver) Capture(rect image.Rectangle) (*image.RGBA, error) {
 func (d *winWindowDriver) Reset() {
 	_ = d.call(func(native *C.fdb_wgc) error { C.fdb_wgc_reset(native); return nil })
 }
+
+func CapturedExecutable() string { return windowsScreen.Executable() }

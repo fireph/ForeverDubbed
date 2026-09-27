@@ -18,6 +18,8 @@ type testCapture struct {
 	frames map[string]*image.RGBA
 }
 
+func (c *testCapture) Executable() string { c.mu.Lock(); defer c.mu.Unlock(); return c.target }
+
 func (c *testCapture) Init(target string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -92,9 +94,13 @@ func TestCaptureTargetChangeResetsAssembler(t *testing.T) {
 	backend.set(t, "second", protocol.Message{Session: 1, Sequence: 1, Text: "second game"})
 	state := appstate.New("first", "pocket", true)
 	runTestCapture(t, backend, state, true, nil)
-	waitCaptureState(t, state, func(s appstate.Snapshot) bool { return s.Message.Text == "first game" })
+	waitCaptureState(t, state, func(s appstate.Snapshot) bool {
+		return s.Message.Text == "first game" && s.DetectedExecutable == "first"
+	})
 	state.SetCaptureTarget("second")
-	waitCaptureState(t, state, func(s appstate.Snapshot) bool { return s.Message.Text == "second game" })
+	waitCaptureState(t, state, func(s appstate.Snapshot) bool {
+		return s.Message.Text == "second game" && s.DetectedExecutable == "second"
+	})
 }
 
 func TestOpticalControlsDuringPreparation(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"foreverdubbed/addon"
 	"image/color"
 	"maps"
+	"path/filepath"
 	"sort"
 	"strings"
 	"unicode"
@@ -58,6 +59,7 @@ type dashboard struct {
 	addonHeading                     *widget.Label
 	addonNotice                      fyne.CanvasObject
 	locateWoW                        *widget.Button
+	wowPath                          *widget.Label
 	queue                            *widget.Check
 	volume                           *widget.Slider
 	volumeLabel                      *widget.Label
@@ -132,7 +134,12 @@ func newDashboard(version string, hide, quit, stop, skip func(), queue func(bool
 	d.volumeLabel = widget.NewLabel("100%")
 	volumeControl := container.NewBorder(nil, nil, widget.NewLabel("Voice volume"), d.volumeLabel, d.volume)
 	audioCard := container.NewVBox(d.audio.root, inset(3, container.NewHBox(questButtonWidget(d.stop), d.skipControl)))
-	header := container.NewVBox(container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), questRule(), categories, volumeControl, d.queue)
+	d.locateWoW = widget.NewButtonWithIcon("Locate WoW…", theme.FolderOpenIcon(), nil)
+	d.wowPath = widget.NewLabel("Not located yet")
+	d.wowPath.Wrapping = fyne.TextWrapWord
+	gameLocation := container.NewBorder(nil, nil, nil, container.NewCenter(questButtonWidget(d.locateWoW)),
+		container.NewVBox(widget.NewLabelWithStyle("WoW location", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), d.wowPath))
+	header := container.NewVBox(container.NewGridWithColumns(3, d.window.root, d.tile.root, audioCard), questRule(), categories, volumeControl, d.queue, questRule(), gameLocation)
 	paper := parchment(container.NewVScroll(header))
 	voices := parchment(container.NewVScroll(d.voicePanel(races)))
 	voices.Hide()
@@ -149,9 +156,7 @@ func newDashboard(version string, hide, quit, stop, skip func(), queue func(bool
 		d.tabSettings.Enable()
 	})
 	d.tabSettings.Disable()
-	d.locateWoW = widget.NewButtonWithIcon("Locate WoW…", theme.FolderOpenIcon(), nil)
-	tabBar := container.NewBorder(nil, nil, nil, questButtonWidget(d.locateWoW),
-		container.NewGridWithColumns(2, questButtonWidget(d.tabSettings), questButtonWidget(d.tabVoices)))
+	tabBar := container.NewGridWithColumns(2, questButtonWidget(d.tabSettings), questButtonWidget(d.tabVoices))
 	panels := container.NewStack(paper, voices)
 	versionLabel := canvas.NewText("v"+version, gold)
 	versionLabel.TextSize = 13
@@ -255,6 +260,7 @@ func (d *dashboard) showQuestOptions() {
 }
 
 func (d *dashboard) render(s appstate.Snapshot) {
+	d.wowPath.SetText(wowLocation(s))
 	heading, detail := addonNoticeText(s.AddonBanner)
 	d.addonHeading.SetText(heading)
 	d.addonBanner.SetText(detail)
@@ -348,4 +354,19 @@ func addonNoticeText(message string) (string, string) {
 		}
 		return "ForeverDubbed addon", message
 	}
+}
+
+func wowLocation(s appstate.Snapshot) string {
+	if s.DetectedExecutable != "" {
+		return s.DetectedExecutable
+	}
+	// Recognize Windows paths in Linux-hosted GUI tests as well.
+	if filepath.IsAbs(s.Target) || strings.HasPrefix(s.Target, `\\`) ||
+		(len(s.Target) >= 3 && s.Target[1] == ':' && (s.Target[2] == '\\' || s.Target[2] == '/')) {
+		return s.Target
+	}
+	if !s.CaptureTargetExplicit && s.WoWPath != "" {
+		return s.WoWPath
+	}
+	return "Not located yet"
 }

@@ -78,6 +78,7 @@ func manageAddon(ctx context.Context, a fyne.App, w fyne.Window, state *appstate
 			gameValid = err == nil
 			if err == nil {
 				a.Preferences().SetString("wowExecutable", path)
+				state.Update(func(v *appstate.Snapshot) { v.WoWPath = path })
 				var prompt string
 				prompt, err = addon.Install(dir, version)
 				if err == nil {

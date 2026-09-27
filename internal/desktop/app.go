@@ -10,11 +10,14 @@ import (
 
 	"foreverdubbed/internal/appicon"
 	"foreverdubbed/internal/appstate"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/theme"
 )
+
+var defaultWindowSize = fyne.NewSize(760, 860)
 
 // Run keeps Fyne's event loop on the main goroutine; capture and synthesis run
 // in the worker. Status is copied under a lock and rendered only via fyne.Do.
@@ -24,7 +27,7 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 	a.SetIcon(Icon)
 	a.Settings().SetTheme(companionTheme{theme.DefaultTheme()})
 	w := a.NewWindow("ForeverDubbed")
-	w.Resize(fyne.NewSize(760, 800))
+	w.Resize(defaultWindowSize)
 	w.CenterOnScreen()
 	quit := func() { stop() }
 	show := func() { restoreMinimized(w); w.Show(); w.RequestFocus() }

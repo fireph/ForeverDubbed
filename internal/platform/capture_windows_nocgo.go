@@ -13,3 +13,5 @@ func Init(string) error                            { return errWinCGO }
 func CloseCapture()                                {}
 func Desktop() image.Rectangle                     { return image.Rectangle{} }
 func Capture(image.Rectangle) (*image.RGBA, error) { return nil, errWinCGO }
+
+func CapturedExecutable() string { return "" }

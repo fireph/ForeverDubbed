@@ -200,3 +200,13 @@ func (c *windowCapture) Capture(rect image.Rectangle) (*image.RGBA, error) {
 	}
 	return im, err
 }
+
+// Executable reports the process selected by capture, without re-enumerating.
+func (c *windowCapture) Executable() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.err != nil {
+		return ""
+	}
+	return c.selected.Executable
+}

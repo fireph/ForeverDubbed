@@ -256,3 +256,26 @@ func TestWindowCaptureLifecycle(t *testing.T) {
 		t.Fatal("captured pixels after closing the driver")
 	}
 }
+
+func TestCapturedExecutableFollowsWindowSelection(t *testing.T) {
+	game := gameWindow(1, 42)
+	driver := &fakeWindowDriver{windows: []captureWindow{game}, bounds: image.Rect(0, 0, 1280, 720)}
+	capture := &windowCapture{}
+	capture.init(game.App, driver)
+	if got := capture.Executable(); got != "" {
+		t.Fatalf("reported a path before discovery: %q", got)
+	}
+	capture.Bounds()
+	if got := capture.Executable(); got != game.Executable {
+		t.Fatalf("detected path = %q", got)
+	}
+	driver.windows = nil
+	capture.Bounds()
+	if got := capture.Executable(); got != "" {
+		t.Fatalf("closed game's path remained: %q", got)
+	}
+	capture.Close()
+	if got := capture.Executable(); got != "" {
+		t.Fatalf("closed capture retained a path: %q", got)
+	}
+}

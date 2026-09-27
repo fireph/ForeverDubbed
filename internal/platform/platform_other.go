@@ -20,3 +20,5 @@ func PlayPCM(context.Context, int, <-chan []byte) error { return errUnsupportedP
 
 // CloseCapture releases platform capture resources at shutdown.
 func CloseCapture() {}
+
+func CapturedExecutable() string { return "" }

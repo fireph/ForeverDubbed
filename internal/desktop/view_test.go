@@ -5,7 +5,6 @@ package desktop
 import (
 	"foreverdubbed/internal/appstate"
 	"foreverdubbed/internal/protocol"
-	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
 	"image/png"
@@ -27,10 +26,11 @@ func TestDashboardLiveStates(t *testing.T) {
 	w := a.NewWindow("ForeverDubbed")
 	defer w.Close()
 	w.SetContent(d.root)
-	w.Resize(fyne.NewSize(760, 740))
+	w.Resize(defaultWindowSize)
 	state := appstate.New("World of Warcraft Beta.app", "pocket", false)
 	state.Update(func(s *appstate.Snapshot) {
 		s.AddonBanner = "Restart World of Warcraft to install Forever Dubbed addon"
+		s.WoWPath = `C:\Program Files (x86)\World of Warcraft\_classic_beta_\WowB.exe`
 	})
 	d.render(state.Snapshot())
 	if !d.addonNotice.Visible() || d.addonHeading.Text != "Restart World of Warcraft" {
@@ -254,5 +254,45 @@ func TestDashboardSavedVoicesWithoutConfig(t *testing.T) {
 	d.voiceSelects["orc:male"].SetSelected("Default")
 	if len(choices) != 0 {
 		t.Fatal("could not clear saved mute choice", choices)
+	}
+}
+
+func TestWoWLocationShowsDetectedAndSelectedPaths(t *testing.T) {
+	a := test.NewApp()
+	defer a.Quit()
+	d := newDashboard("test", func() {}, func() {}, func() {}, func() {}, func(bool) {}, func(appstate.SpeechFilters) {}, nil, nil, nil)
+	state := appstate.New("WowB.exe", "pocket", false)
+	d.render(state.Snapshot())
+	if d.wowPath.Text != "Not located yet" {
+		t.Fatal("bare process name shown as a located executable")
+	}
+	selected := `C:\Games\WoW\WowB.exe`
+	state.Update(func(s *appstate.Snapshot) { s.WoWPath = selected })
+	d.render(state.Snapshot())
+	if d.wowPath.Text != selected {
+		t.Fatal("auto-located installation is missing")
+	}
+	detected := `D:\Games\A different World of Warcraft installation\_classic_beta_\WowB.exe`
+	state.Update(func(s *appstate.Snapshot) { s.DetectedExecutable = detected })
+	d.render(state.Snapshot())
+	if d.wowPath.Text != detected {
+		t.Fatal("actual captured executable did not take priority")
+	}
+	state.SetCaptureTarget(selected)
+	d.render(state.Snapshot())
+	if d.wowPath.Text != selected {
+		t.Fatal("picker selection left the old detected path visible")
+	}
+	state.SetCaptureTarget("Other.exe")
+	state.Update(func(s *appstate.Snapshot) { s.CaptureTargetExplicit = true })
+	d.render(state.Snapshot())
+	if d.wowPath.Text != "Not located yet" {
+		t.Fatal("unrelated installation shown for an explicit selector")
+	}
+	mac := "/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app"
+	state.SetCaptureTarget(mac)
+	d.render(state.Snapshot())
+	if d.wowPath.Text != mac {
+		t.Fatal("selected macOS app path is missing")
 	}
 }

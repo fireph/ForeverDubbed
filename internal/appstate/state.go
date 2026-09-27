@@ -34,6 +34,7 @@ type Snapshot struct {
 	AddonSession                          uint32
 	Filters                               SpeechFilters
 	Target, Backend                       string
+	WoWPath, DetectedExecutable           string
 	CaptureTargetExplicit                 bool
 	Ready, Stopped                        bool
 	Window, Tile                          bool
@@ -202,7 +203,10 @@ func (s *State) Volume() float64 { return s.Snapshot().Volume }
 
 // SetCaptureTarget wakes the capture worker, which owns native reinitialization.
 func (s *State) SetCaptureTarget(target string) {
-	s.Update(func(v *Snapshot) { v.Target = target })
+	s.Update(func(v *Snapshot) {
+		v.Target = target
+		v.DetectedExecutable = ""
+	})
 	select {
 	case s.captureChanges <- struct{}{}:
 	default:
@@ -214,6 +218,7 @@ func (s *State) CaptureChanges() <-chan struct{} { return s.captureChanges }
 func (s *State) ResetCapture() {
 	s.Update(func(v *Snapshot) {
 		v.Window, v.Tile = false, false
+		v.DetectedExecutable = ""
 		v.CaptureError = ""
 		v.AddonVersion, v.AddonSession = "", 0
 		v.Message, v.Received = protocol.Message{}, time.Time{}

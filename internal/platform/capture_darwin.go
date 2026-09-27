@@ -73,3 +73,5 @@ func (macWindowDriver) Capture(rect image.Rectangle) (*image.RGBA, error) {
 
 // CloseCapture releases platform capture resources at shutdown.
 func CloseCapture() { macScreen.Close() }
+
+func CapturedExecutable() string { return macScreen.Executable() }
