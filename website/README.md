@@ -18,9 +18,9 @@ Open http://localhost:8000.
 4. Enable **Enforce HTTPS** when the certificate is ready.
 5. Push website changes to `main`, or run **Deploy website** manually from Actions.
 
-The `pages` branch starts with an empty root commit. The workflow copies the contents of `website/` to the root of that branch, removes files deleted from the source, and commits only when the published files change. It never copies app source or app binaries and does not rewrite branch history. Edit the source on `main`, not the generated `pages` branch.
+The workflow uploads `website/` directly from `main` and deploys it to GitHub Pages. No generated branch or branch pushes are needed. It uses the built-in GitHub Actions token with read-only repository access and Pages deployment permissions.
 
-The same workflow deploys the website through GitHub Actions: pushes made with `GITHUB_TOKEN` do not trigger a separate Pages build. Keep **Settings → Pages → Source** set to **GitHub Actions**, even though the generated files also live on `pages`. No personal access token is needed. A CNAME file is not needed for Actions deployments; the custom domain is configured in repository settings.
+Keep **Settings → Pages → Source** set to **GitHub Actions**, and allow `main` in the `github-pages` environment's deployment branch rules. `website/CNAME` contains `www.foreverdubbed.com`; the custom domain must also be configured in repository settings.
 
 Website-only pushes and pull requests skip `build.yml`. Changes to `.github/workflows/website.yml` are also excluded from app builds. Mixed app/website changes still build the app. Version tags and manual app builds still run, since GitHub does not apply path filters to tag pushes.
 

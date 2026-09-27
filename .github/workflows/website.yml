@@ -9,7 +9,7 @@ on:
       - '.github/workflows/website.yml'
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -26,26 +26,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
-      - name: Publish website files to pages branch
-        env:
-          SOURCE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          publish_dir="$RUNNER_TEMP/foreverdubbed-pages"
-          git fetch origin pages
-          git worktree add --detach "$publish_dir" FETCH_HEAD
-          trap 'git worktree remove --force "$publish_dir"' EXIT
-          rsync -a --delete --exclude='.git' website/ "$publish_dir/"
-          touch "$publish_dir/.nojekyll"
-          git -C "$publish_dir" config user.name 'github-actions[bot]'
-          git -C "$publish_dir" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git -C "$publish_dir" add --all
-          if ! git -C "$publish_dir" diff --cached --quiet; then
-            git -C "$publish_dir" commit -m "Publish website from $SOURCE_SHA"
-            git -C "$publish_dir" push origin HEAD:pages
-          fi
-      # GITHUB_TOKEN branch pushes do not trigger a separate Pages build.
-      # Deploy the same website directly, without requiring a PAT.
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
