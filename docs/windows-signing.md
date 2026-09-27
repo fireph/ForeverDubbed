@@ -1,6 +1,6 @@
 # Windows release signing
 
-The Windows job builds on `windows-2025` with MinGW-w64 and NSIS. Non-PR builds require Azure Artifact Signing; missing configuration or a signing/verification error fails the build before artifact upload or release publishing. Pull requests build unsigned test artifacts without logging into Azure.
+The Windows job builds on `windows-2025` with MSYS2 UCRT64 (MinGW-w64 GCC/G++) and NSIS. Non-PR builds require Azure Artifact Signing; missing configuration or a signing/verification error fails the build before artifact upload or release publishing. Pull requests build unsigned test artifacts without logging into Azure.
 
 The packager signs and verifies `foreverdubbed.exe` and `foreverdubbed-updater.exe` before generating the update manifest and portable ZIP. NSIS signs its embedded uninstaller through `!uninstfinalize`, then the packager signs the finished installer. Every signature uses SHA-256 and Microsoft's RFC 3161 timestamp service, and verification requires both a valid signature and a timestamp. Third-party DLLs retain their original signatures.
 
@@ -10,9 +10,12 @@ The packager signs and verifies `foreverdubbed.exe` and `foreverdubbed-updater.e
 2. In Microsoft Entra ID, create an **App registration** for the GitHub workflow. Record its **Application (client) ID** and **Directory (tenant) ID**, plus your Azure **Subscription ID**.
 3. Under the app registration's **Certificates & secrets → Federated credentials**, add a GitHub Actions credential for your repository with entity type **Environment**, named `windows-signing`. Its values should be:
    - Issuer: `https://token.actions.githubusercontent.com`
-   - Subject: `repo:OWNER/REPOSITORY:environment:windows-signing` (replace owner/repository, preserving case)
+   - Subject for this repository: `repo:fireph@443370/ForeverDubbed@1380626391:environment:windows-signing`
+   - GitHub owner/org ID: `443370`; repository ID: `1380626391`. Enter these if the Azure form requests numeric IDs.
    - Audience: `api://AzureADTokenExchange`
 4. On the signing account's **Access control (IAM)** page, grant that application's service principal the **Artifact Signing Certificate Profile Signer** role. Older Azure UI may label this **Trusted Signing Certificate Profile Signer**. For tighter scope, use Azure CLI to assign the role on the specific certificate profile as shown in [Microsoft's role assignment guide](https://learn.microsoft.com/en-us/azure/artifact-signing/tutorial-assign-roles). Subscription Contributor by itself does not grant signing permission.
+
+This repository uses GitHub's immutable OIDC subject format, so the numeric IDs are required in the subject above. For a different repository, check `gh api repos/OWNER/REPOSITORY/actions/oidc/customization/sub` and append `:environment:windows-signing` to its `sub_claim_prefix`. See [Microsoft's immutable subject guide](https://learn.microsoft.com/en-us/entra/workload-id/workload-identities-github-immutable-subjects).
 
 No client secret, PFX file, or private signing key needs to be stored in GitHub. GitHub OIDC authenticates the workflow, and Azure retains the signing key.
 
