@@ -317,7 +317,7 @@ func (d *dashboard) render(s appstate.Snapshot) {
 		}
 	}
 	d.audio.set(audio, audioDetail, playing)
-	if playing && s.PlaybackID != 0 {
+	if !s.Stopped && s.PlaybackID != 0 {
 		d.stop.Enable()
 	} else {
 		d.stop.Disable()
@@ -327,7 +327,7 @@ func (d *dashboard) render(s appstate.Snapshot) {
 	} else {
 		d.skipControl.Hide()
 	}
-	if s.QueueSpeech && playing && s.PlaybackID != 0 {
+	if s.QueueSpeech && !s.Stopped && s.PlaybackID != 0 {
 		d.skip.Enable()
 	} else {
 		d.skip.Disable()

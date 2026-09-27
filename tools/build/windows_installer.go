@@ -18,7 +18,7 @@ import (
 var installerTemplate string
 
 // Use the ZIP's exact manifest, including only configured voices. Explicit
-// uninstall paths avoid recursively deleting unrelated files in the install dir.
+// inventory avoids recursively deleting unrelated files in the install dir.
 func installerScript(output string, files map[string]string) (string, error) {
 	if _, err := update.Version(buildinfo.Version); err != nil {
 		return "", err
@@ -27,18 +27,18 @@ func installerScript(output string, files map[string]string) (string, error) {
 		return "", fmt.Errorf("Windows installer is missing its executable")
 	}
 	names := make([]string, 0, len(files))
-	dirs := map[string]bool{}
+	inventory, err := update.UninstallInventory(files)
+	if err != nil {
+		return "", err
+	}
 	for name := range files {
 		if name == "." || !filepath.IsLocal(name) || path.Clean(name) != name || strings.ContainsAny(name, "\\:*?\"<>|\r\n") {
 			return "", fmt.Errorf("invalid installer path %q", name)
 		}
 		names = append(names, name)
-		for dir := path.Dir(name); dir != "."; dir = path.Dir(dir) {
-			dirs[dir] = true
-		}
 	}
 	sort.Strings(names)
-	var install, remove strings.Builder
+	var install, writeInventory strings.Builder
 	for _, name := range names {
 		source, err := filepath.Abs(files[name])
 		if err != nil {
@@ -49,18 +49,13 @@ func installerScript(output string, files map[string]string) (string, error) {
 			dir += "\\" + nsisEscape(strings.ReplaceAll(path.Dir(name), "/", "\\"))
 		}
 		fmt.Fprintf(&install, "  SetOutPath \"%s\"\n  File %s %s\n", dir, nsisQuote("/oname="+path.Base(name)), nsisQuote(source))
-		fmt.Fprintf(&remove, "  Delete \"$INSTDIR\\%s\"\n", nsisEscape(strings.ReplaceAll(name, "/", "\\")))
 	}
-	orderedDirs := make([]string, 0, len(dirs))
-	for dir := range dirs {
-		orderedDirs = append(orderedDirs, dir)
+	for _, line := range strings.SplitAfter(inventory, "\r\n") {
+		if line != "" {
+			fmt.Fprintf(&writeInventory, "  FileWriteUTF16LE /BOM $0 %s\n", nsisQuote(line))
+		}
 	}
-	// Descendants sort after their parents; reverse order removes children first.
-	sort.Sort(sort.Reverse(sort.StringSlice(orderedDirs)))
-	for _, dir := range orderedDirs {
-		fmt.Fprintf(&remove, "  RMDir \"$INSTDIR\\%s\"\n", nsisEscape(strings.ReplaceAll(dir, "/", "\\")))
-	}
-	return strings.NewReplacer("@VERSION@", buildinfo.Version, "@OUTPUT@", nsisQuote(output), "@INSTALL_FILES@", install.String(), "@REMOVE_FILES@", remove.String()).Replace(installerTemplate), nil
+	return strings.NewReplacer("@VERSION@", buildinfo.Version, "@OUTPUT@", nsisQuote(output), "@INSTALL_FILES@", install.String(), "@WRITE_INVENTORY@", writeInventory.String(), "@INVENTORY_NAME@", update.InventoryName).Replace(installerTemplate), nil
 }
 
 func nsisEscape(value string) string {

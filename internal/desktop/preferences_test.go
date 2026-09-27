@@ -4,6 +4,8 @@ package desktop
 
 import (
 	"maps"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"foreverdubbed/internal/appstate"
@@ -58,5 +60,36 @@ func TestVoiceChoicePreferences(t *testing.T) {
 	p.SetString("voiceChoices", `{"orc:male":"none","human:female":"obsolete","gnome:male":"default"}`)
 	if got := loadVoiceChoices(p); !maps.Equal(got, map[string]string{"orc:male": "none"}) {
 		t.Fatal("invalid selections must fall back to defaults", got)
+	}
+}
+
+func TestCaptureTargetPreferences(t *testing.T) {
+	a := test.NewApp()
+	defer a.Quit()
+	p := a.Preferences()
+	root := t.TempDir()
+	game := filepath.Join(root, "WowB.exe")
+	if err := os.WriteFile(game, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	p.SetString("wowExecutable", game)
+	state := appstate.New("WowB.exe", "pocket", false)
+	restoreCaptureTarget(p, state, "windows")
+	if state.Snapshot().Target != game {
+		t.Fatal("saved game was not selected")
+	}
+	state.SetCaptureTarget("explicit.exe")
+	state.Update(func(s *appstate.Snapshot) { s.CaptureTargetExplicit = true })
+	restoreCaptureTarget(p, state, "windows")
+	if state.Snapshot().Target != "explicit.exe" {
+		t.Fatal("saved selection replaced explicit CLI target")
+	}
+	state.Update(func(s *appstate.Snapshot) { s.CaptureTargetExplicit = false })
+	if err := os.Remove(game); err != nil {
+		t.Fatal(err)
+	}
+	restoreCaptureTarget(p, state, "windows")
+	if state.Snapshot().Target != "explicit.exe" {
+		t.Fatal("missing saved executable was selected")
 	}
 }

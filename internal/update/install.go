@@ -242,26 +242,53 @@ func Apply(planPath string, progress Reporter) error {
 	if err != nil {
 		return err
 	}
-	names := make([]string, 0, len(incoming.Files)+1)
-	for name := range incoming.Files {
-		names = append(names, name)
+	// Remove only files owned by the previous release. Unknown user files are
+	// never inferred from a directory walk. Keep removals in the rollback log.
+	if err := safeInstalledPath(p.Install.Root, ManifestName); err != nil {
+		return err
 	}
-	sort.Strings(names)
-	names = append(names, ManifestName)
+	old, err := readManifest(filepath.Join(p.Install.Root, ManifestName))
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("installed manifest: %w", err)
+	}
+	// Generate the new inventory before changing any installed files. It is
+	// replaced and rolled back in the same transaction as the release payload.
+	inventory, err := UninstallInventory(incoming.Files)
+	if err != nil {
+		return err
+	}
+	if err := safeInstalledPath(payload, InventoryName); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(payload, InventoryName), inventoryBytes(inventory), 0644); err != nil {
+		return err
+	}
+	present := make(map[string]bool, len(incoming.Files))
+	var additions, obsolete []string
+	present[strings.ToLower(InventoryName)] = true
+	additions = append(additions, InventoryName)
+	for name := range incoming.Files {
+		if name == InventoryName {
+			continue
+		}
+		present[strings.ToLower(name)] = true
+		additions = append(additions, name)
+	}
+	for name := range old.Files {
+		if !present[strings.ToLower(name)] {
+			obsolete = append(obsolete, name)
+		}
+	}
+	sort.Strings(obsolete)
+	sort.Strings(additions)
+	names := append(append(obsolete, additions...), ManifestName)
 	var entries []replacement
 	fail := func(err error) error { return errors.Join(err, rollback(entries)) }
 	for i, name := range names {
 		report(progress, "Installing update", int64(i), int64(len(names)))
 		destination := filepath.Join(p.Install.Root, filepath.FromSlash(name))
-		// Existing symlink parents must not redirect writes outside the install.
-		for dir := filepath.Dir(destination); dir != p.Install.Root; dir = filepath.Dir(dir) {
-			info, statErr := os.Lstat(dir)
-			if statErr == nil && (!info.IsDir() || info.Mode()&os.ModeSymlink != 0) {
-				return fail(fmt.Errorf("unsafe installed directory: %s", dir))
-			}
-			if statErr != nil && !os.IsNotExist(statErr) {
-				return fail(statErr)
-			}
+		if err := safeInstalledPath(p.Install.Root, name); err != nil {
+			return fail(err)
 		}
 		info, statErr := os.Lstat(destination)
 		if statErr != nil && !os.IsNotExist(statErr) {
@@ -283,11 +310,15 @@ func Apply(planPath string, progress Reporter) error {
 			}
 		}
 		entries = append(entries, e)
+		if name != ManifestName && !present[strings.ToLower(name)] {
+			continue
+		}
 		if err = os.Rename(filepath.Join(payload, filepath.FromSlash(name)), destination); err != nil {
 			return fail(err)
 		}
 		entries[len(entries)-1].installed = true
 	}
+	removeEmptyParents(p.Install.Root, obsolete)
 	report(progress, "Installing update", int64(len(names)), int64(len(names)))
 	return nil
 }

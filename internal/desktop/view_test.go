@@ -160,7 +160,19 @@ func TestDashboardLiveStates(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, phase := range []string{"Preparing speech", "Idle", "Muted", "Starting", "Stopped"} {
+	state.Audio("Preparing speech")
+	state.Update(func(v *appstate.Snapshot) { v.PlaybackID = 2 })
+	d.render(state.Snapshot())
+	if d.stop.Disabled() || d.skip.Disabled() {
+		t.Fatal("preparing speech must remain cancellable")
+	}
+	test.Tap(d.stop)
+	test.Tap(d.skip)
+	if stops != 2 || skips != 2 {
+		t.Fatal("preparation controls did not invoke callbacks")
+	}
+	state.ResetPlayback()
+	for _, phase := range []string{"Idle", "Muted", "Starting", "Stopped"} {
 		state.Audio(phase)
 		d.render(state.Snapshot())
 		if !d.stop.Disabled() || !d.skip.Disabled() {
@@ -169,7 +181,7 @@ func TestDashboardLiveStates(t *testing.T) {
 		test.Tap(d.stop)
 		test.Tap(d.skip)
 	}
-	if stops != 1 || skips != 1 {
+	if stops != 2 || skips != 2 {
 		t.Fatal("disabled playback control invoked callback")
 	}
 	state.Update(func(v *appstate.Snapshot) { v.PlaybackID = 2 })

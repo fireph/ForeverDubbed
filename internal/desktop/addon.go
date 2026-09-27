@@ -108,6 +108,9 @@ func manageAddon(ctx context.Context, a fyne.App, w fyne.Window, state *appstate
 				return
 			case selected := <-paths:
 				path, installed, pending = selected, false, ""
+				if _, err := addon.GameDirectory(selected, runtime.GOOS); err == nil {
+					state.SetCaptureTarget(selected)
+				}
 				observedSession, observedVersion = 0, ""
 				attempt()
 			case <-ticker.C:

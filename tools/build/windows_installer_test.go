@@ -31,18 +31,31 @@ func TestInstallerManifest(t *testing.T) {
 		t.Fatal("installer must include every manifest file exactly once")
 	}
 	for name := range files {
-		remove := `Delete "$INSTDIR\` + nsisEscape(strings.ReplaceAll(name, "/", `\`)) + `"`
-		if strings.Count(script, remove) != 1 {
-			t.Errorf("uninstaller missing explicit path: %s", name)
+		record := nsisEscape("F" + strings.ReplaceAll(name, "/", `\`))
+		if strings.Count(script, record) != 1 {
+			t.Errorf("inventory missing file: %s", name)
 		}
 	}
-	if strings.Contains(script, "RMDir /r") || strings.Contains(script, "Delete \"$INSTDIR\\*\"") {
-		t.Fatal("uninstaller must not remove unrelated user files")
+	for _, expected := range []string{
+		`"UninstallString" '"$INSTDIR\Uninstall.exe"'`,
+		`ReadINIStr $0 "$INSTDIR\uninstall-files.ini" "inventory" "$InventoryIndex"`,
+		`Delete "$InventoryPath"`, `RMDir "$InventoryPath"`,
+		`FileWriteUTF16LE /BOM`, `Call un.ValidateInventoryPath`,
+	} {
+		if !strings.Contains(script, expected) {
+			t.Errorf("missing inventory uninstall step: %s", expected)
+		}
 	}
-	child := strings.Index(script, `RMDir "$INSTDIR\native\models"`)
-	parent := strings.Index(script, `RMDir "$INSTDIR\native"`)
+	if strings.Contains(script, "ExecWait") || strings.Contains(script, "-uninstall") || strings.Contains(script, "-remove-installed-files") {
+		t.Fatal("uninstall must not delegate to the updater")
+	}
+	if strings.Contains(script, "RMDir /r") || strings.Contains(script, "Delete \"$INSTDIR\\*\"") {
+		t.Fatal("uninstaller must preserve unrelated user files")
+	}
+	child := strings.Index(script, nsisEscape(`Dnative\models`))
+	parent := strings.Index(script, nsisEscape(`Dnative`)+`$\"`)
 	if child < 0 || child >= parent {
-		t.Fatal("uninstaller must remove children before parents")
+		t.Fatal("inventory must remove child directories before parents")
 	}
 	for _, bad := range []string{"../other.txt", "/other.txt", "a/../../b", "a\\b", "a/*", "a\nb"} {
 		_, err := installerScript("setup.exe", map[string]string{"foreverdubbed.exe": "app.exe", bad: "data"})

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"image"
 	"log"
 	"os"
 	"time"
@@ -16,9 +17,27 @@ import (
 type captureSettings struct {
 	poll, scan     time.Duration
 	emitJSON, mute bool
+	target         string
+	backend        captureBackend
 }
 
+// The capture worker owns all backend calls, including target changes.
+type captureBackend interface {
+	Init(string) error
+	Desktop() image.Rectangle
+	Capture(image.Rectangle) (*image.RGBA, error)
+}
+type liveCapture struct{}
+
+func (liveCapture) Init(target string) error                          { return platform.Init(target) }
+func (liveCapture) Desktop() image.Rectangle                          { return platform.Desktop() }
+func (liveCapture) Capture(rect image.Rectangle) (*image.RGBA, error) { return platform.Capture(rect) }
+
 func captureLoop(ctx context.Context, settings captureSettings, state *appstate.State, identities *identity.Resolver, speak func(context.Context, protocol.Message) error) error {
+	backend := settings.backend
+	if backend == nil {
+		backend = liveCapture{}
+	}
 	var assembler protocol.Assembler
 	output := json.NewEncoder(os.Stdout)
 	// A single worker applies the selected queue/interrupt policy.
@@ -32,13 +51,28 @@ func captureLoop(ctx context.Context, settings captureSettings, state *appstate.
 	failures := 0
 	var lastError time.Time
 	for ctx.Err() == nil {
+		if target := state.Snapshot().Target; target != settings.target {
+			if err := backend.Init(target); err != nil {
+				return err
+			}
+			settings.target = target
+			location, failures = nil, 0
+			assembler = protocol.Assembler{}
+			state.ResetCapture()
+			// Stop both current and queued dialogue from the previous game.
+			select {
+			case speech <- protocol.Message{Kind: protocol.KindStop}:
+			case <-ctx.Done():
+				return nil
+			}
+		}
 		delay := settings.poll
 		var p protocol.Packet
 		windowOK, tileOK := false, false
 		var err error
 		if location == nil {
 			delay = settings.scan
-			im, captureErr := platform.Capture(platform.Desktop())
+			im, captureErr := backend.Capture(backend.Desktop())
 			if captureErr != nil {
 				err = captureErr
 			} else {
@@ -56,7 +90,7 @@ func captureLoop(ctx context.Context, settings captureSettings, state *appstate.
 				}
 			}
 		} else {
-			im, captureErr := platform.Capture(location.Rect())
+			im, captureErr := backend.Capture(location.Rect())
 			if captureErr != nil {
 				err = captureErr
 			} else {
@@ -106,6 +140,8 @@ func captureLoop(ctx context.Context, settings captureSettings, state *appstate.
 		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
+		case <-state.CaptureChanges():
 			timer.Stop()
 		case announcement := <-state.Announcements():
 			timer.Stop()

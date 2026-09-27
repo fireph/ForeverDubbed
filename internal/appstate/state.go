@@ -34,6 +34,7 @@ type Snapshot struct {
 	AddonSession                          uint32
 	Filters                               SpeechFilters
 	Target, Backend                       string
+	CaptureTargetExplicit                 bool
 	Ready, Stopped                        bool
 	Window, Tile                          bool
 	CaptureError, SpeechError, FatalError string
@@ -51,12 +52,13 @@ type Snapshot struct {
 }
 
 type State struct {
-	mu            sync.RWMutex
-	value         Snapshot
-	announcements chan protocol.Message
-	stopAudio     chan uint64
-	skipAudio     chan uint64
-	speechChanges chan struct{}
+	mu             sync.RWMutex
+	value          Snapshot
+	announcements  chan protocol.Message
+	stopAudio      chan uint64
+	skipAudio      chan uint64
+	speechChanges  chan struct{}
+	captureChanges chan struct{}
 	// Voice choices stay outside Snapshot, which must remain comparable.
 	voiceMu      sync.RWMutex
 	voiceChoices map[string]string
@@ -67,7 +69,7 @@ func New(target, backend string, muted bool) *State {
 	if muted {
 		audio = "Muted"
 	}
-	return &State{announcements: make(chan protocol.Message, 4), stopAudio: make(chan uint64, 1), skipAudio: make(chan uint64, 1), speechChanges: make(chan struct{}, 1), value: Snapshot{Volume: 1, Target: target, Backend: backend, Audio: audio, Filters: SpeechFilters{Quests: true, Conversations: true, NPCSpeech: true}}}
+	return &State{captureChanges: make(chan struct{}, 1), announcements: make(chan protocol.Message, 4), stopAudio: make(chan uint64, 1), skipAudio: make(chan uint64, 1), speechChanges: make(chan struct{}, 1), value: Snapshot{Volume: 1, Target: target, Backend: backend, Audio: audio, Filters: SpeechFilters{Quests: true, Conversations: true, NPCSpeech: true}}}
 }
 func (s *State) Snapshot() Snapshot {
 	s.mu.RLock()
@@ -197,3 +199,23 @@ func (s *State) SetVolume(volume float64) {
 	s.Update(func(v *Snapshot) { v.Volume = volume })
 }
 func (s *State) Volume() float64 { return s.Snapshot().Volume }
+
+// SetCaptureTarget wakes the capture worker, which owns native reinitialization.
+func (s *State) SetCaptureTarget(target string) {
+	s.Update(func(v *Snapshot) { v.Target = target })
+	select {
+	case s.captureChanges <- struct{}{}:
+	default:
+	}
+}
+func (s *State) CaptureChanges() <-chan struct{} { return s.captureChanges }
+
+// ResetCapture clears observations belonging to the previous game instance.
+func (s *State) ResetCapture() {
+	s.Update(func(v *Snapshot) {
+		v.Window, v.Tile = false, false
+		v.CaptureError = ""
+		v.AddonVersion, v.AddonSession = "", 0
+		v.Message, v.Received = protocol.Message{}, time.Time{}
+	})
+}

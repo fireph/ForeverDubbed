@@ -368,89 +368,100 @@ func testVoiceChoicesMuteAndPruneQueue(t *testing.T, backend string) {
 }
 
 func TestStopClearsQueueAndSkipPreservesIt(t *testing.T) {
-	for _, desktop := range []bool{false, true} {
-		for _, kind := range []byte{protocol.KindStop, protocol.KindSkip} {
-			name := "game-stop"
-			if desktop {
-				name = "desktop-stop"
-			}
-			if kind == protocol.KindSkip {
-				name += "-skip"
-			}
-			t.Run(name, func(t *testing.T) {
-				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-				defer cancel()
-				state := appstate.New("game", "pocket", false)
-				state.SetQueueSpeech(true)
-				requests := make(chan protocol.Message)
-				started := make(chan string, 4)
-				done := make(chan struct{})
-				go func() {
-					defer close(done)
-					speakLoop(ctx, requests, func(ctx context.Context, m protocol.Message) error {
-						state.Audio("Playing audio")
-						started <- m.Text
-						<-ctx.Done()
-						return ctx.Err()
-					}, state)
-				}()
-				defer func() { cancel(); <-done }()
-				send := func(m protocol.Message) {
-					t.Helper()
-					select {
-					case requests <- m:
-					case <-ctx.Done():
-						t.Fatal("worker hung")
-					}
-				}
-				expect := func(want string) {
-					t.Helper()
-					select {
-					case got := <-started:
-						if got != want {
-							t.Fatalf("started %q, want %q", got, want)
-						}
-					case <-ctx.Done():
-						t.Fatal("speech did not start")
-					}
-				}
-				wait := func(ok func(appstate.Snapshot) bool) {
-					t.Helper()
-					for !ok(state.Snapshot()) {
-						select {
-						case <-ctx.Done():
-							t.Fatal("state did not settle")
-						case <-time.After(time.Millisecond):
-						}
-					}
-				}
-				send(protocol.Message{Text: "first"})
-				expect("first")
-				send(protocol.Message{Text: "second"})
-				send(protocol.Message{Text: "third"})
-				wait(func(s appstate.Snapshot) bool { return s.Queued == 2 })
+	for _, preparing := range []bool{false, true} {
+		for _, desktop := range []bool{false, true} {
+			for _, kind := range []byte{protocol.KindStop, protocol.KindSkip} {
+				name := "game-stop"
 				if desktop {
-					if kind == protocol.KindStop {
-						state.StopAudio()
-					} else {
-						state.SkipAudio()
-					}
-				} else {
-					send(protocol.Message{Kind: kind})
+					name = "desktop-stop"
 				}
 				if kind == protocol.KindSkip {
-					expect("second")
-					wait(func(s appstate.Snapshot) bool { return s.Queued == 1 })
-					// Stop must discard the remaining third message as well.
-					send(protocol.Message{Kind: protocol.KindStop})
+					name += "-skip"
 				}
-				wait(func(s appstate.Snapshot) bool { return s.PlaybackID == 0 && s.Queued == 0 && s.Audio == "Idle" })
-				send(protocol.Message{Text: "fresh dialogue"})
-				expect("fresh dialogue")
-				if s := state.Snapshot(); s.SpeechError != "" {
-					t.Fatal(s.SpeechError)
+				if preparing {
+					name += "-preparing"
 				}
-			})
+				t.Run(name, func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+					defer cancel()
+					state := appstate.New("game", "pocket", false)
+					state.SetQueueSpeech(true)
+					requests := make(chan protocol.Message)
+					started := make(chan string, 4)
+					done := make(chan struct{})
+					go func() {
+						defer close(done)
+						speakLoop(ctx, requests, func(ctx context.Context, m protocol.Message) error {
+							if !preparing {
+								state.Audio("Playing audio")
+							}
+							started <- m.Text
+							<-ctx.Done()
+							return ctx.Err()
+						}, state)
+					}()
+					defer func() { cancel(); <-done }()
+					send := func(m protocol.Message) {
+						t.Helper()
+						select {
+						case requests <- m:
+						case <-ctx.Done():
+							t.Fatal("worker hung")
+						}
+					}
+					expect := func(want string) {
+						t.Helper()
+						select {
+						case got := <-started:
+							if got != want {
+								t.Fatalf("started %q, want %q", got, want)
+							}
+						case <-ctx.Done():
+							t.Fatal("speech did not start")
+						}
+					}
+					wait := func(ok func(appstate.Snapshot) bool) {
+						t.Helper()
+						for !ok(state.Snapshot()) {
+							select {
+							case <-ctx.Done():
+								t.Fatal("state did not settle")
+							case <-time.After(time.Millisecond):
+							}
+						}
+					}
+					send(protocol.Message{Text: "first"})
+					expect("first")
+					if preparing && state.Snapshot().Audio != "Preparing speech" {
+						t.Fatal("expected speech preparation")
+					}
+					send(protocol.Message{Text: "second"})
+					send(protocol.Message{Text: "third"})
+					wait(func(s appstate.Snapshot) bool { return s.Queued == 2 })
+					if desktop {
+						if kind == protocol.KindStop {
+							state.StopAudio()
+						} else {
+							state.SkipAudio()
+						}
+					} else {
+						send(protocol.Message{Kind: kind})
+					}
+					if kind == protocol.KindSkip {
+						expect("second")
+						wait(func(s appstate.Snapshot) bool { return s.Queued == 1 })
+						// Stop must discard the remaining third message as well.
+						send(protocol.Message{Kind: protocol.KindStop})
+					}
+					wait(func(s appstate.Snapshot) bool { return s.PlaybackID == 0 && s.Queued == 0 && s.Audio == "Idle" })
+					send(protocol.Message{Text: "fresh dialogue"})
+					expect("fresh dialogue")
+					if s := state.Snapshot(); s.SpeechError != "" {
+						t.Fatal(s.SpeechError)
+					}
+				})
+			}
 		}
 	}
+
 }

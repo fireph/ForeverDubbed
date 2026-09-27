@@ -109,6 +109,11 @@ func run() error {
 		config, configErr = speech.Load(configPath)
 	}
 	state := appstate.New(captureApp, backend, mute)
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "capture-app" {
+			state.Update(func(v *appstate.Snapshot) { v.CaptureTargetExplicit = true })
+		}
+	})
 	work := func() error {
 		// Report configuration failures inside the window, like other startup
 		// errors. Capture-only mode can still run without a voice configuration.
@@ -168,6 +173,7 @@ func run() error {
 		if testText != "" {
 			return speak(ctx, protocol.Message{Text: testText, Race: testRace, Gender: testGender})
 		}
+		captureApp = state.Snapshot().Target
 		if err := platform.Init(captureApp); err != nil {
 			return err
 		}
@@ -184,7 +190,7 @@ func run() error {
 				v.Audio = "Idle"
 			}
 		})
-		return captureLoop(ctx, captureSettings{poll: poll, scan: scan, emitJSON: !guiMode, mute: mute}, state, identities, speak)
+		return captureLoop(ctx, captureSettings{poll: poll, scan: scan, emitJSON: !guiMode, mute: mute, target: captureApp}, state, identities, speak)
 	}
 	if guiMode {
 		var races []string
