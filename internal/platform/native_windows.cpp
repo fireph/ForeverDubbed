@@ -14,6 +14,8 @@
 #include <new>
 #include "native_windows.h"
 #include "wgc_abi_windows.h"
+#include "dxgi_windows.h"
+#include "dxgi_geometry.h"
 
 extern "C" HRESULT WINAPI CreateDirect3D11DeviceFromDXGIDevice(IDXGIDevice *, IInspectable **);
 
@@ -145,7 +147,20 @@ void fdb_win_free_windows(fdb_win_window *node) {
     }
 }
 
+int fdb_win_uses_dxgi() {
+    // RtlGetVersion reports the actual build even without a compatibility manifest.
+    using GetVersion = LONG(WINAPI *)(OSVERSIONINFOEXW *);
+    auto getVersion = reinterpret_cast<GetVersion>(
+        GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion"));
+    OSVERSIONINFOEXW version{};
+    version.dwOSVersionInfoSize = sizeof(version);
+    return getVersion && getVersion(&version) == 0 &&
+           fdb::useDesktopDuplication(version.dwMajorVersion, version.dwMinorVersion,
+                                       version.dwBuildNumber, version.wProductType);
+}
+
 struct fdb_wgc {
+    fdb_dxgi *desktop = nullptr;
     ComPtr<ID3D11Device> device;
     ComPtr<ID3D11DeviceContext> context;
     ComPtr<IInspectable> rtDevice;
@@ -164,13 +179,20 @@ struct fdb_wgc {
     FdbSize content{};
     ~fdb_wgc() {
         fdb_wgc_reset(this);
+        fdb_dxgi_close(desktop);
         if (borderAccessInfo.p) {
             borderAccessInfo->Cancel();
             borderAccessInfo->Close();
         }
     }
 };
+void fdb_wgc_poll(fdb_wgc *c) {
+    if (c->desktop)
+        fdb_dxgi_poll(c->desktop);
+}
 void fdb_wgc_reset(fdb_wgc *c) {
+    if (c->desktop)
+        fdb_dxgi_reset(c->desktop);
     c->borderSession.reset();
     closeObject(c->session.p);
     c->session.reset();
@@ -234,6 +256,15 @@ fdb_wgc *fdb_wgc_open(char *error, size_t size) {
         fail(error, size, "Could not allocate capture state");
         return nullptr;
     }
+    if (fdb_win_uses_dxgi()) {
+        c->desktop = fdb_dxgi_open();
+        if (!c->desktop) {
+            fail(error, size, "Could not allocate desktop capture state");
+            fdb_wgc_close(c);
+            return nullptr;
+        }
+        return c;
+    }
     hr = factory(L"Windows.Graphics.Capture.GraphicsCaptureItem", iidItemInterop,
                  reinterpret_cast<void **>(c->itemFactory.put()));
     if (SUCCEEDED(hr))
@@ -273,6 +304,8 @@ void fdb_wgc_close(fdb_wgc *c) {
 
 int fdb_wgc_select(fdb_wgc *c, uintptr_t id, uint32_t pid, int *width, int *height, char *error,
                    size_t size) {
+    if (c->desktop)
+        return fdb_dxgi_select(c->desktop, reinterpret_cast<HWND>(id), pid, width, height, error, size);
     HWND window = reinterpret_cast<HWND>(id);
     DWORD owner = 0;
     if (!eligible(window, &owner) || owner != pid) {
@@ -362,6 +395,8 @@ static HRESULT cacheFrame(fdb_wgc *c, FdbFrame *frame) {
 }
 int fdb_wgc_capture(fdb_wgc *c, int x, int y, int width, int height, void *rgba, char *error,
                     size_t size) {
+    if (c->desktop)
+        return fdb_dxgi_capture(c->desktop, x, y, width, height, rgba, error, size);
     DWORD owner = 0;
     if (!c->window || !eligible(c->window, &owner) || owner != c->pid) {
         fdb_wgc_reset(c);

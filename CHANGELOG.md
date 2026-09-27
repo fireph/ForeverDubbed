@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.3
+
+- Use DXGI desktop capture on Windows 10 to avoid the yellow capture border. Capture starts only with a visible window owned by the configured WoW executable and releases when it becomes unavailable. Keep the data square uncovered; only the requested game-relative crop reaches the decoder. Windows 11 keeps Windows Graphics Capture.
+
 ## 0.9.2
 
 - Normalize all-caps words and remove matching stutter prefixes before PocketTTS synthesis (`GET OUT!` → `Get out!`, `T-That's` → `That's`). Preserve listed WoW acronyms, Roman numerals, identifiers, and ordinary hyphenated words.

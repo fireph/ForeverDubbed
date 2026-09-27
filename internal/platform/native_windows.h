@@ -17,10 +17,12 @@ fdb_win_window *fdb_win_windows(char *error, size_t size);
 void fdb_win_free_windows(fdb_win_window *windows);
 
 typedef struct fdb_wgc fdb_wgc;
-// All WGC functions run on the same dedicated OS thread (COM MTA).
+// Windows 10 desktop capture or WGC; all calls use the same OS thread (COM MTA).
+int fdb_win_uses_dxgi(void);
 fdb_wgc *fdb_wgc_open(char *error, size_t size);
 void fdb_wgc_close(fdb_wgc *capture);
 void fdb_wgc_reset(fdb_wgc *capture);
+void fdb_wgc_poll(fdb_wgc *capture);
 int fdb_wgc_select(fdb_wgc *capture, uintptr_t window, uint32_t pid, int *width, int *height,
                    char *error, size_t size);
 int fdb_wgc_capture(fdb_wgc *capture, int x, int y, int width, int height, void *rgba, char *error,

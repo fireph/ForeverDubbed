@@ -1,6 +1,11 @@
 # Windows game-window capture
 
-The Windows companion captures only the game window owned by **WoWB.exe**, using Windows Graphics Capture and Direct3D 11. It requires Windows 10 version 1903 or newer (Windows 11 is supported). There is no desktop capture fallback. Window discovery reads process/window metadata, then binds capture to that game's HWND.
+The Windows companion selects the game window owned by **WoWB.exe** using process/window metadata. It requires Windows 10 version 1903 or newer (Windows 11 is supported).
+
+- **Windows 10:** uses DXGI Desktop Duplication to avoid the yellow capture border. It starts capture only after finding a visible, non-minimized window owned by the configured game executable. It captures the monitor(s) intersecting that window and returns only the requested game-relative area to the decoder. Other windows covering that area are visible to capture, so keep the data square uncovered. Capture is released when the reader detects that the game has closed, minimized, or become unavailable. No desktop capture starts while waiting for the game.
+- **Windows 11:** uses the existing Windows Graphics Capture backend, which captures the game window independently of other windows covering it. It does not switch to desktop capture if window capture fails.
+
+Backend selection uses the actual OS version: Windows 10 client builds 18362–21999 use DXGI; Windows 11 and Server remain on Windows Graphics Capture. The desktop backend handles monitor offsets, rotated displays, games spanning monitors, and separate graphics adapters. Display changes or loss of access reset capture so the next read can reacquire it.
 
 Run the prepared release to open the status dashboard:
 
@@ -22,13 +27,13 @@ The executable filename is matched case-insensitively against the owning process
 
 When the game is closed or minimized, the reader waits. It reacquires the window after it reopens or changes size. If two matching processes are running, specify the exact executable path or close the other instance. Window coordinates and snapshots are relative to the captured game window, not the desktop.
 
-The yellow outline is Windows' capture indicator. ForeverDubbed requests permission to hide it using the supported borderless-capture API (Windows build 20348 or newer, including Windows 11). Allow the Windows permission prompt if one appears. Capture continues while permission is pending; the outline disappears once access is granted. The request is made once per reader, and the setting is reapplied when the game window is reacquired. Restart ForeverDubbed after changing capture permissions in Windows.
+On Windows 11, the yellow outline is Windows' capture indicator. ForeverDubbed requests permission to hide it using the supported borderless-capture API (Windows build 20348 or newer, including Windows 11). Allow the Windows permission prompt if one appears. Capture continues while permission is pending; the outline disappears once access is granted. The request is made once per reader, and the setting is reapplied when the game window is reacquired. Restart ForeverDubbed after changing capture permissions in Windows.
 
-Older Windows versions, denied permission, or another application capturing the same window with its border enabled can leave the outline visible. These conditions do not prevent ForeverDubbed from reading the game. See Microsoft's [capture-border documentation](https://learn.microsoft.com/en-us/uwp/api/windows.graphics.capture.graphicscapturesession.isborderrequired).
+On the Windows Graphics Capture backend, denied permission or another application capturing the same window with its border enabled can leave the outline visible. Windows 10 uses DXGI instead, so ForeverDubbed does not create that indicator; another application may still display one. These conditions do not prevent ForeverDubbed from reading the game. See Microsoft's [capture-border documentation](https://learn.microsoft.com/en-us/uwp/api/windows.graphics.capture.graphicscapturesession.isborderrequired).
 
-Use windowed or borderless mode. Exclusive fullscreen, a minimized game, or a game that disables capture may not produce frames; the reader reports that condition without capturing the desktop instead. If the game is elevated and cannot be discovered, run the companion at the same privilege level. HDR or color filters can affect the optical palette; use SDR when diagnosing decoding failures.
+Use windowed or borderless mode. Exclusive fullscreen, a minimized game, or a game that disables capture may not produce frames; the reader reports that condition. Windows 10 desktop capture requires the data square to be visible on screen. If the game is elevated and cannot be discovered, run the companion at the same privilege level. HDR or color filters can affect the optical palette; use SDR when diagnosing decoding failures.
 
-`-snapshot` captures only the selected game window:
+`-snapshot` saves the selected game bounds. On Windows 10 this is a crop of the visible desktop and can include windows covering the game:
 
 ```powershell
 .\foreverdubbed.exe -mute
@@ -36,7 +41,7 @@ Use windowed or borderless mode. Exclusive fullscreen, a minimized game, or a ga
 .\foreverdubbed.exe -image capture.png
 ```
 
-Normal captures stay in memory. Only an explicit `-snapshot` writes a PNG. Cover the game with another application while testing a snapshot to verify that the other application's content is excluded.
+Normal captures stay in memory. Only an explicit `-snapshot` writes a PNG. On Windows 11, cover the game with another application to verify that window capture excludes it. On Windows 10, covering the data square should stop decoding until it is uncovered; snapshot pixels within the game bounds will include the covering application.
 
 ## Build and test
 
@@ -54,4 +59,4 @@ $env:CGO_ENABLED = "1"
 go test ./internal/platform -run TestWindowsGameWindowCapture -count=1
 ```
 
-Also check closing/reopening, minimizing/restoring, resizing, and moving the game between monitors. Linux builds and portable tests validate compilation, process matching, and recovery logic; they cannot exercise the Windows compositor or a live game.
+On both Windows 10 and Windows 11, also check closing/reopening, minimizing/restoring, resizing, and moving the game between monitors. On Windows 10, verify no capture starts before WoW is open, the yellow capture border is absent, and closing/minimizing WoW releases desktop duplication. Test portrait monitors, negative monitor coordinates, a window spanning monitors, and lock/unlock or display-mode changes. On Windows 11, verify the existing window-capture behavior and border-permission handling remain unchanged. Linux builds and portable tests validate compilation, process matching, and recovery logic; they cannot exercise the Windows compositor or a live game.

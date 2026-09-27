@@ -91,7 +91,8 @@ func chooseCaptureWindow(windows []captureWindow, app string, previous captureWi
 	return best, nil
 }
 
-// windowCaptureDriver captures pixels only from an explicitly selected window.
+// windowCaptureDriver returns pixels relative to an explicitly selected window.
+// Windows 10 reads the visible desktop within that window's bounds.
 // Implementations may also provide Reset() and Close() methods.
 type windowCaptureDriver interface {
 	Windows() ([]captureWindow, error)

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -37,7 +38,7 @@ func Init(app string) error {
 	if app == "" {
 		return fmt.Errorf("-capture-app must name the game executable")
 	}
-	// Keep HWND geometry and WGC's output in physical pixels at every DPI.
+	// Keep HWND geometry and both capture backends in physical pixels at every DPI.
 	user32 := syscall.NewLazyDLL("user32.dll")
 	dpi := user32.NewProc("SetProcessDpiAwarenessContext")
 	aware := uintptr(0)
@@ -63,11 +64,17 @@ func Init(app string) error {
 			return
 		}
 		defer C.fdb_wgc_close(native)
+		// Stop Windows 10 desktop duplication even if the dialogue reader is busy.
+		// This checks window metadata only; it never starts or reads capture.
+		watch := time.NewTicker(250 * time.Millisecond)
+		defer watch.Stop()
 		started <- nil
 		for {
 			select {
 			case <-driver.stop:
 				return
+			case <-watch.C:
+				C.fdb_wgc_poll(native)
 			case request := <-driver.requests:
 				request.result <- request.run(native)
 			}

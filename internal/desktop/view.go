@@ -153,13 +153,9 @@ func newDashboard(version string, hide, quit, stop, skip func(), queue func(bool
 	tabBar := container.NewBorder(nil, nil, nil, questButtonWidget(d.locateWoW),
 		container.NewGridWithColumns(2, questButtonWidget(d.tabSettings), questButtonWidget(d.tabVoices)))
 	panels := container.NewStack(paper, voices)
-	privacy := canvas.NewText("Only your game window is captured. Speech stays on this computer.", gold)
-	privacy.TextSize = 12
-	privacy.TextStyle.Italic = true
 	versionLabel := canvas.NewText("v"+version, gold)
 	versionLabel.TextSize = 13
-	privacyNote := container.New(layout.NewCustomPaddedLayout(0, 10, 0, 0), container.NewCenter(privacy))
-	footer := container.NewVBox(privacyNote, container.NewHBox(container.NewCenter(versionLabel), layout.NewSpacer(), questButton("Minimize to tray", hide), questButton("Quit", quit)))
+	footer := container.NewHBox(container.NewCenter(versionLabel), layout.NewSpacer(), questButton("Minimize to tray", hide), questButton("Quit", quit))
 	d.root = questFrame(container.NewBorder(container.NewVBox(inset(5, banner), d.addonNotice, inset(2, tabBar)), inset(5, footer), nil, nil, panels))
 	// Set only after the selects above restored their saved selections, so
 	// building the tab never persists or replays user choices.

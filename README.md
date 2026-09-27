@@ -35,6 +35,8 @@ The application will install the WoW addon automatically.
 3. Type **`/fdb test`** in WoW. The companion should show **Connected** and read the test aloud.
 4. Use **`/fdb unlock`** to drag the small data square somewhere unobstructed, then **`/fdb lock`** to finish.
 
+On Windows 10, the companion uses desktop capture while the game is visible to avoid the yellow capture border. Other windows must not cover the data square. Windows 11 uses game-window capture.
+
 The square passes dialogue to the companion. Keep its entire border visible and your pointer off it; it hides after sending text (after ~15 seconds). While unlocked for positioning, it stays visible until you lock it again.
 
 Use **Locate WoW…** to change the installation or retry. If access is denied, run the Windows companion as administrator and retry, or manually copy the bundled **ForeverDubbed** addon folder into the exact `Interface/AddOns` location shown in the error banner. The bundled folder is beside the Windows executable under `addon`; on macOS, use **Show Package Contents → Contents/Resources/addon** in Finder.
