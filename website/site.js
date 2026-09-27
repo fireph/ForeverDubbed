@@ -19,7 +19,15 @@
     : 'macOS detected. The Mac download requires an Apple Silicon (M-series) Mac.';
   const link = document.querySelector('#hero-download');
   link.href = card.querySelector('[data-os]').href;
-  link.textContent = os === 'windows' ? 'Download for Windows ↓' : 'Download for macOS ↓';
+  link.querySelector('.download-label').textContent = os === 'windows' ? 'Download for Windows' : 'Download for macOS';
+  link.addEventListener('click', (event) => {
+    // Keep the browser's normal download action and modified-click behavior.
+    if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    document.querySelector('#setup').scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'start',
+    });
+  });
   document.querySelector('#hero-platform').textContent = os === 'windows'
     ? 'Windows 10 (1903+) / 11 · 64-bit · Addon included'
     : 'macOS 14+ · Apple Silicon only · Addon included';

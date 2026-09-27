@@ -193,6 +193,12 @@ p {
   border-radius:3px;
 }
 
+.download-icon {
+  width:20px;
+  height:20px;
+  flex-shrink:0;
+}
+
 .button:hover {
   background:linear-gradient(#ba382a,#801e15);
   color:#fff0c9;
@@ -237,28 +243,8 @@ p {
   transform:rotate(1deg);
 }
 
-.preview-heading {
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:1px 4px 11px;
-  color:#c5b187;
-  font-size:.67rem;
-  letter-spacing:.07em;
-}
 
-.preview-heading>span:last-child {
-  margin-left:auto;
-  color:var(--gold);
-}
 
-.status-dot {
-  width:6px;
-  height:6px;
-  background:#87a86b;
-  border-radius:100%;
-  box-shadow:0 0 8px #95b47280;
-}
 
 .screenshot-link {
   display:block;
