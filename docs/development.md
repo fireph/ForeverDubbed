@@ -63,6 +63,8 @@ macOS release builds produce a self-contained `ForeverDubbed.app`; Windows build
 
 GUI tests use Fyne's `ci` software driver, so Linux CI needs no display server or graphics development libraries. To preview the actual desktop interface on Linux, install Fyne's X11/OpenGL development prerequisites; live game capture and playback still require Windows or macOS. Status updates are shared through `internal/appstate` and applied on Fyne's event loop. PCM playback status starts after the first successful device queue operation and remains active until playback finishes or is canceled.
 
+`internal/game` owns WoW installation validation and default search locations. The desktop's `gameSelection` controller restores saved paths, applies automatic discovery, and handles manual selections through the same validation and persistence flow. A discovered path immediately becomes the capture target unless an explicit CLI selector was supplied. Manual selection can replace that selector. Addon installation remains in `addon`, with its status and reload notices managed by `internal/desktop/addon.go`.
+
 For runtime validation, check startup errors, game absent/present, tile found/lost, preparing/playing/idle speech, minimizing or closing to the tray, restoring from the tray, and quitting during playback. Unit tests and cross-compilation cannot validate native system-tray behavior.
 
 ### Logo and application icons
@@ -86,18 +88,20 @@ The desktop UI uses a parchment reading area, textured dark frame, gold headings
 
 FDB5 flags describe NUL-separated UTF-8 fields: flags 0 has speaker/title/text;
 flags 1 adds race/gender/NPC ID; flags 2 adds display ID/model ID/race override;
-flags 3 adds quest objectives as a tenth field. Objectives are never appended
+flags 3 adds quest objectives as a tenth field; flags 4 adds the addon version
+as an eleventh field. Objectives are never appended
 to the main text by the addon. Empty optional metadata fields still occupy their
 positions when a later field is present. Flags 0/1/2 remain readable, but an old
 addon that embeds objectives in text must be updated for dialogue-only speech.
 The desktop keeps received fields intact and chooses spoken quest content when
 playback starts. Separate title and objectives options both default off.
 
-FDB5 kinds 7 (Stop) and 8 (Skip) carry three empty string fields and no voice
-metadata. They share the dialogue session/sequence counter and assembler
+FDB5 kinds 7 (Stop) and 8 (Skip) carry empty dialogue and voice fields plus the
+addon version. They share the dialogue session/sequence counter and assembler
 deduplication, so repeated captures execute a command once. The speech worker
-handles controls before queueing or synthesis; both cancel the current utterance
-and let the existing queue advance, matching the desktop controls. A control
+handles controls before queueing or synthesis. Stop cancels the current utterance
+and clears the waiting queue; Skip cancels only the current utterance and lets
+the queue advance, matching the desktop controls. A control
 does not replace the displayed last-dialogue metadata.
 
 Control frames replace older dialogue immediately, cancel unresolved speaker
@@ -114,7 +118,9 @@ persistence, control priority, late identity callbacks, and duplicate frames.
 
 ## Automatic updates
 
-`internal/update` uses the public `fireph/ForeverDubbed` latest-release API with a 15-second startup-check deadline. It only offers newer stable semantic versions, selects the exact OS/architecture asset, and requires `SHA256SUMS.txt`. Only the current names (`ForeverDubbed-windows-<arch>-portable.zip` and `ForeverDubbed-mac-<arch>.zip`) are accepted. Windows uses the portable payload for both installed and portable updates; it does not change installer registration or shortcuts. macOS verifies the new bundle against the installed bundle's designated code-signing requirement.
+`internal/update` uses the public `fireph/ForeverDubbed` latest-release API with a 15-second startup-check deadline. It only offers newer stable semantic versions, selects the exact OS/architecture asset, and requires `SHA256SUMS.txt`. Only the current names (`ForeverDubbed-windows-<arch>-portable.zip` and `ForeverDubbed-mac-<arch>.zip`) are accepted. Windows uses the portable payload for both installed and portable updates; it refreshes the registered version for a matching installed copy and preserves shortcuts. macOS verifies the new bundle against the installed bundle's designated code-signing requirement.
+
+`internal/releaseversion` provides stable version parsing and comparison for addon installation, loaded-addon checks, updates, and packaging. It accepts `MAJOR.MINOR.PATCH` with an optional `v` prefix and validates every component before comparison; prereleases and malformed versions are rejected.
 
 The builder includes a standalone updater with native dialogs (Zenity), no Fyne or PocketTTS dependencies, and `release-manifest.json`. Its entry point is `cmd/foreverdubbed-updater`, native UI is in `internal/updaterui`, and installation/rollback logic remains in `internal/update`. Shared console support lives in `internal/console`; the main app and updater share the Windows icon resource in `internal/appicon/windowsresource`. The desktop downloads/verifies/extracts before changing any installed files. It copies the existing updater into a private staging folder, waits for readiness, then shuts down normally. The updater waits for the parent process to exit before moving locked files, reports installation progress, rolls back on replacement errors, and relaunches with the original arguments and working directory. Unrelated files and Fyne preferences are untouched; bundled voice/config files are replaced. Successful jobs are cleaned after the helper exits; failures retain logs and backups. Updates require sufficient space for the download, staged payload, and previous files. Manual release installation remains available.
 

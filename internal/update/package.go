@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"foreverdubbed/internal/releaseversion"
 )
 
 const ManifestName = "release-manifest.json"
@@ -223,7 +225,7 @@ func readManifest(filename string) (Manifest, error) {
 	if err = json.Unmarshal(data, &m); err != nil {
 		return m, err
 	}
-	if _, err = Version(m.Version); err != nil {
+	if _, err = releaseversion.Parse(m.Version); err != nil {
 		return m, err
 	}
 	if len(m.Files) == 0 {

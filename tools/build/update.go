@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"foreverdubbed/internal/buildinfo"
+	"foreverdubbed/internal/releaseversion"
 	"foreverdubbed/internal/update"
 )
 
@@ -23,7 +24,7 @@ func releaseVersion() (string, error) {
 		}
 		version = strings.TrimPrefix(tag, "v")
 	}
-	if _, err := update.Version(version); err != nil {
+	if _, err := releaseversion.Parse(version); err != nil {
 		return "", err
 	}
 	return version, nil

@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"foreverdubbed/internal/releaseversion"
 )
 
 type Plan struct {
@@ -127,7 +129,7 @@ func LoadPlan(filename string) (Plan, error) {
 	if p.Install.Executable != expected {
 		return p, fmt.Errorf("invalid update executable")
 	}
-	_, err = Version(p.Version)
+	_, err = releaseversion.Parse(p.Version)
 	return p, err
 }
 

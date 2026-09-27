@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"foreverdubbed/internal/buildinfo"
+	"foreverdubbed/internal/releaseversion"
 	"foreverdubbed/internal/update"
 )
 
@@ -20,7 +21,7 @@ var installerTemplate string
 // Use the ZIP's exact manifest, including only configured voices. Explicit
 // inventory avoids recursively deleting unrelated files in the install dir.
 func installerScript(output string, files map[string]string) (string, error) {
-	if _, err := update.Version(buildinfo.Version); err != nil {
+	if _, err := releaseversion.Parse(buildinfo.Version); err != nil {
 		return "", err
 	}
 	if _, ok := files["foreverdubbed.exe"]; !ok {

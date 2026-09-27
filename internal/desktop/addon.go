@@ -14,6 +14,8 @@ import (
 
 	"foreverdubbed/addon"
 	"foreverdubbed/internal/appstate"
+	"foreverdubbed/internal/game"
+	"foreverdubbed/internal/releaseversion"
 	"fyne.io/fyne/v2"
 	"github.com/ncruces/zenity"
 )
@@ -54,14 +56,8 @@ func manageAddon(ctx context.Context, a fyne.App, w fyne.Window, state *appstate
 
 	// Always allow retrying a cancelled picker or choosing another installation.
 	go func() {
-		candidates := append([]string{a.Preferences().String("wowExecutable")}, addon.Candidates(runtime.GOOS, os.Getenv)...)
-		path := ""
-		for _, candidate := range candidates {
-			if _, err := addon.GameDirectory(candidate, runtime.GOOS); err == nil {
-				path = candidate
-				break
-			}
-		}
+		selection := gameSelection{a.Preferences(), state, runtime.GOOS}
+		path := selection.discover(game.Candidates(runtime.GOOS, os.Getenv))
 		if path == "" {
 			setBanner("Click Locate WoW to select your WoW Forever installation.")
 			fyne.Do(choose)
@@ -74,11 +70,9 @@ func manageAddon(ctx context.Context, a fyne.App, w fyne.Window, state *appstate
 		var observedVersion string
 		attempt := func() {
 			installed = false
-			dir, err := addon.GameDirectory(path, runtime.GOOS)
+			dir, err := game.Directory(path, runtime.GOOS)
 			gameValid = err == nil
 			if err == nil {
-				a.Preferences().SetString("wowExecutable", path)
-				state.Update(func(v *appstate.Snapshot) { v.WoWPath = path })
 				var prompt string
 				prompt, err = addon.Install(dir, version)
 				if err == nil {
@@ -108,10 +102,11 @@ func manageAddon(ctx context.Context, a fyne.App, w fyne.Window, state *appstate
 			case <-ctx.Done():
 				return
 			case selected := <-paths:
-				path, installed, pending = selected, false, ""
-				if _, err := addon.GameDirectory(selected, runtime.GOOS); err == nil {
-					state.SetCaptureTarget(selected)
+				if _, err := selection.selectPath(selected, true); err != nil {
+					setBanner(fmt.Sprintf("Could not select WoW: %v. Click Locate WoW to retry.", err))
+					continue
 				}
+				path, installed, pending = selected, false, ""
 				observedSession, observedVersion = 0, ""
 				attempt()
 			case <-ticker.C:
@@ -177,7 +172,12 @@ func reconcileAddonNotice(notice string, observed appstate.Snapshot, expected st
 // The version reported by the square is authoritative. Session IDs deduplicate
 // dialogue; they must not impose an additional reload on a current addon.
 func addonVersionCurrent(loaded, expected string) bool {
-	loaded = strings.TrimPrefix(strings.TrimSpace(loaded), "v")
-	expected = strings.TrimPrefix(strings.TrimSpace(expected), "v")
-	return loaded != "" && (loaded == expected || addon.Newer(loaded, expected))
+	loaded = strings.TrimSpace(loaded)
+	expected = strings.TrimSpace(expected)
+	a, err := releaseversion.Parse(loaded)
+	if err != nil {
+		return false
+	}
+	b, err := releaseversion.Parse(expected)
+	return err == nil && (a == b || releaseversion.Newer(loaded, expected))
 }

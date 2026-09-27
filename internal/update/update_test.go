@@ -83,16 +83,6 @@ func TestReleaseSelection(t *testing.T) {
 		}
 	}
 }
-func TestVersions(t *testing.T) {
-	for _, bad := range []string{"", "1.2", "1.2.3.4", "1.2.-3", "1.2.3-beta", "1.02.3", "+1.2.3", "1.2.18446744073709551616"} {
-		if _, err := Version(bad); err == nil {
-			t.Errorf("accepted %q", bad)
-		}
-	}
-	if !newer("v0.10.0", "0.9.9") || newer("1.0.0", "1.0.0") || newer("0.9.9", "0.10.0") {
-		t.Fatal("incorrect version comparison")
-	}
-}
 func TestVerifiedDownloadAndCancellation(t *testing.T) {
 	archive := bytes.Repeat([]byte("payload"), 100000)
 	r := fixtureRelease(archive, "windows", "amd64")

@@ -5,7 +5,6 @@ package desktop
 import (
 	"encoding/json"
 
-	"foreverdubbed/addon"
 	"foreverdubbed/internal/appstate"
 	"foreverdubbed/internal/speech"
 	"fyne.io/fyne/v2"
@@ -52,17 +51,4 @@ func saveVoiceChoices(p fyne.Preferences, choices map[string]string) {
 		return
 	}
 	p.SetString("voiceChoices", string(data))
-}
-
-// An explicit CLI selector wins at startup; choosing a new path in the picker
-// remains an explicit user action and can replace it during this run.
-func restoreCaptureTarget(p fyne.Preferences, state *appstate.State, platform string) {
-	if state.Snapshot().CaptureTargetExplicit {
-		return
-	}
-	if saved := p.String("wowExecutable"); saved != "" {
-		if _, err := addon.GameDirectory(saved, platform); err == nil {
-			state.SetCaptureTarget(saved)
-		}
-	}
 }

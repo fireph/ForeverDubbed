@@ -22,7 +22,7 @@ Var InventoryKind
 Var InventoryRelative
 Var InventoryPath
 
-!define MUI_WELCOMEPAGE_TEXT "Setup will install ForeverDubbed and its offline voices.$\r$\n$\r$\nBefore updating, quit ForeverDubbed from its tray menu.$\r$\n$\r$\nThe WoW addon is included in the addon folder; copy it into your game's Interface\AddOns folder separately."
+!define MUI_WELCOMEPAGE_TEXT "Setup will install ForeverDubbed and its offline voices.$\r$\n$\r$\nBefore updating, quit ForeverDubbed from its tray menu.$\r$\n$\r$\nWhen you open ForeverDubbed, it locates WoW and installs the addon automatically. If WoW isn't found, select your game client when prompted."
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES

@@ -39,6 +39,8 @@ func TestPendingAddonNoticeUsesLoadedAddon(t *testing.T) {
 		{name: "reload confirms update", pending: addon.Reload, loaded: "v0.8.3", tile: true, session: 2},
 		{name: "current version clears without another reload", pending: addon.Reload, loaded: "v0.8.3", tile: true, session: 1},
 		{name: "lost square cannot confirm", pending: addon.Restart, loaded: "v0.8.3", session: 2, want: addon.Restart},
+		{name: "malformed newer version", pending: addon.Reload, loaded: "2.bad.bad", tile: true, session: 1, want: addon.Reload},
+		{name: "duplicate version prefix", pending: addon.Reload, loaded: "vv0.8.3", tile: true, session: 1, want: addon.Reload},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := appstate.Snapshot{Tile: tc.tile, AddonVersion: tc.loaded, AddonSession: tc.session}

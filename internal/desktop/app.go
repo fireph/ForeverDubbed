@@ -5,7 +5,6 @@ package desktop
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"time"
 
 	"foreverdubbed/internal/appicon"
@@ -37,7 +36,6 @@ func Run(ctx context.Context, stop context.CancelFunc, state *appstate.State, ve
 			w.Hide()
 		}
 	}
-	restoreCaptureTarget(a.Preferences(), state, runtime.GOOS)
 	state.SetVolume(a.Preferences().FloatWithFallback("voiceVolume", 1))
 	state.SetQueueSpeech(a.Preferences().BoolWithFallback("queueSpeech", true))
 	state.SetSpeechFilters(loadSpeechFilters(a.Preferences()))

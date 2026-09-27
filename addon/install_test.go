@@ -38,70 +38,6 @@ func TestInstallUpdateRepairAndPreserve(t *testing.T) {
 	check("0.8.4", "")
 }
 
-func TestGameDirectory(t *testing.T) {
-	for _, tc := range []struct {
-		name, client, platform string
-		directories, files     []string
-		bundle, wantValid      bool
-	}{
-		{name: "default Windows", client: "WowB.exe", platform: "windows", directories: []string{"Data"}, wantValid: true},
-		{name: "renamed Windows", client: "CustomClient.EXE", platform: "windows", directories: []string{"Interface", "WTF"}, wantValid: true},
-		{name: "fresh shared data", client: "_classic_beta_/Custom.exe", platform: "windows", directories: []string{"Data"}, files: []string{".build.info"}, wantValid: true},
-		{name: "default Mac", client: "World of Warcraft Beta.app", platform: "darwin", directories: []string{"Data"}, bundle: true, wantValid: true},
-		{name: "renamed Mac", client: "_classic_beta_/Custom WoW.app", platform: "darwin", directories: []string{"Data"}, files: []string{".build.info"}, bundle: true, wantValid: true},
-		{name: "unrelated executable", client: "Other.exe", platform: "windows"},
-		{name: "expected name outside install", client: "WowB.exe", platform: "windows"},
-		{name: "unrelated Mac app", client: "Other.app", platform: "darwin", bundle: true},
-		{name: "wrong extension", client: "Wow.txt", platform: "windows", directories: []string{"Data"}},
-		{name: "exe directory", client: "Wow.exe", platform: "windows", directories: []string{"Data"}, bundle: true},
-		{name: "app file", client: "WoW.app", platform: "darwin", directories: []string{"Data"}},
-		{name: "data file", client: "Wow.exe", platform: "windows", files: []string{"Data"}},
-		{name: "incomplete shared layout", client: "_classic_beta_/Wow.exe", platform: "windows", directories: []string{"Data"}},
-		{name: "metadata directory", client: "_classic_beta_/Wow.exe", platform: "windows", directories: []string{"Data", ".build.info"}},
-		{name: "unsupported platform", client: "Wow.exe", platform: "linux", directories: []string{"Data"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
-			client := filepath.Join(root, tc.client)
-			mkdir := func(path string) {
-				t.Helper()
-				if err := os.MkdirAll(path, 0755); err != nil {
-					t.Fatal(err)
-				}
-			}
-			write := func(path string) {
-				t.Helper()
-				if err := os.WriteFile(path, nil, 0644); err != nil {
-					t.Fatal(err)
-				}
-			}
-			mkdir(filepath.Dir(client))
-			for _, path := range tc.directories {
-				mkdir(filepath.Join(root, path))
-			}
-			for _, path := range tc.files {
-				write(filepath.Join(root, path))
-			}
-			if tc.bundle {
-				mkdir(client)
-			} else {
-				write(client)
-			}
-			dir, err := GameDirectory(client, tc.platform)
-			if tc.wantValid {
-				if err != nil || dir != filepath.Dir(client) {
-					t.Fatalf("GameDirectory = %q, %v", dir, err)
-				}
-			} else if err == nil {
-				t.Fatalf("accepted invalid client: %s", client)
-			}
-			if _, err := GameDirectory(filepath.Join(root, "missing.exe"), "windows"); err == nil {
-				t.Fatal("accepted missing file")
-			}
-		})
-	}
-}
-
 func TestFailedInstallLeavesExistingAddon(t *testing.T) {
 	root := t.TempDir()
 	if _, err := Install(root, "0.8.3"); err != nil {
@@ -133,5 +69,31 @@ func TestExistingAddonWithoutTOCNeedsReload(t *testing.T) {
 	got, err := Install(root, "0.8.3")
 	if err != nil || got != Reload {
 		t.Fatalf("existing addon repair: %q, %v; want reload", got, err)
+	}
+}
+
+func TestInstallRepairsMalformedVersion(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "Interface", "AddOns", "ForeverDubbed")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	toc := filepath.Join(dir, "ForeverDubbed.toc")
+	if err := os.WriteFile(toc, []byte("## Version: 2.bad.bad\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if notice, err := Install(root, "1.0.0"); err != nil || notice != Reload {
+		t.Fatalf("repair: %q, %v", notice, err)
+	}
+	data, err := os.ReadFile(toc)
+	if err != nil || tocVersion(data) != "1.0.0" {
+		t.Fatalf("malformed version prevented repair: %s, %v", data, err)
+	}
+	if _, err := Install(root, "2.bad.bad"); err == nil {
+		t.Fatal("accepted malformed incoming version")
+	}
+	data, err = os.ReadFile(toc)
+	if err != nil || tocVersion(data) != "1.0.0" {
+		t.Fatal("invalid incoming version modified installed addon")
 	}
 }
