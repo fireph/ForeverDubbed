@@ -412,6 +412,114 @@ code {
   margin-bottom:0;
 }
 
+.comparison-section {
+  padding-block:0 85px;
+}
+
+.comparison-scroll {
+  overflow-x:auto;
+  border:1px solid #a88b51;
+  border-radius:4px;
+  background:#211c16;
+}
+
+.comparison-scroll:focus-visible {
+  outline:3px solid #71d7ee;
+  outline-offset:5px;
+}
+
+.comparison-table {
+  width:100%;
+  min-width:560px;
+  border-collapse:collapse;
+  table-layout:fixed;
+  font-size:.9rem;
+}
+
+.comparison-table caption {
+  padding:14px 20px;
+  color:var(--muted);
+  text-align:left;
+  font-size:.8rem;
+  border-bottom:1px solid var(--line);
+}
+
+.comparison-table th,.comparison-table td {
+  padding:18px 24px;
+  border-bottom:1px solid var(--line);
+  text-align:center;
+  vertical-align:middle;
+  overflow-wrap:break-word;
+}
+
+.comparison-table th:first-child {
+  width:42%;
+  text-align:left;
+}
+
+.comparison-table thead th {
+  font:700 1.15rem Caudex,Georgia,serif;
+  color:#ead2a3;
+}
+
+.comparison-table tbody th {
+  font-weight:400;
+}
+
+.comparison-table td {
+  color:var(--muted);
+}
+
+.comparison-table th:nth-child(2),.comparison-table td:nth-child(2) {
+  background:#e2bd7210;
+  border-inline:1px solid var(--line);
+}
+
+.comparison-table thead th:nth-child(2) {
+  color:var(--gold-light);
+  box-shadow:inset 0 3px var(--gold);
+}
+
+.comparison-table tbody tr:last-child>* {
+  border-bottom:0;
+}
+
+.comparison-yes,.comparison-no,.comparison-partial {
+  font-weight:700;
+  white-space:nowrap;
+}
+
+.comparison-yes {
+  color:#bcd9ac;
+}
+
+.comparison-no {
+  color:#dfaaa0;
+}
+
+.comparison-partial {
+  color:var(--gold);
+}
+
+.comparison-yes span,.comparison-no span,.comparison-partial span {
+  margin-right:5px;
+}
+
+.comparison-table small {
+  display:block;
+  margin-top:3px;
+  font-size:.75rem;
+  color:#a39989;
+}
+
+.comparison-note {
+  max-width:850px;
+  margin:18px auto 0;
+  color:var(--muted);
+  font-size:.78rem;
+  text-align:center;
+}
+
 .download-section {
   background:radial-gradient(ellipse at 50% 0,#4c3523aa,transparent 80%),#16130f;
   padding:72px 0;
@@ -751,6 +859,12 @@ details p {
   }
   .download-section {
     padding-block:50px;
+  }
+  .comparison-section {
+    padding-bottom:50px;
+  }
+  .comparison-table th,.comparison-table td {
+    padding:14px 12px;
   }
   .download-grid {
     grid-template-columns:1fr;

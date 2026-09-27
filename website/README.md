@@ -26,6 +26,12 @@ Website-only pushes and pull requests skip `build.yml`. Changes to `.github/work
 
 Website artwork is copied into `assets/` so website deployments are self-contained. Update those copies when changing the site's branding.
 
+## Comparison claims
+
+The comparison uses “Other voiceover addons” for prerecorded quest/gossip pack players, not every speech addon. Checked September 26, 2026 against the [original player's documentation](https://www.curseforge.com/wow/addons/voiceover), its [release features](https://github.com/mrthinger/wow-voiceover/releases), and a [WoW Forever pack-based implementation](https://www.curseforge.com/wow/addons/forever-voiceover). These document separate audio packs, quest/gossip playback, and queue controls; the Forever implementation explicitly describes missing lines needing pack coverage. Fixed recordings cannot synthesize arbitrary player names or changed text at playback time.
+
+Forever Dubbed's claims follow the root README and `addon/ForeverDubbed/ForeverDubbed.lua`: dialogue text is sent to the local companion for speech. Its ambient speech handlers include NPC says, yells, and whispers; the [comparison player's event handlers](https://github.com/mrthinger/wow-voiceover/blob/master/AI_VoiceOver/VoiceOver.lua) cover quest and gossip interactions, not ambient NPC chat. Keep the text-availability qualification and desktop-companion tradeoff when updating this table. Recheck other addons before changing comparative claims.
+
 ## Downloads and screenshots
 
 `site.js` recommends the Windows installer or macOS DMG using browser platform information. Both downloads remain accessible without JavaScript. Mobile visitors are not assigned a desktop download; the Mac requirement explicitly states Apple Silicon because browser OS detection cannot reliably determine the processor.
