@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.4
+
+- Omit the unused Mimi reference-audio encoder from release packages, saving approximately 38 MiB of installed space. Load it only when encoding reference audio; saved voice playback requires no encoder.
+
+- Reduce release size by including only PocketTTS preset voices referenced by `tts/voices.json`. The current custom-only configuration excludes all eight default presets, saving approximately 52 MiB of installed space.
+- Strip debug information and symbol tables from the Windows release executable.
+- Reduce macOS runtime libraries to the release's target architecture before signing, preserving library loader names and updater compatibility.
+
 ## 0.9.3
 
 - Use DXGI desktop capture on Windows 10 to avoid the yellow capture border. Capture starts only with a visible window owned by the configured WoW executable and releases when it becomes unavailable. Keep the data square uncovered; only the requested game-relative crop reaches the decoder. Windows 11 keeps Windows Graphics Capture.

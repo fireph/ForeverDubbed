@@ -33,6 +33,9 @@ func TestReleaseAssetsSelectReferencedPresets(t *testing.T) {
 			}
 			models, presets := 0, 0
 			for _, asset := range assets {
+				if asset.Path == "models/mimi_encoder.onnx" {
+					t.Fatal("bundled unused reference-audio encoder")
+				}
 				if strings.HasPrefix(asset.Path, "models/") {
 					models++
 				} else {
@@ -42,7 +45,7 @@ func TestReleaseAssetsSelectReferencedPresets(t *testing.T) {
 					}
 				}
 			}
-			if models != 7 || presets != tc.presets {
+			if models != 6 || presets != tc.presets {
 				t.Fatalf("models=%d presets=%d", models, presets)
 			}
 		})

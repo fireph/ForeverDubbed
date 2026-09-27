@@ -38,7 +38,7 @@ func addTargetNativeFiles(bundle map[string]string, dir string, target buildtool
 	return nil
 }
 
-// Models are always required; presets are shipped only when configured.
+// Playback models are always required; presets ship only when configured.
 func releaseAssets(configPath string) ([]pocket.Asset, error) {
 	profiles, err := voiceProfiles(configPath)
 	if err != nil {
@@ -56,7 +56,7 @@ func releaseAssets(configPath string) ([]pocket.Asset, error) {
 		presets["presets/"+voice+".safetensors"] = true
 	}
 	var selected []pocket.Asset
-	for _, asset := range pocket.Assets() {
+	for _, asset := range pocket.PlaybackAssets() {
 		if strings.HasPrefix(asset.Path, "presets/") && !presets[asset.Path] {
 			continue
 		}

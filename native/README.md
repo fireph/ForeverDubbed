@@ -14,6 +14,7 @@ PocketTTS.cpp and our C wrapper are compiled by `go build` through cgo and linke
 `internal/pocket/pocket_tts.hpp` is VolgaGerm/PocketTTS.cpp at commit `e801e7d6c2692121a39e80ae525cb5265174a495`, under `native/vendor/LICENSE`. The source uses a header extension so cgo compiles it once through `internal/pocket/bridge.cpp` and tracks changes for rebuilds. Local changes:
 
 - Unused upstream HTTP server, command-line program, and alternate C API are removed; the application uses only its own `fdb_*` streaming ABI.
+- Load the optional Mimi audio encoder only for uncached reference recordings. Saved voice playback does not load or require `mimi_encoder.onnx`; release packages omit it. `tools/models` retains it for development use.
 - `PocketTTS::load_voice_state` imports the existing April-model `.safetensors` voice states. No re-cloning or lossy conversion is performed.
 - Correct restoration of dynamic snapshot shapes and initialization of decoder `first` flags for the pinned April export.
 - Exceptions from generation/decoding join the worker before propagating to Go.

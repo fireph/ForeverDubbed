@@ -28,6 +28,19 @@ func Assets() []Asset {
 	}
 	return assets
 }
+
+// PlaybackAssets excludes the reference-audio encoder. Saved voice states need
+// only the synthesis models; Assets retains the encoder for development tools.
+func PlaybackAssets() []Asset {
+	var assets []Asset
+	for _, asset := range Assets() {
+		if asset.Path != "models/mimi_encoder.onnx" {
+			assets = append(assets, asset)
+		}
+	}
+	return assets
+}
+
 func VerifyAsset(dir string, asset Asset) error {
 	f, err := os.Open(filepath.Join(dir, filepath.FromSlash(asset.Path)))
 	if err != nil {
@@ -44,7 +57,7 @@ func VerifyAsset(dir string, asset Asset) error {
 	return nil
 }
 func VerifyModels(dir string) error {
-	for _, asset := range Assets() {
+	for _, asset := range PlaybackAssets() {
 		if filepath.Dir(asset.Path) == "models" {
 			asset.Path = filepath.Base(asset.Path)
 			if err := VerifyAsset(dir, asset); err != nil {

@@ -1560,7 +1560,7 @@ public:
         
         auto opts_full = make_opts(threads_full);
         auto opts_ar = make_opts(threads_ar);
-        auto opts_enc = make_opts_no_arena(threads_full);
+        encoder_threads_ = threads_full;
         auto opts_dec = make_opts_no_arena(threads_dec);
         
         if (cfg_.verbose) {
@@ -1580,7 +1580,6 @@ public:
         auto& env = get_ort_env();
         std::string sfx = cfg_.precision == "int8" ? "_int8" : "";
         
-        enc_ = std::make_unique<OrtSession>(env, cfg_.models_dir + "/mimi_encoder.onnx", opts_enc, "mimi_encoder");
         txt_ = std::make_unique<OrtSession>(env, cfg_.models_dir + "/text_conditioner.onnx", opts_full, "text_conditioner");
         main_ = std::make_unique<OrtSession>(env, cfg_.models_dir + "/flow_lm_main" + sfx + ".onnx", opts_ar, "flow_lm_main" + sfx);
         flow_ = std::make_unique<OrtSession>(env, cfg_.models_dir + "/flow_lm_flow" + sfx + ".onnx", opts_ar, "flow_lm_flow" + sfx);
@@ -1692,6 +1691,22 @@ public:
             }
         }
         
+        // Saved .safetensors states bypass audio encoding entirely. Load the
+        // optional encoder only when an uncached reference recording is used.
+        if (!enc_) {
+            const auto model = cfg_.models_dir + "/mimi_encoder.onnx";
+            if (!std::filesystem::exists(std::filesystem::u8path(model)))
+                throw std::runtime_error("Reference audio encoding requires mimi_encoder.onnx; "
+                                         "use a saved .safetensors voice or run go run ./tools/models");
+            Ort::SessionOptions opts;
+            opts.SetIntraOpNumThreads(encoder_threads_);
+            opts.SetInterOpNumThreads(1);
+            opts.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+            opts.DisableMemPattern();
+            opts.DisableCpuMemArena();
+            enc_ = std::make_unique<OrtSession>(get_ort_env(), model, opts, "mimi_encoder");
+        }
+
         auto a = load_audio(path);
         
         // Truncate to 30 seconds max — matches Python, prevents OOM on long samples
@@ -1762,6 +1777,7 @@ public:
 
 private:
     Config cfg_;
+    int encoder_threads_ = 1;
     std::unique_ptr<OrtSession> enc_, txt_, main_, flow_, dec_;
     std::unique_ptr<Tokenizer> tok_;
     std::unique_ptr<StatefulRunner> main_runner_;

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"foreverdubbed/internal/buildtool"
 )
 
 func TestNativeSentenceFades(t *testing.T) {
@@ -111,5 +113,59 @@ func TestNativeRecovery(t *testing.T) {
 	}
 	if err := engine.Stream(ctx, "Hello.", voice, StreamOptions{DecodeSteps: 1}, emit); err == nil {
 		t.Fatal("closed engine succeeded")
+	}
+}
+
+// Exercise the actual release model set: no encoder, not even an empty placeholder.
+func TestNativeSavedVoiceWithoutEncoder(t *testing.T) {
+	dir := os.Getenv("FDB_TEST_NATIVE_DIR")
+	if dir == "" {
+		t.Skip("set FDB_TEST_NATIVE_DIR to exercise the real native engine")
+	}
+	models := t.TempDir()
+	for _, asset := range PlaybackAssets() {
+		if filepath.Dir(asset.Path) != "models" {
+			continue
+		}
+		if err := buildtool.CopyFile(filepath.Join(dir, filepath.FromSlash(asset.Path)), filepath.Join(models, filepath.Base(asset.Path))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(models, "mimi_encoder.onnx")); !os.IsNotExist(err) {
+		t.Fatalf("encoder must be absent: %v", err)
+	}
+	engine, err := Open(models, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	voice := filepath.Join(dir, "presets", "anna.safetensors")
+	for _, text := range []string{"Welcome, traveler.", "Your next adventure awaits."} {
+		nonzero := false
+		if err := engine.Stream(ctx, text, voice, StreamOptions{DecodeSteps: 1}, func(pcm []byte) error {
+			for _, b := range pcm {
+				if b != 0 {
+					nonzero = true
+				}
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if !nonzero {
+			t.Fatal("saved voice produced no audible samples")
+		}
+	}
+	if err := engine.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Excluding the encoder must not weaken validation of synthesis models.
+	if err := os.Remove(filepath.Join(models, "mimi_decoder_int8.onnx")); err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyModels(models); err == nil {
+		t.Fatal("accepted missing synthesis decoder")
 	}
 }
