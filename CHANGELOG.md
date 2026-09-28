@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2
+
+- Fix Windows build failures caused by reusing cached MINGW64 objects with the UCRT64 toolchain. Reset the Go cache when workflow or native build configuration changes.
+
 ## 1.0.1
 
 - Sign and timestamp the Windows app, updater, installer, and uninstaller with Azure Artifact Signing. Include the signed executables in both installed and portable releases.
