@@ -2,11 +2,12 @@
 ## Title: ForeverDubbed
 ## Notes: Sends NPC and quest text to a screen-reading TTS companion.
 ## Author: ForeverDubbed contributors
-## Version: 1.0.2
+## Version: 1.0.3
 ## SavedVariables: ForeverDubbedDB
 ## AllowLoadGameType: standard, camelot
 
 Codec.lua
 Speakers.lua
 Controls.lua
+QuestLog.lua
 ForeverDubbed.lua

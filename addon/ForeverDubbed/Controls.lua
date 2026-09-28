@@ -114,7 +114,7 @@ function NS.Controls.Init(db)
         GameTooltip:AddLine("Left-click: Skip current audio", 1, 1, 1)
         GameTooltip:AddLine("Shift + left-click: Stop all audio", 1, 1, 1)
         GameTooltip:AddLine("Right-click: Menu", 1, 1, 1)
-        if db.paused then GameTooltip:AddLine("Paused: new dialogue will not be read.", 1, 0.82, 0) end
+        if db.paused then GameTooltip:AddLine("Paused: automatic reading is off.", 1, 0.2, 0.2) end
         GameTooltip:AddLine("Drag to move around the minimap.", 0.6, 0.6, 0.6)
         GameTooltip:AddLine("Requires the companion app.", 0.6, 0.6, 0.6)
         GameTooltip:Show()

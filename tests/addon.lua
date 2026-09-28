@@ -5,6 +5,14 @@ local physicalHeight, uiScale = 1440, 0.75
 local methods = {}
 function methods:SetScript(name, fn) self.scripts[name] = fn end
 function methods:RegisterEvent(name) self.events[name] = true end
+function methods:SetEnabled(enabled) self.enabled = not not enabled end
+function methods:HookScript(name, fn)
+    local previous = self.scripts[name]
+    self.scripts[name] = function(...)
+        if previous then previous(...) end
+        fn(...)
+    end
+end
 function methods:CreateTexture()
     local t = setmetatable({}, {__index = methods})
     self.textures = rawget(self, "textures") or {}
@@ -99,6 +107,7 @@ local ns = {}
 assert(loadfile("addon/ForeverDubbed/Codec.lua"))("ForeverDubbed", ns)
 assert(loadfile("addon/ForeverDubbed/Speakers.lua"))("ForeverDubbed", ns)
 assert(loadfile("addon/ForeverDubbed/Controls.lua"))("ForeverDubbed", ns)
+assert(loadfile("addon/ForeverDubbed/QuestLog.lua"))("ForeverDubbed", ns)
 local actual, calls = ns.Codec.Encode, {}
 ns.Codec.Encode = function(...)
     calls[#calls+1] = {...}
@@ -501,4 +510,119 @@ before = #calls
 events.scripts.OnEvent(events, "ADDON_LOADED", "ForeverDubbed")
 assert(ForeverDubbedDB.paused and not tile.visible and #calls == before)
 assertMinimapIcon(true)
+-- The quest log may be loaded after the addon. Play follows the displayed
+-- selection, sends no NPC identity, and does not narrate just by opening it.
+SlashCmdList.FOREVERDUBBED("resume")
+now = now + 2
+local selected = 1
+local quests = {
+    {title="Accepted quest", description="Quest description", objectives="Quest goals"},
+    {title="Another quest", description="Different description", objectives="Other goals"},
+    {title="Zone header", header=true},
+}
+function GetQuestLogSelection() return selected end
+function GetQuestLogTitle(index)
+    local q = quests[index]
+    if q then return q.title, 1, nil, q.header end
+end
+function GetQuestLogQuestText(index)
+    local q = quests[index or selected]
+    if q then return q.description, q.objectives end
+end
+function QuestLog_SetSelection(index) selected = index end
+function QuestLog_Update() end
+function hooksecurefunc(name, fn)
+    local original = _G[name]
+    _G[name] = function(...)
+        original(...)
+        fn(...)
+    end
+end
+QuestLogFrame = CreateFrame("Frame", nil, UIParent)
+QuestLogFrameCloseButton = CreateFrame("Button", nil, QuestLogFrame)
+before = #calls
+events.scripts.OnEvent(events, "ADDON_LOADED", "Blizzard_QuestLog")
+local play = ForeverDubbedQuestLogPlayButton
+assert(play and play.parent == QuestLogFrame and play.enabled and #calls == before)
+assert(play.point[2] == QuestLogFrameCloseButton, "classic Play must sit beside Close")
+local function expectQuest(q)
+    local sent = calls[#calls]
+    assert(sent[3] == 2 and sent[4] == "" and sent[5] == q.title and sent[6] == q.description and sent[13] == q.objectives)
+    for i=7,12 do assert(sent[i] == "", "quest log inherited NPC identity") end
+end
+play.scripts.OnClick(play)
+expectQuest(quests[1])
+local firstSequence = calls[#calls][2]
+play.scripts.OnClick(play)
+assert(calls[#calls][2] == firstSequence+1, "explicit replay was deduplicated")
+QuestLog_SetSelection(2)
+play.scripts.OnClick(play)
+expectQuest(quests[2])
+QuestLog_SetSelection(3)
+assert(not play.enabled)
+before = #calls
+play.scripts.OnClick(play)
+assert(#calls == before, "header was narrated")
+QuestLog_SetSelection(0)
+assert(not play.enabled)
+QuestLog_SetSelection(1)
+SlashCmdList.FOREVERDUBBED("pause")
+assert(play.enabled, "manual Play must remain enabled while paused")
+before = #calls
+play.scripts.OnClick(play)
+assert(#calls == before and calls[#calls][3] == 7, "Play must allow Stop to transmit first")
+-- Automatic dialogue cannot overwrite a manual request waiting behind Stop.
+events.scripts.OnEvent(events, "QUEST_DETAIL")
+now = now + 1.6
+tile.scripts.OnUpdate(tile, 1.6)
+assert(#calls == before+1, "deferred manual Play was blocked by pause")
+expectQuest(quests[1])
+assert(ForeverDubbedDB.paused)
+assertMinimapIcon(true)
+before = #calls
+events.scripts.OnEvent(events, "GOSSIP_SHOW")
+events.scripts.OnEvent(events, "QUEST_DETAIL")
+assert(#calls == before, "manual Play resumed automatic reading")
+play.scripts.OnClick(play)
+assert(#calls == before+1, "immediate manual replay was blocked by pause")
+expectQuest(quests[1])
+SlashCmdList.FOREVERDUBBED("resume")
+assert(play.enabled)
+SlashCmdList.FOREVERDUBBED("off")
+assert(not play.enabled)
+SlashCmdList.FOREVERDUBBED("on")
+assert(play.enabled)
+events.scripts.OnEvent(events, "ADDON_LOADED", "OtherAddon")
+assert(ForeverDubbedQuestLogPlayButton == play, "duplicate quest-log button")
+-- Map-style quest details must use the displayed quest ID, not an unrelated
+-- global selection, and must not play quests absent from the accepted log.
+QuestMapFrame = {DetailsFrame=CreateFrame("Frame", nil, UIParent)}
+local details = QuestMapFrame.DetailsFrame
+details.questID = 102
+details.BackFrame = {BackButton=CreateFrame("Button", nil, details)}
+C_QuestLog = {
+    GetLogIndexForQuestID=function(id) return id == 102 and 2 or nil end,
+    GetInfo=function(index) local q=quests[index]; return q and {title=q.title, isHeader=q.header} end,
+}
+function QuestMapFrame_ShowQuestDetails(id) details.questID = id end
+events.scripts.OnEvent(events, "ADDON_LOADED", "Blizzard_WorldMap")
+play = ForeverDubbedQuestLogPlayButton
+assert(play.parent == details and play.enabled and play.point[2] == details.BackFrame.BackButton)
+now = now + 2
+play.scripts.OnClick(play)
+expectQuest(quests[2])
+QuestMapFrame_ShowQuestDetails(999)
+assert(not play.enabled)
+before = #calls
+play.scripts.OnClick(play)
+assert(#calls == before)
+QuestMapFrame_ShowQuestDetails(102)
+assert(play.enabled)
+local readText = GetQuestLogQuestText
+GetQuestLogQuestText = function() return nil, nil end
+events.scripts.OnEvent(events, "QUEST_LOG_UPDATE")
+assert(not play.enabled, "missing quest text should disable Play")
+GetQuestLogQuestText = readText
+events.scripts.OnEvent(events, "QUEST_LOG_UPDATE")
+assert(play.enabled)
 print("Addon smoke tests passed")

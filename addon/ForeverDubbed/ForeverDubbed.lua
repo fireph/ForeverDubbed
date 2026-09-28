@@ -134,10 +134,10 @@ local function publishVersion()
     draw()
 end
 
-local function publishReady(kind, speaker, title, text, info, objectives)
-    if not ready or not ForeverDubbedDB.enabled or ForeverDubbedDB.paused then return end
+local function publishReady(kind, speaker, title, text, info, objectives, manual)
+    if not ready or not ForeverDubbedDB.enabled or (ForeverDubbedDB.paused and not manual) then return end
     if GetTime() < controlUntil then
-        deferredDialogue = {kind, speaker, title, text, info, objectives}
+        deferredDialogue = {kind, speaker, title, text, info, objectives, manual}
         return
     end
     speaker, title, text = clean(speaker), clean(title), clean(text)
@@ -164,7 +164,7 @@ local function publishReady(kind, speaker, title, text, info, objectives)
     draw()
 end
 
--- Pause stops current audio and suppresses dialogue; controls still transmit.
+-- Pause stops current audio and suppresses automatic dialogue; manual Play and controls still transmit.
 function NS.SetPaused(paused)
     if not ready or ForeverDubbedDB.paused == paused then return end
     requestID = requestID + 1 -- invalidate any pending identity resolution
@@ -172,8 +172,9 @@ function NS.SetPaused(paused)
     lastBody, lastAt = nil, -1
     ForeverDubbedDB.paused = paused
     NS.Controls.UpdateIcon(paused)
+    NS.QuestLog.Refresh()
     if paused then NS.Control("stop") end
-    printStatus(paused and "Paused. New dialogue will not be read." or "Resumed.")
+    printStatus(paused and "Paused. Automatic reading is off." or "Resumed.")
 end
 
 -- Commands use the normal checksummed transport and sequence deduplication.
@@ -203,6 +204,16 @@ local function publish(kind, speaker, title, text, info, objectives)
     end
 end
 
+-- An accepted quest has no live NPC identity. Empty identity fields select the
+-- companion's narrator fallback and cannot inherit the current target's voice.
+function NS.ReadQuestLog(title, description, objectives)
+    if not ready or not ForeverDubbedDB.enabled then return end
+    requestID = requestID + 1
+    deferredDialogue = nil
+    lastBody, lastAt = nil, -1 -- an explicit Play click may replay the same quest
+    publishReady(2, "", title, description, {}, objectives, true)
+end
+
 local function publishNPC(kind, title, text, objectives)
     local info = NS.Speakers.Dialog()
     publish(kind, info.name, title, text, info, objectives)
@@ -224,7 +235,7 @@ frame:SetScript("OnUpdate", function(_, dt)
     if deferredDialogue and GetTime() >= controlUntil then
         local dialogue = deferredDialogue
         deferredDialogue = nil
-        publishReady(unpack(dialogue, 1, 6))
+        publishReady(unpack(dialogue, 1, 7))
     end
     if not pages then return end
     if GetTime() > expires and ForeverDubbedDB.locked then frame:Hide(); return end
@@ -251,7 +262,10 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
 events:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" then
-        if ... ~= "ForeverDubbed" then return end
+        if ... ~= "ForeverDubbed" then
+            if ready then NS.QuestLog.Init() end -- quest UI may load on demand
+            return
+        end
         ForeverDubbedDB = ForeverDubbedDB or {}
         local db = ForeverDubbedDB
         -- Previously saved positions used canvas units. Convert them once to
@@ -274,14 +288,17 @@ events:SetScript("OnEvent", function(_, event, ...)
         ready = true
         place()
         NS.Controls.Init(db)
+        NS.QuestLog.Init()
         publishVersion()
         for _, e in ipairs({"GOSSIP_SHOW", "QUEST_GREETING", "QUEST_DETAIL", "QUEST_PROGRESS", "QUEST_COMPLETE",
             "ITEM_TEXT_READY", "CHAT_MSG_MONSTER_SAY", "CHAT_MSG_MONSTER_YELL", "CHAT_MSG_MONSTER_WHISPER",
             "CHAT_MSG_MONSTER_EMOTE", "CHAT_MSG_RAID_BOSS_EMOTE", "CHAT_MSG_RAID_BOSS_WHISPER",
-            "UI_SCALE_CHANGED", "DISPLAY_SIZE_CHANGED"}) do
+            "UI_SCALE_CHANGED", "DISPLAY_SIZE_CHANGED", "QUEST_LOG_UPDATE"}) do
             pcall(events.RegisterEvent, events, e)
         end
         printStatus(VERSION .. " ready. /fdb test to test, /fdb unlock to drag the square.")
+    elseif event == "QUEST_LOG_UPDATE" then
+        NS.QuestLog.Refresh()
     elseif event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
         place()
     elseif event == "GOSSIP_SHOW" then
@@ -340,6 +357,7 @@ SlashCmdList.FOREVERDUBBED = function(input)
         db.enabled = cmd == "on"
         if not db.enabled then requestID = requestID + 1; deferredDialogue = nil; pages = nil; frame:Hide() end
         if db.enabled then publishVersion() end
+        NS.QuestLog.Refresh()
         printStatus("Enabled: " .. tostring(db.enabled))
     elseif cmd == "chat" then
         db.chat = not db.chat; printStatus("NPC chat: " .. tostring(db.chat))
