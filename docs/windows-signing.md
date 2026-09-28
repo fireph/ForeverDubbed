@@ -2,6 +2,8 @@
 
 The Windows job builds on `windows-2025` with MSYS2 UCRT64 (MinGW-w64 GCC/G++) and NSIS. Non-PR builds require Azure Artifact Signing; missing configuration or a signing/verification error fails the build before artifact upload or release publishing. Pull requests build unsigned test artifacts without logging into Azure.
 
+Go modules and compiled packages use `setup-go`'s built-in cache. Its dependency key includes `go.mod`, `go.sum`, the workflow, and `native/CMakeLists.txt`, so changing the configured toolchain or native dependencies resets cached cgo objects. If an external toolchain update causes an ABI mismatch without changes to those files, delete the Windows Go cache in GitHub Actions before rebuilding. Native dependency preparation and signing still run for each build.
+
 The packager signs and verifies `foreverdubbed.exe` and `foreverdubbed-updater.exe` before generating the update manifest and portable ZIP. NSIS signs its embedded uninstaller through `!uninstfinalize`, then the packager signs the finished installer. Every signature uses SHA-256 and Microsoft's RFC 3161 timestamp service, and verification requires both a valid signature and a timestamp. Third-party DLLs retain their original signatures.
 
 ## Azure setup

@@ -108,8 +108,6 @@ jobs:
       run:
         shell: pwsh
     env:
-      CC: gcc
-      CXX: g++
       FDB_SIGNING_ENDPOINT: ${{ vars.FDB_SIGNING_ENDPOINT }}
       FDB_SIGNING_ACCOUNT: ${{ vars.FDB_SIGNING_ACCOUNT }}
       FDB_SIGNING_PROFILE: ${{ vars.FDB_SIGNING_PROFILE }}
@@ -131,6 +129,12 @@ jobs:
         with:
           go-version: '1.27.1'
           cache: true
+          # Reset cached cgo objects when the configured toolchain changes.
+          cache-dependency-path: |
+            go.mod
+            go.sum
+            .github/workflows/build.yml
+            native/CMakeLists.txt
       - name: Install MinGW UCRT64 compiler and make
         uses: msys2/setup-msys2@v2
         id: msys2
@@ -141,9 +145,14 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-make
       - name: Configure native Windows build tools
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
         run: |
           # Use native MinGW tools from PowerShell, without MSYS shell wrappers.
-          "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          $compilerBin = Join-Path $env:MSYS2_LOCATION 'ucrt64/bin'
+          $compilerBin | Out-File -FilePath $env:GITHUB_PATH -Append
+          "CC=$(Join-Path $compilerBin 'gcc.exe')" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "CXX=$(Join-Path $compilerBin 'g++.exe')" | Out-File -FilePath $env:GITHUB_ENV -Append
           choco install nsis --yes --no-progress
           if ($LASTEXITCODE -ne 0) { throw 'NSIS installation failed' }
           "${env:ProgramFiles(x86)}\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append
