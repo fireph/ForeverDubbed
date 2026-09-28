@@ -127,7 +127,7 @@ local function draw()
 end
 
 local function publishVersion()
-    if not ready or not ForeverDubbedDB.enabled then return end
+    if not ready or not ForeverDubbedDB.enabled or ForeverDubbedDB.paused then return end
     sequence = (sequence + 1) % 4294967296
     pages = Codec.Encode(session, sequence, 9, "", "", "", nil, nil, nil, nil, nil, nil, nil, WIRE_VERSION)
     page, elapsed, expires = 1, 0, GetTime() + 15
@@ -135,7 +135,7 @@ local function publishVersion()
 end
 
 local function publishReady(kind, speaker, title, text, info, objectives)
-    if not ready or not ForeverDubbedDB.enabled then return end
+    if not ready or not ForeverDubbedDB.enabled or ForeverDubbedDB.paused then return end
     if GetTime() < controlUntil then
         deferredDialogue = {kind, speaker, title, text, info, objectives}
         return
@@ -164,6 +164,18 @@ local function publishReady(kind, speaker, title, text, info, objectives)
     draw()
 end
 
+-- Pause stops current audio and suppresses dialogue; controls still transmit.
+function NS.SetPaused(paused)
+    if not ready or ForeverDubbedDB.paused == paused then return end
+    requestID = requestID + 1 -- invalidate any pending identity resolution
+    deferredDialogue = nil
+    lastBody, lastAt = nil, -1
+    ForeverDubbedDB.paused = paused
+    NS.Controls.UpdateIcon(paused)
+    if paused then NS.Control("stop") end
+    printStatus(paused and "Paused. New dialogue will not be read." or "Resumed.")
+end
+
 -- Commands use the normal checksummed transport and sequence deduplication.
 -- Hold them briefly so a new NPC event cannot overwrite them before capture.
 function NS.Control(action)
@@ -179,6 +191,7 @@ function NS.Control(action)
 end
 
 local function publish(kind, speaker, title, text, info, objectives)
+    if not ready or not ForeverDubbedDB.enabled or ForeverDubbedDB.paused then return end
     requestID = requestID + 1
     local id = requestID
     if info then
@@ -255,6 +268,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         db.x = tonumber(db.x) or 16
         db.y = tonumber(db.y) or (screenHeight() - 16)
         if db.enabled == nil then db.enabled = true end
+        if db.paused == nil then db.paused = false end
         if db.chat == nil then db.chat = true end
         if db.locked == nil then db.locked = true end
         ready = true
@@ -309,6 +323,8 @@ SlashCmdList.FOREVERDUBBED = function(input)
     if not ready then return end
     if cmd == "stop" or cmd == "skip" then
         NS.Control(cmd)
+    elseif cmd == "pause" or cmd == "resume" then
+        NS.SetPaused(cmd == "pause")
     elseif cmd == "test" or cmd == "unlock" then
         if cmd == "unlock" then db.locked = false; place() end
         publish(0, "ForeverDubbed", "Connection test", "Welcome to ForeverDubbed. Quest and NPC dialogue will be read aloud here.")
@@ -352,6 +368,7 @@ SlashCmdList.FOREVERDUBBED = function(input)
         printStatus("Addon " .. VERSION .. "; client " .. tostring(version) .. ", build " .. tostring(build) .. ", interface " .. tostring(interface))
         printStatus("Gossip API: " .. tostring(C_GossipInfo and type(C_GossipInfo.GetText) == "function")
             .. "; quest API: " .. tostring(type(GetQuestText) == "function") .. "; enabled: " .. tostring(db.enabled)
+            .. "; paused: " .. tostring(db.paused)
             .. "; colors: 16; cell: " .. db.cell .. "; bytes/page: " .. Codec.PAYLOAD
             .. "; locked: " .. tostring(db.locked))
         printStatus(string.format("Pixel factor: %.5f; effective scale: %.5f; physical cell: %.3f px; square: %.1f px",
@@ -361,6 +378,6 @@ SlashCmdList.FOREVERDUBBED = function(input)
         printStatus("Last NPC: " .. (info.name or "") .. "; race: " .. (info.race or "") .. "; gender: " .. (info.gender or "") .. "; NPC ID: " .. (info.npcID or "")
             .. "; race source: " .. (info.raceSource or "unavailable"))
     else
-        printStatus("/fdb stop | skip | test | unlock | lock | cell 2–8 | chat | on | off | reset | npc | race NAME | status")
+        printStatus("/fdb stop | skip | pause | resume | test | unlock | lock | cell 2–8 | chat | on | off | reset | npc | race NAME | status")
     end
 end

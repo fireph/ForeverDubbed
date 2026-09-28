@@ -5,4 +5,7 @@
     <Binding name="FOREVERDUBBED_SKIP" category="BINDING_HEADER_FOREVERDUBBED">
         ForeverDubbed_SkipAudio();
     </Binding>
+    <Binding name="FOREVERDUBBED_PAUSE" category="BINDING_HEADER_FOREVERDUBBED">
+        ForeverDubbed_TogglePause();
+    </Binding>
 </Bindings>

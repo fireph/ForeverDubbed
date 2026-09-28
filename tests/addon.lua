@@ -12,6 +12,7 @@ function methods:CreateTexture()
     return t
 end
 methods.CreateMaskTexture = methods.CreateTexture
+function methods:SetTexture(texture) self.texture = texture end
 function methods:SetPoint(...) self.point={...} end
 function methods:ClearAllPoints() self.point=nil end
 function methods:SetSize(w,h) self.width, self.height = w,h end
@@ -36,7 +37,7 @@ function methods:GetLeft() return 20 end
 function methods:GetTop() return 900 end
 setmetatable(methods, {__index = function() return function() end end})
 function CreateFrame(_, name, parent)
-    local f = setmetatable({scripts={}, events={}, parent=parent}, {__index=methods})
+    local f = setmetatable({scripts={}, events={}, parent=parent, menu=false}, {__index=methods})
     objects[#objects+1] = f
     if name then _G[name] = f end
     return f
@@ -44,6 +45,32 @@ end
 UIParent = CreateFrame("Frame")
 Minimap = CreateFrame("Frame", nil, UIParent)
 GameTooltip = setmetatable({}, {__index=methods})
+local shiftDown = false
+function IsShiftKeyDown() return shiftDown end
+local menuItems
+local modernMenu = {CreateContextMenu=function(owner, generate)
+    menuItems = {}
+    generate(owner, {
+        CreateTitle=function(_, title) assert(title == "ForeverDubbed") end,
+        CreateButton=function(_, text, callback)
+            local item = {text=text, func=callback, disabled=false}
+            function item:SetEnabled(enabled) self.disabled = not enabled end
+            menuItems[#menuItems+1] = item
+            return item
+        end,
+    })
+end}
+MenuUtil = modernMenu
+function UIDropDownMenu_Initialize(menu, init, style)
+    assert(style == "MENU")
+    menu.init = init
+end
+function UIDropDownMenu_CreateInfo() return {} end
+function UIDropDownMenu_AddButton(info) menuItems[#menuItems+1] = info end
+function ToggleDropDownMenu(_, _, menu)
+    menuItems = {}
+    menu.init()
+end
 local cursorX, cursorY = 200, 100
 function GetCursorPosition() return cursorX, cursorY end
 DEFAULT_CHAT_FRAME = {AddMessage=function(_, text) messages[#messages+1]=text end}
@@ -327,7 +354,9 @@ local controlSequence = calls[#calls][2]
 for i=1,5 do tile.scripts.OnUpdate(tile, 0.1) end
 assert(#calls == before+1, "redrawing a control must not issue a fresh command")
 now = now + 1
-button.scripts.OnClick(button, "RightButton")
+shiftDown = true
+button.scripts.OnClick(button, "LeftButton")
+shiftDown = false
 assert(calls[#calls][3] == 7 and calls[#calls][2] == controlSequence+1)
 now = now + 1
 ForeverDubbed_SkipAudio()
@@ -380,4 +409,96 @@ ForeverDubbed_StopAudio()
 assert(calls[#calls][2] == sequence+2 and calls[#calls][3] == 7)
 ForeverDubbed_SkipAudio()
 assert(calls[#calls][2] == sequence+3 and calls[#calls][3] == 8)
+local function assertMinimapIcon(paused)
+    local expected = "Interface\\AddOns\\ForeverDubbed\\" .. (paused and "IconPaused" or "Icon")
+    assert(ForeverDubbedMinimapButton.textures[1].texture == expected, "minimap icon does not match pause state")
+end
+assertMinimapIcon(false)
+-- Both menu APIs expose the current pause state and preserve the click shortcuts.
+SlashCmdList.FOREVERDUBBED("on")
+for _, modern in ipairs({true, false}) do
+    MenuUtil = modern and modernMenu or nil
+    before = #calls
+    button.scripts.OnClick(button, "RightButton")
+    assert(#calls == before and #menuItems == 3, "opening the menu sent a control")
+    assert(menuItems[1].text == "Pause")
+    menuItems[1].func()
+    assert(ForeverDubbedDB.paused and tile.visible and #calls == before+1 and calls[#calls][3] == 7,
+        "pause must send Stop")
+    assertMinimapIcon(true)
+    before = #calls
+    now = now + 1
+    tile.scripts.OnUpdate(tile, 1)
+    assert(tile.visible and #calls == before, "Stop must remain visible without being resent")
+    now = now + 15
+    tile.scripts.OnUpdate(tile, 15)
+    assert(not tile.visible)
+    button.scripts.OnClick(button, "RightButton")
+    assert(menuItems[1].text == "Resume" and not menuItems[2].disabled and not menuItems[3].disabled)
+    for _, cmd in ipairs({"test", "unlock", "on", "cell 3", "reset"}) do
+        SlashCmdList.FOREVERDUBBED(cmd)
+        assert(not tile.visible and #calls == before, "paused command exposed the square: " .. cmd)
+    end
+    for _, event in ipairs({"GOSSIP_SHOW", "QUEST_DETAIL", "QUEST_PROGRESS", "QUEST_COMPLETE", "UI_SCALE_CHANGED"}) do
+        events.scripts.OnEvent(events, event)
+        assert(not tile.visible and #calls == before, "paused event transmitted: " .. event)
+    end
+    SlashCmdList.FOREVERDUBBED("lock")
+    now = now + 20
+    tile.scripts.OnUpdate(tile, 20)
+    assert(not tile.visible and #calls == before)
+    -- Controls remain usable while paused, without admitting new dialogue.
+    menuItems[2].func()
+    assert(calls[#calls][3] == 8 and tile.visible and ForeverDubbedDB.paused)
+    menuItems[3].func()
+    assert(calls[#calls][3] == 7 and tile.visible and ForeverDubbedDB.paused)
+    before = #calls
+    events.scripts.OnEvent(events, "QUEST_DETAIL")
+    assert(#calls == before and calls[#calls][3] == 7)
+    SlashCmdList.FOREVERDUBBED("lock")
+    menuItems[1].func()
+    assert(not ForeverDubbedDB.paused and #calls == before, "resume should wait for new dialogue")
+    assertMinimapIcon(false)
+    button.scripts.OnClick(button, "RightButton")
+    assert(menuItems[1].text == "Pause" and not menuItems[2].disabled and not menuItems[3].disabled)
+    menuItems[2].func()
+    assert(calls[#calls][3] == 8)
+    menuItems[3].func()
+    assert(calls[#calls][3] == 7)
+end
+-- Late identity callbacks cannot resurrect pre-pause dialogue, even after resume.
+pending = {}
+events.scripts.OnEvent(events, "QUEST_DETAIL")
+assert(#pending == 1)
+SlashCmdList.FOREVERDUBBED("pause")
+assertMinimapIcon(true)
+SlashCmdList.FOREVERDUBBED("resume")
+assertMinimapIcon(false)
+before = #calls
+pending[1]()
+assert(#calls == before)
+-- Drop dialogue deferred behind a control when pausing.
+ns.Speakers.Resolve = function(info, cb) cb(info) end
+ForeverDubbed_StopAudio()
+events.scripts.OnEvent(events, "QUEST_DETAIL")
+ForeverDubbed_TogglePause()
+assert(ForeverDubbedDB.paused and calls[#calls][3] == 7)
+now = now + 16
+tile.scripts.OnUpdate(tile, 16)
+assert(not tile.visible)
+ForeverDubbed_TogglePause()
+before = #calls
+now = now + 2
+tile.scripts.OnUpdate(tile, 2)
+assert(#calls == before, "resume replayed deferred dialogue")
+events.scripts.OnEvent(events, "QUEST_DETAIL")
+assert(#calls == before+1 and calls[#calls][3] == 2, "new dialogue failed after resume")
+-- Persisted pause also suppresses startup version publication.
+SlashCmdList.FOREVERDUBBED("pause")
+now = now + 16
+tile.scripts.OnUpdate(tile, 16)
+before = #calls
+events.scripts.OnEvent(events, "ADDON_LOADED", "ForeverDubbed")
+assert(ForeverDubbedDB.paused and not tile.visible and #calls == before)
+assertMinimapIcon(true)
 print("Addon smoke tests passed")

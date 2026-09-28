@@ -1,13 +1,51 @@
 local _, NS = ...
 NS.Controls = {}
+local minimapIcon
+
+function NS.Controls.UpdateIcon(paused)
+    if minimapIcon then
+        minimapIcon:SetTexture("Interface\\AddOns\\ForeverDubbed\\" .. (paused and "IconPaused" or "Icon"))
+    end
+end
 
 BINDING_HEADER_FOREVERDUBBED = "ForeverDubbed"
 BINDING_NAME_FOREVERDUBBED_STOP = "Stop all audio"
 BINDING_NAME_FOREVERDUBBED_SKIP = "Skip current audio"
+BINDING_NAME_FOREVERDUBBED_PAUSE = "Pause / resume"
 
 -- Bindings.xml calls these globals; the transport is initialized at ADDON_LOADED.
 function ForeverDubbed_StopAudio() if NS.Control then NS.Control("stop") end end
 function ForeverDubbed_SkipAudio() if NS.Control then NS.Control("skip") end end
+
+function ForeverDubbed_TogglePause()
+    if NS.SetPaused then NS.SetPaused(not ForeverDubbedDB.paused) end
+end
+
+local function openMenu(button, db)
+    GameTooltip:Hide()
+    local entries = {
+        {db.paused and "Resume" or "Pause", ForeverDubbed_TogglePause},
+        {"Skip current audio", ForeverDubbed_SkipAudio},
+        {"Stop all audio", ForeverDubbed_StopAudio},
+    }
+    if MenuUtil and MenuUtil.CreateContextMenu then
+        MenuUtil.CreateContextMenu(button, function(_, root)
+            root:CreateTitle("ForeverDubbed")
+            for _, entry in ipairs(entries) do root:CreateButton(entry[1], entry[2]) end
+        end)
+    else
+        -- Classic clients use the legacy dropdown API.
+        button.menu = button.menu or CreateFrame("Frame", nil, UIParent, "UIDropDownMenuTemplate")
+        UIDropDownMenu_Initialize(button.menu, function()
+            for _, entry in ipairs(entries) do
+                local info = UIDropDownMenu_CreateInfo()
+                info.text, info.func, info.notCheckable = entry[1], entry[2], true
+                UIDropDownMenu_AddButton(info)
+            end
+        end, "MENU")
+        ToggleDropDownMenu(1, nil, button.menu, "cursor", 0, 0)
+    end
+end
 
 function NS.Controls.Init(db)
     if not Minimap then return end
@@ -21,9 +59,11 @@ function NS.Controls.Init(db)
     button:RegisterForDrag("LeftButton")
 
     local icon = button:CreateTexture(nil, "BACKGROUND")
-    icon:SetTexture("Interface\\AddOns\\ForeverDubbed\\Icon")
-    icon:SetSize(26, 26)
-    icon:SetPoint("CENTER", button, "CENTER", 0, 0)
+    minimapIcon = icon
+    NS.Controls.UpdateIcon(db.paused)
+    -- Inset the artwork beneath the tracking border, whose opening is offset.
+    icon:SetSize(24, 24)
+    icon:SetPoint("CENTER", button, "CENTER", 1, 0)
     local mask = button:CreateMaskTexture()
     mask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
     mask:SetAllPoints(icon)
@@ -61,17 +101,22 @@ function NS.Controls.Init(db)
     end)
     button:SetScript("OnClick", function(self, mouseButton)
         if self.dragging or (self.ignoreClickUntil and GetTime() < self.ignoreClickUntil) then return end
-        if mouseButton == "RightButton" then ForeverDubbed_StopAudio()
-        else ForeverDubbed_SkipAudio() end
+        if mouseButton == "RightButton" then openMenu(self, db)
+        elseif mouseButton == "LeftButton" then
+            if IsShiftKeyDown() then ForeverDubbed_StopAudio()
+            else ForeverDubbed_SkipAudio() end
+        end
     end)
     button:SetScript("OnEnter", function(self)
         if self.dragging then return end
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine("ForeverDubbed", 1, 0.82, 0)
         GameTooltip:AddLine("Left-click: Skip current audio", 1, 1, 1)
-        GameTooltip:AddLine("Right-click: Stop all audio", 1, 1, 1)
-        GameTooltip:AddLine("Drag to move around the minimap.", 0.8, 0.8, 0.8)
-        GameTooltip:AddLine("Requires the companion and visible data square.", 0.8, 0.8, 0.8)
+        GameTooltip:AddLine("Shift + left-click: Stop all audio", 1, 1, 1)
+        GameTooltip:AddLine("Right-click: Menu", 1, 1, 1)
+        if db.paused then GameTooltip:AddLine("Paused: new dialogue will not be read.", 1, 0.82, 0) end
+        GameTooltip:AddLine("Drag to move around the minimap.", 0.6, 0.6, 0.6)
+        GameTooltip:AddLine("Requires the companion app.", 0.6, 0.6, 0.6)
         GameTooltip:Show()
     end)
     button:SetScript("OnLeave", function() GameTooltip:Hide() end)
