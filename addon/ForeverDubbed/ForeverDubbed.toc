@@ -1,8 +1,9 @@
 ## Interface: 16001
 ## Title: ForeverDubbed
+## IconTexture: Interface\AddOns\ForeverDubbed\Icon.tga
 ## Notes: Sends NPC and quest text to a screen-reading TTS companion.
 ## Author: ForeverDubbed contributors
-## Version: 1.0.3
+## Version: 1.0.4
 ## SavedVariables: ForeverDubbedDB
 ## AllowLoadGameType: standard, camelot
 
