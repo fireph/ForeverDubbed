@@ -42,7 +42,7 @@ func Directory(path, platform string) (string, error) {
 
 func Candidates(platform string, getenv func(string) string) []string {
 	if platform == "darwin" {
-		return []string{"/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app"}
+		return []string{"/Applications/World of Warcraft/_forever_/World of Warcraft.app"}
 	}
 	if platform != "windows" {
 		return nil
@@ -51,7 +51,7 @@ func Candidates(platform string, getenv func(string) string) []string {
 	var paths []string
 	for _, root := range roots {
 		if root != "" {
-			paths = append(paths, filepath.Join(root, "World of Warcraft", "_classic_beta_", "WowB.exe"))
+			paths = append(paths, filepath.Join(root, "World of Warcraft", "_forever_", "Wow.exe"))
 		}
 	}
 	return paths

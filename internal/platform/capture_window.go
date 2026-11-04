@@ -22,7 +22,7 @@ type captureWindow struct {
 }
 
 // Resolve the app bundle from the process's actual executable, not its window
-// title or display name. This distinguishes Beta from other installed clients.
+// title or display name. The full bundle path distinguishes installed clients.
 func executableBundle(executable string) string {
 	if !path.IsAbs(executable) {
 		return ""

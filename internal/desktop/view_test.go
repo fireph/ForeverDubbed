@@ -27,10 +27,10 @@ func TestDashboardLiveStates(t *testing.T) {
 	defer w.Close()
 	w.SetContent(d.root)
 	w.Resize(defaultWindowSize)
-	state := appstate.New("World of Warcraft Beta.app", "pocket", false)
+	state := appstate.New("World of Warcraft.app", "pocket", false)
 	state.Update(func(s *appstate.Snapshot) {
 		s.AddonBanner = "Restart World of Warcraft to install Forever Dubbed addon"
-		s.WoWPath = `C:\Program Files (x86)\World of Warcraft\_classic_beta_\WowB.exe`
+		s.WoWPath = `C:\Program Files (x86)\World of Warcraft\_forever_\Wow.exe`
 	})
 	d.render(state.Snapshot())
 	if !d.addonNotice.Visible() || d.addonHeading.Text != "Restart World of Warcraft" {
@@ -264,18 +264,18 @@ func TestWoWLocationShowsDetectedAndSelectedPaths(t *testing.T) {
 	a := test.NewApp()
 	defer a.Quit()
 	d := newDashboard("test", func() {}, func() {}, func() {}, func() {}, func(bool) {}, func(appstate.SpeechFilters) {}, nil, nil, nil)
-	state := appstate.New("WowB.exe", "pocket", false)
+	state := appstate.New("Wow.exe", "pocket", false)
 	d.render(state.Snapshot())
 	if d.wowPath.Text != "Not located yet" {
 		t.Fatal("bare process name shown as a located executable")
 	}
-	selected := `C:\Games\WoW\WowB.exe`
+	selected := `C:\Games\WoW\Wow.exe`
 	state.Update(func(s *appstate.Snapshot) { s.WoWPath = selected })
 	d.render(state.Snapshot())
 	if d.wowPath.Text != selected {
 		t.Fatal("auto-located installation is missing")
 	}
-	detected := `D:\Games\A different World of Warcraft installation\_classic_beta_\WowB.exe`
+	detected := `D:\Games\A different World of Warcraft installation\_forever_\Wow.exe`
 	state.Update(func(s *appstate.Snapshot) { s.DetectedExecutable = detected })
 	d.render(state.Snapshot())
 	if d.wowPath.Text != detected {
@@ -292,7 +292,7 @@ func TestWoWLocationShowsDetectedAndSelectedPaths(t *testing.T) {
 	if d.wowPath.Text != "Not located yet" {
 		t.Fatal("unrelated installation shown for an explicit selector")
 	}
-	mac := "/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app"
+	mac := "/Applications/World of Warcraft/_forever_/World of Warcraft.app"
 	state.SetCaptureTarget(mac)
 	d.render(state.Snapshot())
 	if d.wowPath.Text != mac {

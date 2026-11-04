@@ -8,7 +8,7 @@ import (
 )
 
 func TestCaptureRecoveryAndShutdown(t *testing.T) {
-	s := New("WoWB.exe", "pocket", false)
+	s := New("Wow.exe", "pocket", false)
 	s.Capture(true, true, nil)
 	s.Capture(false, true, errors.New("game closed"))
 	if v := s.Snapshot(); v.Window || v.Tile || v.CaptureError == "" {

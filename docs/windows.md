@@ -1,6 +1,6 @@
 # Windows game-window capture
 
-The Windows companion selects the game window owned by **WoWB.exe** using process/window metadata. It requires Windows 10 version 1903 or newer (Windows 11 is supported).
+The Windows companion selects the game window owned by **Wow.exe** by default, using process/window metadata. It requires Windows 10 version 1903 or newer (Windows 11 is supported).
 
 - **Windows 10:** uses DXGI Desktop Duplication to avoid the yellow capture border. It starts capture only after finding a visible, non-minimized window owned by the configured game executable. It captures the monitor(s) intersecting that window and returns only the requested game-relative area to the decoder. Other windows covering that area are visible to capture, so keep the data square uncovered. Capture is released when the reader detects that the game has closed, minimized, or become unavailable. No desktop capture starts while waiting for the game.
 - **Windows 11:** uses the existing Windows Graphics Capture backend, which captures the game window independently of other windows covering it. It does not switch to desktop capture if window capture fails.
@@ -19,10 +19,10 @@ Quest speech reads the main dialogue by default. **Quest title** adds the title 
 
 Install the 0.6.5 addon as well as the desktop app for this feature, then `/reload` WoW. The addon sends the title, dialogue, and objectives separately; the desktop retains them all and chooses which text to speak. Older addons merge objectives into the dialogue, so the desktop cannot reliably exclude them until the addon is updated.
 
-The executable filename is matched case-insensitively against the owning process's full image path. A window title alone cannot match, and `WoW.exe` is not selected. To target a particular installation, use its full executable path:
+The executable filename is matched case-insensitively against the owning process's image path, regardless of where WoW is installed. A window title alone cannot match. The desktop app uses the exact executable path found by automatic discovery or selected with **Locate WoW…**. To target a particular installation when multiple WoW clients share the same executable name, use `-capture-app` with its full executable path:
 
 ```powershell
-.\foreverdubbed.exe -capture-app "C:\Games\World of Warcraft\_classic_beta_\WoWB.exe"
+.\foreverdubbed.exe -capture-app "C:\Program Files (x86)\World of Warcraft\_forever_\Wow.exe"
 ```
 
 When the game is closed or minimized, the reader waits. It reacquires the window after it reopens or changes size. If two matching processes are running, specify the exact executable path or close the other instance. Window coordinates and snapshots are relative to the captured game window, not the desktop.
@@ -56,7 +56,7 @@ Follow the [Windows build instructions](../native/README.md#build) to prepare de
 For an opt-in live regression test on Windows with the game open:
 
 ```powershell
-$env:FDB_TEST_CAPTURE_APP = "WoWB.exe"
+$env:FDB_TEST_CAPTURE_APP = "Wow.exe"
 $env:CGO_ENABLED = "1"
 go test ./internal/platform -run TestWindowsGameWindowCapture -count=1
 ```

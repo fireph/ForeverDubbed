@@ -47,9 +47,9 @@ func run() error {
 	flag.StringVar(&voice, "voice", "", "Pocket TTS profile override, or system voice name with -tts system")
 	flag.StringVar(&snapshot, "snapshot", "", "save one game-window PNG after 3 seconds, then exit")
 	if runtime.GOOS == "windows" {
-		flag.StringVar(&captureApp, "capture-app", "WoWB.exe", "capture only this Windows executable (exact filename or full path)")
+		flag.StringVar(&captureApp, "capture-app", "Wow.exe", "capture only this Windows executable (exact filename or full path)")
 	} else if runtime.GOOS == "darwin" {
-		flag.StringVar(&captureApp, "capture-app", "World of Warcraft Beta.app", "capture only this macOS app (bundle name, absolute path, application name, or bundle identifier)")
+		flag.StringVar(&captureApp, "capture-app", "World of Warcraft.app", "capture only this macOS app (bundle name, absolute path, application name, or bundle identifier)")
 	}
 	flag.StringVar(&backend, "tts", "pocket", "speech backend: pocket (local CPU) or system (OS voices; sapi is a Windows alias)")
 	flag.StringVar(&configPath, "voice-config", speech.DefaultConfigPath(), "local race/voice mapping JSON")

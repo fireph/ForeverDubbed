@@ -33,13 +33,13 @@ func TestWebsiteScreenshots(t *testing.T) {
 	a := test.NewApp()
 	defer a.Quit()
 	a.Settings().SetTheme(companionTheme{theme.DefaultTheme()})
-	state := appstate.New("WowB.exe", "pocket", false)
+	state := appstate.New("Wow.exe", "pocket", false)
 	state.SetQueueSpeech(true)
 	state.Update(func(s *appstate.Snapshot) {
 		s.Ready, s.Window, s.Tile = true, true, true
 		s.Audio = "Idle"
 		s.AddonVersion = buildinfo.Version
-		s.WoWPath = `C:\Program Files (x86)\World of Warcraft\_classic_beta_\WowB.exe`
+		s.WoWPath = `C:\Program Files (x86)\World of Warcraft\_forever_\Wow.exe`
 		s.DetectedExecutable = s.WoWPath
 	})
 	d := newDashboard(buildinfo.Version, func() {}, func() {}, state.StopAudio, state.SkipAudio,

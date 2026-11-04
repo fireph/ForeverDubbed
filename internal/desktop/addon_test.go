@@ -14,7 +14,7 @@ import (
 
 func TestAddonPermissionHelp(t *testing.T) {
 	for _, platform := range []string{"windows", "darwin"} {
-		root := filepath.Join("game", "_classic_beta_")
+		root := filepath.Join("game", "_forever_")
 		got := addonPermissionHelp(root, platform)
 		if !strings.Contains(got, "manually") || !strings.Contains(got, filepath.Join(root, "Interface", "AddOns")) {
 			t.Fatalf("missing manual destination: %s", got)

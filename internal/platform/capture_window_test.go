@@ -8,7 +8,7 @@ import (
 )
 
 func gameWindow(id uint32, pid int32) captureWindow {
-	return captureWindow{ID: uint64(id), PID: pid, App: "World of Warcraft", Bundle: "com.blizzard.worldofwarcraft", Executable: "/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app/Contents/MacOS/World of Warcraft", Width: 1280, Height: 720, OnScreen: true}
+	return captureWindow{ID: uint64(id), PID: pid, App: "World of Warcraft", Bundle: "com.blizzard.worldofwarcraft", Executable: "/Applications/World of Warcraft/_forever_/World of Warcraft.app/Contents/MacOS/World of Warcraft", Width: 1280, Height: 720, OnScreen: true}
 }
 
 func TestChooseCaptureWindow(t *testing.T) {
@@ -171,53 +171,64 @@ func TestWindowCaptureInvalidatesChangedGeometryAndErrors(t *testing.T) {
 	}
 }
 
-func TestCaptureAppUsesRealBetaBundle(t *testing.T) {
-	beta := gameWindow(1, 42)
+func TestCaptureAppUsesRealForeverBundle(t *testing.T) {
+	game := gameWindow(1, 42)
 	retail := gameWindow(2, 43)
 	retail.Executable = "/Applications/World of Warcraft/_retail_/World of Warcraft.app/Contents/MacOS/World of Warcraft"
 	spoof := gameWindow(3, 44)
-	spoof.App = "World of Warcraft Beta.app"
+	spoof.App = "World of Warcraft.app"
 	spoof.Executable = "/Applications/Safari.app/Contents/MacOS/Safari"
-	for _, selector := range []string{
-		"World of Warcraft Beta.app",
-		"/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app",
-		beta.Executable,
+	for _, tc := range []struct {
+		selector string
+		others   []captureWindow
+	}{
+		{"World of Warcraft.app", []captureWindow{spoof}},
+		{"/Applications/World of Warcraft/_forever_/World of Warcraft.app", []captureWindow{retail, spoof}},
+		{game.Executable, []captureWindow{retail, spoof}},
 	} {
-		got, err := chooseCaptureWindow([]captureWindow{retail, spoof, beta}, selector, captureWindow{})
-		if err != nil || got.ID != beta.ID {
-			t.Fatalf("%s: %+v, %v", selector, got, err)
+		got, err := chooseCaptureWindow(append(tc.others, game), tc.selector, captureWindow{})
+		if err != nil || got.ID != game.ID {
+			t.Fatalf("%s: %+v, %v", tc.selector, got, err)
 		}
-		if _, err := chooseCaptureWindow([]captureWindow{retail, spoof}, selector, captureWindow{}); err == nil {
-			t.Fatalf("%s: fell back to another app", selector)
+		if _, err := chooseCaptureWindow(tc.others, tc.selector, captureWindow{}); err == nil {
+			t.Fatalf("%s: fell back to another app", tc.selector)
 		}
 	}
-	beta.Executable = ""
-	if _, err := chooseCaptureWindow([]captureWindow{beta}, "World of Warcraft Beta.app", captureWindow{}); err == nil {
+	game.Executable = ""
+	if _, err := chooseCaptureWindow([]captureWindow{game}, "World of Warcraft.app", captureWindow{}); err == nil {
 		t.Fatal("matched app bundle without executable identity")
 	}
-	if _, err := chooseCaptureWindow([]captureWindow{beta}, "", captureWindow{}); err == nil {
+	if _, err := chooseCaptureWindow([]captureWindow{game}, "", captureWindow{}); err == nil {
 		t.Fatal("accepted empty selector")
 	}
 }
 
 func TestWindowsExecutableSelection(t *testing.T) {
-	game := captureWindow{ID: 0x123456789, PID: 100, Executable: `C:\Games\World of Warcraft\_classic_beta_\WoWB.exe`, Width: 1920, Height: 1080, OnScreen: true}
+	game := captureWindow{ID: 0x123456789, PID: 100, Executable: `C:\Program Files (x86)\World of Warcraft\_forever_\Wow.exe`, Width: 1920, Height: 1080, OnScreen: true}
 	retail := game
-	retail.ID, retail.PID, retail.Executable = 2, 200, `C:\Games\World of Warcraft\_retail_\WoW.exe`
+	retail.ID, retail.PID, retail.Executable = 2, 200, `C:\Program Files (x86)\World of Warcraft\_retail_\Wow.exe`
 	browser := game
-	browser.ID, browser.PID, browser.App, browser.Executable = 3, 300, "WoWB.exe", `C:\Browser\browser.exe`
-	for _, selector := range []string{"WoWB.exe", "wowb.EXE", game.Executable, "c:/games/World of Warcraft/_classic_beta_/wowb.exe"} {
-		got, err := chooseCaptureWindow([]captureWindow{retail, browser, game}, selector, captureWindow{})
+	browser.ID, browser.PID, browser.App, browser.Executable = 3, 300, "Wow.exe", `C:\Browser\browser.exe`
+	for _, tc := range []struct {
+		selector string
+		others   []captureWindow
+	}{
+		{"Wow.exe", []captureWindow{browser}},
+		{"wow.EXE", []captureWindow{browser}},
+		{game.Executable, []captureWindow{retail, browser}},
+		{"c:/program files (x86)/World of Warcraft/_forever_/wow.exe", []captureWindow{retail, browser}},
+	} {
+		got, err := chooseCaptureWindow(append(tc.others, game), tc.selector, captureWindow{})
 		if err != nil || got.ID != game.ID {
-			t.Fatalf("%s: %+v, %v", selector, got, err)
+			t.Fatalf("%s: %+v, %v", tc.selector, got, err)
 		}
-		if _, err := chooseCaptureWindow([]captureWindow{retail, browser}, selector, captureWindow{}); err == nil {
-			t.Fatalf("%s: matched another executable", selector)
+		if _, err := chooseCaptureWindow(tc.others, tc.selector, captureWindow{}); err == nil {
+			t.Fatalf("%s: matched another executable", tc.selector)
 		}
 	}
 	second := game
-	second.ID, second.PID, second.Executable = 4, 400, `D:\Other WoW\WoWB.exe`
-	if _, err := chooseCaptureWindow([]captureWindow{game, second}, "WoWB.exe", captureWindow{}); err == nil {
+	second.ID, second.PID, second.Executable = 4, 400, `D:\Other WoW\Wow.exe`
+	if _, err := chooseCaptureWindow([]captureWindow{game, second}, "Wow.exe", captureWindow{}); err == nil {
 		t.Fatal("accepted ambiguous executable instances")
 	}
 	got, err := chooseCaptureWindow([]captureWindow{second, game}, game.Executable, captureWindow{})

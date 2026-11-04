@@ -15,7 +15,7 @@ import (
 
 func wowPickerOptions(ctx context.Context, w fyne.Window, previous string) []zenity.Option {
 	options := []zenity.Option{zenity.Context(ctx), zenity.Title("Locate WoW Forever — select your WoW executable"),
-		zenity.FileFilter{Name: "WoW Forever (WowB.exe)", Patterns: []string{"WowB.exe"}, CaseFold: true},
+		zenity.FileFilter{Name: "WoW Forever (Wow.exe)", Patterns: []string{"Wow.exe"}, CaseFold: true},
 		zenity.FileFilter{Name: "All executables (*.exe)", Patterns: []string{"*.exe"}, CaseFold: true}}
 	if runtime.GOOS == "darwin" {
 		options = []zenity.Option{zenity.Context(ctx), zenity.Title("Locate WoW Forever — select your WoW application"),

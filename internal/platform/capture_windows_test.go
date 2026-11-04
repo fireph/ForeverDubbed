@@ -11,7 +11,7 @@ import (
 func TestWindowsGameWindowCapture(t *testing.T) {
 	app := os.Getenv("FDB_TEST_CAPTURE_APP")
 	if app == "" {
-		t.Skip("set FDB_TEST_CAPTURE_APP=WoWB.exe with the game open to test native capture")
+		t.Skip("set FDB_TEST_CAPTURE_APP=Wow.exe with the game open to test native capture")
 	}
 	if err := Init(app); err != nil {
 		t.Fatal(err)

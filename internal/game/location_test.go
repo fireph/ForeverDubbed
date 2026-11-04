@@ -12,20 +12,20 @@ func TestDirectory(t *testing.T) {
 		directories, files     []string
 		bundle, wantValid      bool
 	}{
-		{name: "default Windows", client: "WowB.exe", platform: "windows", directories: []string{"Data"}, wantValid: true},
+		{name: "default Windows", client: "Wow.exe", platform: "windows", directories: []string{"Data"}, wantValid: true},
 		{name: "renamed Windows", client: "CustomClient.EXE", platform: "windows", directories: []string{"Interface", "WTF"}, wantValid: true},
-		{name: "fresh shared data", client: "_classic_beta_/Custom.exe", platform: "windows", directories: []string{"Data"}, files: []string{".build.info"}, wantValid: true},
-		{name: "default Mac", client: "World of Warcraft Beta.app", platform: "darwin", directories: []string{"Data"}, bundle: true, wantValid: true},
-		{name: "renamed Mac", client: "_classic_beta_/Custom WoW.app", platform: "darwin", directories: []string{"Data"}, files: []string{".build.info"}, bundle: true, wantValid: true},
+		{name: "fresh shared data", client: "_forever_/Custom.exe", platform: "windows", directories: []string{"Data"}, files: []string{".build.info"}, wantValid: true},
+		{name: "default Mac", client: "World of Warcraft.app", platform: "darwin", directories: []string{"Data"}, bundle: true, wantValid: true},
+		{name: "renamed Mac", client: "_forever_/Custom WoW.app", platform: "darwin", directories: []string{"Data"}, files: []string{".build.info"}, bundle: true, wantValid: true},
 		{name: "unrelated executable", client: "Other.exe", platform: "windows"},
-		{name: "expected name outside install", client: "WowB.exe", platform: "windows"},
+		{name: "expected name outside install", client: "Wow.exe", platform: "windows"},
 		{name: "unrelated Mac app", client: "Other.app", platform: "darwin", bundle: true},
 		{name: "wrong extension", client: "Wow.txt", platform: "windows", directories: []string{"Data"}},
 		{name: "exe directory", client: "Wow.exe", platform: "windows", directories: []string{"Data"}, bundle: true},
 		{name: "app file", client: "WoW.app", platform: "darwin", directories: []string{"Data"}},
 		{name: "data file", client: "Wow.exe", platform: "windows", files: []string{"Data"}},
-		{name: "incomplete shared layout", client: "_classic_beta_/Wow.exe", platform: "windows", directories: []string{"Data"}},
-		{name: "metadata directory", client: "_classic_beta_/Wow.exe", platform: "windows", directories: []string{"Data", ".build.info"}},
+		{name: "incomplete shared layout", client: "_forever_/Wow.exe", platform: "windows", directories: []string{"Data"}},
+		{name: "metadata directory", client: "_forever_/Wow.exe", platform: "windows", directories: []string{"Data", ".build.info"}},
 		{name: "unsupported platform", client: "Wow.exe", platform: "linux", directories: []string{"Data"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

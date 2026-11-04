@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.5
+
+- Update automatic WoW discovery to the `_forever_` installation folder on Windows and macOS, and update the Windows file picker to select `Wow.exe`.
+- Match `Wow.exe` on Windows and `World of Warcraft.app` on macOS by default, regardless of installation location. Keep full paths available for selecting a particular installation.
+- Update setup guides and website instructions for the release client.
+
+## 1.0.4
+
+- Show the ForeverDubbed icon in WoW's AddOns list.
+
+## 1.0.3
+
+- Add Pause and Resume through the minimap menu, `/fdb pause`, `/fdb resume`, and a key binding. Pausing stops audio and suppresses automatic dialogue; the pause setting survives reloads.
+- Add a quest-log play button to read the selected accepted quest with the narrator voice. It respects quest title/objective preferences and works while automatic reading is paused.
+- Update minimap controls: left-click to Skip, Shift + left-click to Stop all audio, and right-click to open the menu.
+- Add a distinct paused minimap icon and improve the artwork's alignment within its border.
+
 ## 1.0.2
 
 - Fix Windows build failures caused by reusing cached MINGW64 objects with the UCRT64 toolchain. Reset the Go cache when workflow or native build configuration changes.

@@ -146,14 +146,14 @@ Useful checks:
 "$fdb" -image capture.png
 ```
 
-Capture is restricted to a window owned by the **World of Warcraft Beta.app** bundle. The default matches the `.app` bundle containing the owning process's executable, so the retail client or a browser window titled World of Warcraft cannot be selected. The expected game executable is `/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app/Contents/MacOS/World of Warcraft`. It waits if the game is closed, minimized, or unavailable, and automatically rediscovers the window after it reopens or changes size. It never falls back to desktop capture. If more than one matching game process is open, close the other instance.
+Capture defaults to a window owned by **World of Warcraft.app**, wherever it is installed. The bundle name is resolved from the owning process's executable, so a browser window titled World of Warcraft cannot match. The desktop app uses the exact app path found by automatic discovery or selected with **Locate WoW…**; its standard discovery location is `/Applications/World of Warcraft/_forever_/World of Warcraft.app`. It waits if the game is closed, minimized, or unavailable, and automatically rediscovers the window after it reopens or changes size. It never falls back to desktop capture. If more than one matching game process is open, specify its full path or close the other instance.
 
-If your game's app bundle differs, specify its exact bundle name, absolute app/executable path, application name, or bundle identifier:
+Use `-capture-app` to specify a bundle name, absolute app/executable path, application name, or bundle identifier. A full path distinguishes Forever from other WoW clients with the same app name:
 
 ```sh
-"$fdb" -capture-app "World of Warcraft Beta.app"
-# To target this particular installation:
-"$fdb" -capture-app "/Applications/World of Warcraft/_classic_beta_/World of Warcraft Beta.app"
+"$fdb" -capture-app "World of Warcraft.app"
+# To target a particular installation:
+"$fdb" -capture-app "/Applications/World of Warcraft/_forever_/World of Warcraft.app"
 ```
 
 ScreenCaptureKit captures the selected game window at native pixel scale. The reader crops the detected tile from that image in memory; neither the desktop nor other applications' windows are included. Coordinates are relative to the game window. `-snapshot` also saves only the selected game window. No images are saved unless you explicitly request a snapshot.
@@ -163,7 +163,7 @@ Before distributing a build, check on a Mac that the tile decodes in windowed an
 For an opt-in native startup regression test on a Mac with the game open and Screen Recording permission granted, run:
 
 ```sh
-FDB_TEST_CAPTURE_APP="World of Warcraft Beta.app" CGO_ENABLED=1 go test ./internal/platform -run TestMacWindowCaptureStartup -count=1
+FDB_TEST_CAPTURE_APP="World of Warcraft.app" CGO_ENABLED=1 go test ./internal/platform -run TestMacWindowCaptureStartup -count=1
 ```
 
 This exercises the real command-line CoreGraphics initialization and single-window capture path. The captured game image stays in memory.
